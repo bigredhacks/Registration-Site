@@ -6,4 +6,4 @@ Registration System for BigRed//Hacks
 ## Contributors
 **Current Contributors**
 - **Colin Wu** - Software Lead
-- **Liesel Wong** - Software Member
+- **Liesel Wong** - Software Developer

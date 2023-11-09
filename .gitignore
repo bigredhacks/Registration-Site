@@ -131,3 +131,7 @@ dist
 
 # Mac
 .DS_Store
+
+# Firebase Configurations
+service-account.json
+config.json

@@ -6,4 +6,5 @@ Registration System for BigRed//Hacks
 ## Contributors
 **Current Contributors**
 - **Colin Wu** - Software Lead
-- **Jeffrey Huang** - Fullstack Developer
+- **Liesel Wong** - Fullstack Software Developer
+- **Jeffrey Huang** - Fullstack Software Developer

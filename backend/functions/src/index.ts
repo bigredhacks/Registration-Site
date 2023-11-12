@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions'
 import admin from 'firebase-admin';
 import express from 'express';
 import cors from 'cors';
+import students from './students';
 //import bodyParser from 'body-parser';
 const serviceAccount: string = require('../service-account.json')
 

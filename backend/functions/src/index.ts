@@ -8,9 +8,16 @@ const serviceAccount: string = require('../service-account.json')
 // initialize firebase inorder to access its services
 admin.initializeApp({credential: admin.credential.cert(serviceAccount)});
 
-//initialize express server
-const app = express()
-app.use(express.json())
-app.use(cors())
+const app = express();
+const students = express();
+
+app.use(express.json());
+app.use(cors());
+app.use("/students", students)
+
+students.get('/', (req, res) => {
+  res.send('hello!');
+});
+
 
 exports.api = functions.https.onRequest(app)

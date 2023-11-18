@@ -73,7 +73,7 @@ students.get('/getStudent', async (req, res) => {
   // TODO: add email regex
   if (email == undefined) {
     res.status(400).send({
-      error: 'Student email undefined.'
+      error: 'Student email not specified.'
     });
   }
 

@@ -64,16 +64,17 @@ students.post('/updateStudent', async (req, res) => {
  * Retrieves student data given a supplied email.
  */
 students.get('/getStudent', async (req, res) => {
-  let studentData = req.body;
+  let {email} = req.query;
 
-  if (!('email' in studentData)) {
-    res.status(400).send('Student email not specified.');
+  // TODO: add email regex
+  if (email == undefined) {
+    res.status(400).send('Student email undefined.');
   }
 
   let docRef = await firebaseApp
     .firestore()
     .collection('students')
-    .doc(studentData.email)
+    .doc(email as string)
     .get();
 
   if (docRef.exists) res.send(docRef.data());

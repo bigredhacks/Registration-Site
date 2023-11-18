@@ -2,11 +2,12 @@ import express from 'express';
 import { firebaseApp } from './index';
 
 const students = express();
-
 interface student {
   firstName: string;
   lastName: string;
   gradYear: number;
+  email: string;
+  netid: string;
   misc?: object;
 }
 
@@ -14,15 +15,13 @@ function isStudent(data: object): data is student {
   return 'firstName' in data && 'lastName' in data && 'gradYear' in data;
 }
 
-// TODO: use express-validator middleware
-
 /**
  * Creates a new student in the `registrants` collection using x-www-form-urlencoded data.
  * 
  * Upon success returns the document ID with HTTP 202
  * Upon fail returns HTTP 400
  */
-students.post('/register', async (req, res) => {
+students.post('/createStudent', async (req, res) => {
   let studentData = req.body;
 
   if (!isStudent(studentData)) {
@@ -30,19 +29,76 @@ students.post('/register', async (req, res) => {
     return;
   }
 
-  // When a student is registered it should send the document ID of the newly created student
-  let ref = await firebaseApp
+  await firebaseApp
     .firestore()
-    .collection('registrants')
-    .add(studentData);
+    .collection('students')
+    .doc(studentData.email)
+    .set(studentData);
 
-  res.status(202).send(ref.id);
+  res.sendStatus(200);
 });
 
-students.put('/updateStudent', async (req, res) => {});
+/**
+ * Updates a student with new parameters. Does not support updating arrays yet.
+ */
+students.post('/updateStudent', async (req, res) => {
+  let studentData = req.body;
 
-students.get('/query', async (req, res) => {});
+  // Check that email field exists on req.body
+  if (!("email" in studentData)) {
+    res.status(400).send('Student email not specified.');
+  }
 
-students.get('/queryAll', async (req, res) => {});
+  // TODO: handle food allergies with firestore arrayUnion()
+
+  await firebaseApp
+    .firestore()
+    .collection('students')
+    .doc(studentData.email)
+    .update(studentData);
+
+  res.sendStatus(200);
+});
+
+/**
+ * Retrieves student data given a supplied email.
+ */
+students.get('/getStudent', async (req, res) => {
+  let studentData = req.body;
+
+  if (!("email" in studentData)) {
+    res.status(400).send('Student email not specified.');
+  }
+
+  let docRef = await firebaseApp
+    .firestore()
+    .collection('students')
+    .doc(studentData.email)
+    .get();
+
+  if (docRef.exists)
+    res.send(docRef.data());
+  else
+    res.sendStatus(404);
+});
+
+/**
+ * Retrieves all students in the students collection.
+ */
+students.get('/getAllStudents', async (req, res) => {
+  let docData = await firebaseApp
+    .firestore()
+    .collection('students')
+    .get();
+
+  let addedData: Map<string, student> = new Map();
+
+  docData.forEach(doc => {
+    console.log(doc.id, "=>", doc.data())
+    addedData.set(doc.id, doc.data() as student);
+  });
+  
+  res.send(Object.fromEntries(addedData));
+});
 
 export default students;

@@ -25,7 +25,9 @@ students.post('/createStudent', async (req, res) => {
   let studentData = req.body;
 
   if (!isStudent(studentData)) {
-    res.status(400).send('Malformed student registration request.');
+    res.status(400).send({
+      error: 'Malformed student registration request.'
+    });
     return;
   }
 
@@ -46,7 +48,9 @@ students.post('/updateStudent', async (req, res) => {
 
   // Check that email field exists on req.body
   if (!('email' in studentData)) {
-    res.status(400).send('Student email not specified.');
+    res.status(400).send({
+      error: 'Student email not specified.'
+    });
   }
 
   // TODO: handle food allergies with firestore arrayUnion()
@@ -68,7 +72,9 @@ students.get('/getStudent', async (req, res) => {
 
   // TODO: add email regex
   if (email == undefined) {
-    res.status(400).send('Student email undefined.');
+    res.status(400).send({
+      error: 'Student email undefined.'
+    });
   }
 
   let docRef = await firebaseApp

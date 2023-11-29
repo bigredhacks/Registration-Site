@@ -34,7 +34,7 @@ function isStudentMutation(data: object): data is studentMutation {
  * Upon success returns the document ID with HTTP 202
  * Upon fail returns HTTP 400
  */
-students.post('/createStudent', async (req, res) => {
+students.post('/', async (req, res) => {
   let studentData = req.body;
 
   if (!isStudent(studentData)) {
@@ -56,7 +56,7 @@ students.post('/createStudent', async (req, res) => {
 /**
  * Updates a student with new parameters. Does not support updating arrays yet.
  */
-students.post('/updateStudent', async (req, res) => {
+students.put('/', async (req, res) => {
   let studentData = req.body;
 
   // Check that email field exists on req.body
@@ -82,7 +82,7 @@ students.post('/updateStudent', async (req, res) => {
 /**
  * Retrieves student data given a supplied email.
  */
-students.get('/getStudent', async (req, res) => {
+students.get('/', async (req, res) => {
   let {email} = req.query;
 
   // TODO: add email regex
@@ -103,19 +103,37 @@ students.get('/getStudent', async (req, res) => {
 });
 
 /**
- * Retrieves all students in the students collection.
+ * Retrieves all students in the students collection. If there is an `email` URL param specified then it will query only one email.
  */
-students.get('/getAllStudents', async (req, res) => {
-  let docData = await firebaseApp.firestore().collection('students').get();
+students.get('/', async (req, res) => {
+  let docRef = await firebaseApp.firestore().collection('students');
+  let {email} = req.query;
 
-  let addedData: Map<string, student> = new Map();
+  // TODO: collapse these if statements
 
-  docData.forEach((doc) => {
-    console.log(doc.id, '=>', doc.data());
-    addedData.set(doc.id, doc.data() as student);
-  });
+  if (email != undefined) {
+    let docRef = await firebaseApp
+      .firestore()
+      .collection('students')
+      .doc(email as string)
+      .get();
+    
+    if (docRef.exists) res.send(docRef.data());
+    else res.sendStatus(404);
+  } else {
+    let docData = await firebaseApp
+      .firestore()
+      .collection('students')
+      .get();
 
-  res.send(Object.fromEntries(addedData));
+    let addedData: Map<string, student> = new Map();
+
+    docData.forEach((doc) => {
+      addedData.set(doc.id, doc.data() as student);
+    });
+
+    res.send(Object.fromEntries(addedData));
+  }
 });
 
 export default students;

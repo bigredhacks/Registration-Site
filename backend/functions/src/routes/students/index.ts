@@ -68,7 +68,7 @@ students.put('/', async (req, res) => {
   }
 
   // TODO: handle food allergies with firestore arrayUnion()
-
+  // TODO: error handing
   await firebaseApp
     .firestore()
     .collection('students')
@@ -105,34 +105,29 @@ students.get('/', async (req, res) => {
 /**
  * Retrieves all students in the students collection. If there is an `email` URL param specified then it will query only one email.
  */
-students.get('/', async (req, res) => {
-  let docRef = await firebaseApp.firestore().collection('students');
-  let {email} = req.query;
-
-  // TODO: collapse these if statements
-
-  if (email != undefined) {
-    let docRef = await firebaseApp
-      .firestore()
-      .collection('students')
-      .doc(email as string)
-      .get();
-    
-    if (docRef.exists) res.send(docRef.data());
-    else res.sendStatus(404);
-  } else {
-    let docData = await firebaseApp
-      .firestore()
-      .collection('students')
-      .get();
+students.get('/:email', async (req, res) => {
+  let email = req.params.email;
+  let collectionRef = firebaseApp.firestore().collection('students');
+  
+  // Default case to get all students when email not specified
+  if (email == "") {
+    let snapshotRef = await collectionRef.get();
 
     let addedData: Map<string, student> = new Map();
-
-    docData.forEach((doc) => {
+    snapshotRef.forEach((doc) => {
       addedData.set(doc.id, doc.data() as student);
     });
 
     res.send(Object.fromEntries(addedData));
+  } else {
+    // Special case when email is specified
+    let docRef = await collectionRef.doc(email).get();
+
+    if (docRef.exists) {
+      res.send(docRef.data());
+    } else {
+      res.sendStatus(404);
+    }
   }
 });
 

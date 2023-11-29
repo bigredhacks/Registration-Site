@@ -1,7 +1,7 @@
 import express from 'express';
 import { firebaseApp } from '../../index';
 
-const students = express();
+const students = express.Router();
 interface student {
   email: string;
   firstName: string;

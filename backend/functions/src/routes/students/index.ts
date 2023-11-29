@@ -73,6 +73,7 @@ students.post('/updateStudent', async (req, res) => {
     .firestore()
     .collection('students')
     .doc(studentData.email)
+    //@ts-ignore
     .update(studentData);
 
   res.sendStatus(200);

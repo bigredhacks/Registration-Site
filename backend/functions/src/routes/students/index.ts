@@ -3,20 +3,33 @@ import { firebaseApp } from '../../index';
 
 const students = express();
 interface student {
+  email: string;
   firstName: string;
   lastName: string;
   gradYear: number;
-  email: string;
   netid: string;
   misc?: object;
 }
 
+interface studentMutation {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  gradYear?: number;
+  netid?: string;
+  misc?: object;
+}
+
 function isStudent(data: object): data is student {
-  return 'firstName' in data && 'lastName' in data && 'gradYear' in data;
+  return 'firstName' in data && 'lastName' in data && 'gradYear' in data && 'netid' in data;
+}
+
+function isStudentMutation(data: object): data is studentMutation {
+  return 'email' in data;
 }
 
 /**
- * Creates a new student in the `registrants` collection using x-www-form-urlencoded data.
+ * Creates a new student in the `students` collection using x-www-form-urlencoded data.
  *
  * Upon success returns the document ID with HTTP 202
  * Upon fail returns HTTP 400
@@ -47,10 +60,11 @@ students.post('/updateStudent', async (req, res) => {
   let studentData = req.body;
 
   // Check that email field exists on req.body
-  if (!('email' in studentData)) {
+  if (!isStudentMutation(studentData)) {
     res.status(400).send({
       error: 'Student email not specified.'
     });
+    return;
   }
 
   // TODO: handle food allergies with firestore arrayUnion()

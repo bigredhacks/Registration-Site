@@ -1,4 +1,4 @@
-import express from 'express';
+import express, {Request, Response} from 'express';
 import { db } from '../../index';
 
 const students = express.Router();
@@ -35,19 +35,29 @@ function isStudentMutation(data: object): data is studentMutation {
   return !('email' in data) && Object.keys(data).length != 0;
 }
 
+function catchAll(func: (req: Request, res: Response) => Promise<void>): (req: Request, res: Response) => Promise<void> {
+  return async (req: Request, res: Response) => {
+    try {
+      await func(req, res);
+    } catch (e: any) {
+      res.status(500).send(e.message);
+    }
+  }
+}
+
 /**
  * Creates a new student in the `students` collection using x-www-form-urlencoded data.
  *
  * Upon success returns the document ID with HTTP 202
  * Upon fail returns HTTP 400
  */
-students.post('/', async (req, res) => {
+students.post('/', catchAll(async (req, res) => {
   let studentData = req.body;
 
   // Validate form data
   if (!isStudent(studentData)) {
     res.status(400).send({
-      error: 'Malformed student registration request.',
+      error: 'Malformed student registration request. Missing some required fields.'
     });
     return;
   }
@@ -81,12 +91,12 @@ students.post('/', async (req, res) => {
   }
 
   res.sendStatus(200);
-});
+}));
 
 /**
  * Updates a student with new parameters. Does not support updating arrays yet.
  */
-students.put('/:email', async (req, res) => {
+students.put('/:email', catchAll(async (req, res) => {
   let email = req.params.email;
   let studentData = req.body;
 
@@ -112,12 +122,12 @@ students.put('/:email', async (req, res) => {
   }
 
   res.sendStatus(200);
-});
+}));
 
 /**
  * Retrieves all students in the students collection. If there is an `email` URL param specified then it will query only one email.
  */
-students.get('/:email?', async (req, res) => {
+students.get('/:email?', catchAll(async (req, res) => {
   let email = req.params.email;
   let collectionRef = db.collection('students');
 
@@ -143,12 +153,12 @@ students.get('/:email?', async (req, res) => {
         .send({ error: `Could not get data from email: ${email}` });
     }
   }
-});
+}));
 
 /**
  * Deletes student from the students collection.
  */
-students.delete('/:email', async (req, res) => {
+students.delete('/:email', catchAll(async (req, res) => {
   let email = req.params.email;
   let collectionRef = db.collection('students');
 
@@ -166,6 +176,6 @@ students.delete('/:email', async (req, res) => {
   }
 
   res.status(200).send(`Successfully deleted: ${email}`);
-});
+}));
 
 export default students;

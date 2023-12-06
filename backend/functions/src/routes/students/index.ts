@@ -2,6 +2,7 @@ import express from 'express';
 import { firebaseApp } from '../../index';
 
 const students = express.Router();
+
 interface student {
   email: string;
   firstName: string;
@@ -27,8 +28,6 @@ function isStudent(data: object): data is student {
 function isStudentMutation(data: object): data is studentMutation {
   return 'email' in data;
 }
-
-// TODO: error handling for failed firestore gets/updates
 
 /**
  * Creates a new student in the `students` collection using x-www-form-urlencoded data.
@@ -133,6 +132,9 @@ students.get('/:email', async (req, res) => {
   }
 });
 
+/**
+ * Deletes student from the students collection.
+ */
 students.delete("/:email", async (req, res) => {
   let email = req.params.email;
   let collectionRef = firebaseApp.firestore().collection('students');

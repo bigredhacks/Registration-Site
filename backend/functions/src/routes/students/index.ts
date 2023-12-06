@@ -80,29 +80,6 @@ students.put('/', async (req, res) => {
 });
 
 /**
- * Retrieves student data given a supplied email.
- */
-students.get('/', async (req, res) => {
-  let {email} = req.query;
-
-  // TODO: add email regex
-  if (email == undefined) {
-    res.status(400).send({
-      error: 'Student email not specified.'
-    });
-  }
-
-  let docRef = await firebaseApp
-    .firestore()
-    .collection('students')
-    .doc(email as string)
-    .get();
-
-  if (docRef.exists) res.send(docRef.data());
-  else res.sendStatus(404);
-});
-
-/**
  * Retrieves all students in the students collection. If there is an `email` URL param specified then it will query only one email.
  */
 students.get('/:email', async (req, res) => {

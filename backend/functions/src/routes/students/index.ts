@@ -9,6 +9,7 @@ interface student {
   lastName: string;
   gradYear: number;
   netid: string;
+  allergies?: string;
   misc?: object;
 }
 
@@ -17,6 +18,7 @@ interface studentMutation {
   lastName?: string;
   gradYear?: number;
   netid?: string;
+  allergies?: string;
   misc?: object;
 }
 
@@ -96,7 +98,6 @@ students.put('/:email', async (req, res) => {
     return;
   }
 
-  // TODO: handle food allergies with firestore arrayUnion()
   try {
     await db
       .collection('students')

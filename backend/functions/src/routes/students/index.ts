@@ -28,6 +28,8 @@ function isStudentMutation(data: object): data is studentMutation {
   return 'email' in data;
 }
 
+// TODO: error handling for failed firestore gets/updates
+
 /**
  * Creates a new student in the `students` collection using x-www-form-urlencoded data.
  *
@@ -44,11 +46,16 @@ students.post('/', async (req, res) => {
     return;
   }
 
-  await firebaseApp
-    .firestore()
-    .collection('students')
-    .doc(studentData.email)
-    .set(studentData);
+  try {
+    await firebaseApp
+      .firestore()
+      .collection('students')
+      .doc(studentData.email)
+      .set(studentData);
+  } catch (e) {
+    res.status(400).send({error: "Could not create student."});
+    return;
+  }
 
   res.sendStatus(200);
 });
@@ -61,20 +68,26 @@ students.put('/', async (req, res) => {
 
   // Check that email field exists on req.body
   if (!isStudentMutation(studentData)) {
-    res.status(400).send({
+    res.status(404).send({
       error: 'Student email not specified.'
     });
     return;
   }
 
   // TODO: handle food allergies with firestore arrayUnion()
-  // TODO: error handing
-  await firebaseApp
+  try {
+    await firebaseApp
     .firestore()
     .collection('students')
     .doc(studentData.email)
     // @ts-ignore
     .update(studentData);
+  } catch (e) {
+    res.status(404).send({
+      error: `Student with email: ${studentData.email} could not be updated.`
+    })
+    return;
+  }
 
   res.sendStatus(200);
 });
@@ -95,15 +108,15 @@ students.get('/:email', async (req, res) => {
       addedData.set(doc.id, doc.data() as student);
     });
 
-    res.send(Object.fromEntries(addedData));
+    res.status(200).send(Object.fromEntries(addedData));
   } else {
     // Special case when email is specified
     let docRef = await collectionRef.doc(email).get();
 
     if (docRef.exists) {
-      res.send(docRef.data());
+      res.status(200).send(docRef.data());
     } else {
-      res.sendStatus(404);
+      res.status(404).send({error: `Could not get data from email: ${email}`});
     }
   }
 });
@@ -114,14 +127,14 @@ students.delete("/:email", async (req, res) => {
 
   // Handle when email not specified
   if (email == "") {
-    res.status(400).send("Error: Email must be specified.");
+    res.status(400).send({error: "Email must be specified."});
     return;
   }
 
   try {
     await collectionRef.doc(email).delete();
   } catch (e) {
-    res.status(404).send(`Error: Cannot find email: ${email}`);
+    res.status(404).send({error: `Cannot find email: ${email}`});
     return;
   }
 

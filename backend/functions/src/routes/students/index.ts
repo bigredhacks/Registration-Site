@@ -39,10 +39,22 @@ function isStudentMutation(data: object): data is studentMutation {
 students.post('/', async (req, res) => {
   let studentData = req.body;
 
+  // Validate form data
   if (!isStudent(studentData)) {
     res.status(400).send({
       error: 'Malformed student registration request.'
     });
+    return;
+  }
+
+  // Check email not in database already
+  let docRef = await firebaseApp
+    .firestore()
+    .collection('students')
+    .doc(studentData.email)
+    .get();
+  if (docRef.exists) {
+    res.status(400).send({error: `Student with email: ${studentData.email} already exists.`});
     return;
   }
 

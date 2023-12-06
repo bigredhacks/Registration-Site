@@ -1,5 +1,5 @@
 import express from 'express';
-import { firebaseApp } from '../../index';
+import { db } from '../../index';
 
 const students = express.Router();
 
@@ -25,13 +25,12 @@ function isStudent(data: object): data is student {
     'firstName' in data &&
     'lastName' in data &&
     'gradYear' in data &&
-    'netid' in data &&
-    !('email' in data)
+    'netid' in data
   );
 }
 
 function isStudentMutation(data: object): data is studentMutation {
-  return 'email' in data;
+  return !('email' in data) && Object.keys(data).length != 0;
 }
 
 /**
@@ -52,23 +51,25 @@ students.post('/', async (req, res) => {
   }
 
   // Check email not in database already
-  let docRef = await firebaseApp
-    .firestore()
-    .collection('students')
-    .doc(studentData.email)
-    .get();
-  if (docRef.exists) {
-    res
-      .status(400)
-      .send({
-        error: `Student with email: ${studentData.email} already exists.`,
-      });
-    return;
+  try {
+    let docRef = await db
+      .collection('students')
+      .doc(studentData.email)
+      .get();
+    if (docRef.exists) {
+      res
+        .status(400)
+        .send({
+          error: `Student with email: ${studentData.email} already exists.`
+        });
+      return;
+    }
+  } catch (e) {
+    res.status(500).send({error: `Problem with email validation.`});
   }
 
   try {
-    await firebaseApp
-      .firestore()
+    await db
       .collection('students')
       .doc(studentData.email)
       .set(studentData);
@@ -97,8 +98,7 @@ students.put('/:email', async (req, res) => {
 
   // TODO: handle food allergies with firestore arrayUnion()
   try {
-    await firebaseApp
-      .firestore()
+    await db
       .collection('students')
       .doc(email)
       // @ts-ignore
@@ -116,12 +116,12 @@ students.put('/:email', async (req, res) => {
 /**
  * Retrieves all students in the students collection. If there is an `email` URL param specified then it will query only one email.
  */
-students.get('/:email', async (req, res) => {
+students.get('/:email?', async (req, res) => {
   let email = req.params.email;
-  let collectionRef = firebaseApp.firestore().collection('students');
+  let collectionRef = db.collection('students');
 
   // Default case to get all students when email not specified
-  if (email == '') {
+  if (email === undefined) {
     let snapshotRef = await collectionRef.get();
 
     let addedData: Map<string, student> = new Map();
@@ -149,7 +149,7 @@ students.get('/:email', async (req, res) => {
  */
 students.delete('/:email', async (req, res) => {
   let email = req.params.email;
-  let collectionRef = firebaseApp.firestore().collection('students');
+  let collectionRef = db.collection('students');
 
   // Handle when email not specified
   if (email == '') {

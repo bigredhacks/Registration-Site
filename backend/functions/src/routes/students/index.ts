@@ -108,4 +108,24 @@ students.get('/:email', async (req, res) => {
   }
 });
 
+students.delete("/:email", async (req, res) => {
+  let email = req.params.email;
+  let collectionRef = firebaseApp.firestore().collection('students');
+
+  // Handle when email not specified
+  if (email == "") {
+    res.status(400).send("Error: Email must be specified.");
+    return;
+  }
+
+  try {
+    await collectionRef.doc(email).delete();
+  } catch (e) {
+    res.status(404).send(`Error: Cannot find email: ${email}`);
+    return;
+  }
+
+  res.status(200).send(`Successfully deleted: ${email}`);
+});
+
 export default students;

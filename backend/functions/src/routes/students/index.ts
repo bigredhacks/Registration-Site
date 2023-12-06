@@ -13,7 +13,6 @@ interface student {
 }
 
 interface studentMutation {
-  email: string;
   firstName?: string;
   lastName?: string;
   gradYear?: number;
@@ -26,7 +25,8 @@ function isStudent(data: object): data is student {
     'firstName' in data &&
     'lastName' in data &&
     'gradYear' in data &&
-    'netid' in data
+    'netid' in data &&
+    !('email' in data)
   );
 }
 
@@ -83,7 +83,8 @@ students.post('/', async (req, res) => {
 /**
  * Updates a student with new parameters. Does not support updating arrays yet.
  */
-students.put('/', async (req, res) => {
+students.put('/:email', async (req, res) => {
+  let email = req.params.email;
   let studentData = req.body;
 
   // Check that email field exists on req.body
@@ -99,12 +100,12 @@ students.put('/', async (req, res) => {
     await firebaseApp
       .firestore()
       .collection('students')
-      .doc(studentData.email)
+      .doc(email)
       // @ts-ignore
       .update(studentData);
   } catch (e) {
     res.status(404).send({
-      error: `Student with email: ${studentData.email} could not be updated.`,
+      error: `Student with email: ${email} could not be updated.`,
     });
     return;
   }

@@ -2,11 +2,10 @@ import * as functions from 'firebase-functions';
 import admin from 'firebase-admin';
 import express from 'express';
 import cors from 'cors';
-//import bodyParser from 'body-parser';
-const serviceAccount: string = require('../service-account.json');
+import ServiceAccount from '../service-account.json';
 
-// initialize firebase inorder to access its services
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+// initialize firebase in order to access its services
+admin.initializeApp({ credential: admin.credential.cert(JSON.stringify(ServiceAccount)) });
 
 //initialize express server
 const app = express();

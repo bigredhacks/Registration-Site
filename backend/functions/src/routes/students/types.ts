@@ -5,7 +5,6 @@ interface student {
   gradYear: number;
   netid: string;
   allergies?: string;
-  misc?: object;
 }
 
 interface studentMutation {
@@ -14,7 +13,6 @@ interface studentMutation {
   gradYear?: number;
   netid?: string;
   allergies?: string;
-  misc?: object;
 }
 
 function isStudent(data: object): data is student {

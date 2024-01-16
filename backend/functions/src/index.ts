@@ -6,10 +6,11 @@ import cors from 'cors';
 import students from './routes/students/index';
 
 //import bodyParser from 'body-parser';
-const serviceAccount: string = require('../service-account.json');
 
-// initialize firebase inorder to access its services
-admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+import ServiceAccount from '../service-account.json';
+
+// initialize firebase in order to access its services
+admin.initializeApp({ credential: admin.credential.cert(JSON.stringify(ServiceAccount)) });
 
 //initialize express server
 const app = express();

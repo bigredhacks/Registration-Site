@@ -1,0 +1,12 @@
+{
+  "name": "registration-site",
+  "version": "1.0.0",
+  "description": "## About Registration System for BigRed//Hacks",
+  "main": "index.js",
+  "scripts": {
+    "emulate:frontend": "cd frontend && npm run dev",
+    "emulate:backend": "cd backend/functions && npm run emulate",
+    "install": "cd backend/functions && npm i && cd ../../frontend && npm i"
+  },
+  "license": "ISC"
+}

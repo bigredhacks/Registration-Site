@@ -7,10 +7,11 @@ import students from './routes/students/index';
 
 //import bodyParser from 'body-parser';
 
-import ServiceAccount from '../service-account.json';
+const serviceAccount: string = require('../service-account.json');
+// import ServiceAccount from '../service-account.json';
 
 // initialize firebase in order to access its services
-admin.initializeApp({ credential: admin.credential.cert(JSON.stringify(ServiceAccount)) });
+admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
 
 //initialize express server
 const app = express();

@@ -1,5 +1,9 @@
 import express, { Request, Response } from 'express';
 import { db } from '../../index';
+// import { CollectionReference, Query } from 'firebase-admin/firestore';
+import {student, isEmailedStudent} from "./types"
+import { Query } from 'firebase-admin/database';
+import { CollectionReference } from 'firebase-admin/firestore';
 
 const students = express.Router();
 
@@ -26,7 +30,7 @@ students.post('/', catchAll(async (req, res) => {
   let studentData = req.body;
 
   // Validate form data
-  if (!isStudent(studentData)) {
+  if (!isEmailedStudent(studentData)) {
     res.status(400).send({
       error:
         'Malformed student registration request. Missing some required fields.',
@@ -67,13 +71,14 @@ students.put('/:email', catchAll(async (req, res) => {
   let studentData = req.body;
 
   // Check that email field exists on req.body
-  if (!isStudentMutation(studentData)) {
+  if (!isEmailedStudent(studentData)) {
     res.status(404).send({
       error: 'Student email not specified.',
     });
     return;
   }
 
+  // Update the database
   try {
     await db
       .collection('students')
@@ -94,7 +99,15 @@ students.put('/:email', catchAll(async (req, res) => {
  * Retrives all students.
  */
 students.get('/', catchAll(async (req, res) => {
-  let collectionRef = db.collection('students');
+  let collectionRef: CollectionReference | Query = db.collection('students');
+  
+  // Evaluate filters placed on GET
+  let filters: student = req.query;
+  Object.entries(filters).forEach(([key, value]) => {
+    // @ts-ignore
+    collectionRef = collectionRef.where(key, "==", value);
+  });
+
   let snapshotRef = await collectionRef.get();
 
   let addedData: Map<string, student> = new Map();

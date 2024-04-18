@@ -48,15 +48,15 @@ students.post('/', catchAll(async (req, res) => {
       });
       return;
     }
-  } catch (e) {
-    res.status(500).send({ error: `Problem with email validation.` });
+  } catch (e: any) {
+    res.status(500).send({ error: `Problem with email validation. ${e.message}` });
   }
 
   // Create student with email
   try {
     await db.collection('students').doc(studentData.email).set(studentData);
-  } catch (e) {
-    res.status(400).send({ error: 'Could not create student.' });
+  } catch (e: any) {
+    res.status(400).send({ error: `Could not create student. ${e.message}` });
     return;
   }
 
@@ -85,9 +85,9 @@ students.put('/:email', catchAll(async (req, res) => {
       .doc(email)
       // @ts-ignore
       .update(studentData);
-  } catch (e) {
+  } catch (e: any) {
     res.status(404).send({
-      error: `Student with email: ${email} could not be updated.`,
+      error: `Student with email: ${email} could not be updated. ${e.message}`,
     });
     return;
   }
@@ -152,8 +152,8 @@ students.delete('/:email', catchAll(async (req, res) => {
 
   try {
     await collectionRef.doc(email).delete();
-  } catch (e) {
-    res.status(404).send({ error: `Cannot find email: ${email}` });
+  } catch (e: any) {
+    res.status(404).send({ error: `Cannot find email: ${email}. ${e.message}` });
     return;
   }
 

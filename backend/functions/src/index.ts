@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 
 import students from './routes/students/index';
+import teams from "./routes/teams/index"
 
 //import bodyParser from 'body-parser';
 
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use(cors());
 
 app.use("/students", students)
+app.use("/teams", teams)
 
 const db = admin.firestore();
 

@@ -14,7 +14,8 @@ export function isEmailedStudent(data: object): data is emailed_student {
     'lastName' in data &&
     'gradYear' in data &&
     'netid' in data && 
-    'email' in data
+    'email' in data &&
+    /^\w+@[A-Za-z]+\.edu$/.test(data.email as string)
   );
 }
 

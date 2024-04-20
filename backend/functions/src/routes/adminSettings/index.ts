@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import { db } from '../../index';
-
+import { logger } from 'firebase-functions'; 
 
 const adminSettings = express.Router();
 
@@ -13,12 +13,19 @@ interface adminSettings {
 }
 
 function isAdmin(data: object): data is adminSettings {
+  /* 
+  logger.info('hackathonDate' in data)
+  logger.info('signupDate' in data)
+  logger.info('acceptedText' in data )
+  logger.info('waitlistText' in data )
+  logger.info('confirmationText'in data)
+  */
   return (
     'hackathonDate' in data &&
     'signupDate' in data &&
     'acceptedText' in data &&
     'waitlistText' in data && 
-    'confirmationTest'in data
+    'confirmationText'in data
   );
 }
 
@@ -38,7 +45,7 @@ function catchAll(func: (req: Request, res: Response) => Promise<void>): (req: R
 */
 adminSettings.post('/', catchAll(async (req, res) => {
   let adminData = req.body;
-
+logger.info(adminData);
   if (!isAdmin(adminData)) {
     res.status(400).send({
       error: 'Malformed admin data.'});
@@ -50,7 +57,7 @@ adminSettings.post('/', catchAll(async (req, res) => {
       .collection('admin')
       .doc('info')
       // @ts-ignore
-      .update(adminData);
+      .set(adminData);
   } catch (e) {
     res.status(415).send({
       error: 'Could not update admin information.' });
@@ -67,8 +74,7 @@ adminSettings.get('/', catchAll(async (req, res) => {
   try {
     const docRef = await db.collection('admin').doc('info').get(); 
     if (docRef.exists) {
-      res.status(200).json("hello");
-      // docRef.data()
+      res.status(200).json(docRef.data());
     } else {
       res.status(404).send({ error: 'Admin information not found.' });
     }

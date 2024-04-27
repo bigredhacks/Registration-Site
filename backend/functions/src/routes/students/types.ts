@@ -8,16 +8,15 @@ export interface student {
 
 export type emailed_student = student & {email : string};
 
-export function isEmailedStudent(data: object): data is emailed_student {
+export function isStudent(data: object): data is emailed_student {
   return (
     'firstName' in data &&
     'lastName' in data &&
     'gradYear' in data &&
-    'netid' in data && 
-    'email' in data
+    'netid' in data
   );
 }
 
-export function isStudent(data: object): data is student {
+export function isStudentMutation(data: object): data is student {
   return !('email' in data) && Object.keys(data).length != 0;
 }

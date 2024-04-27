@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import { db } from '../../index';
 // import { CollectionReference, Query } from 'firebase-admin/firestore';
-import {student, isEmailedStudent} from "./types"
+import {student, isStudent} from "./types"
 import { Query } from 'firebase-admin/database';
 import { CollectionReference } from 'firebase-admin/firestore';
 
@@ -26,11 +26,12 @@ function catchAll(
  * Upon success returns the document ID with HTTP 202
  * Upon fail returns HTTP 400
  */
-students.post('/', catchAll(async (req, res) => {
+students.post('/:email', catchAll(async (req, res) => {
+  const email = req.params.email
   let studentData = req.body;
 
   // Validate form data
-  if (!isEmailedStudent(studentData)) {
+  if (!isStudent(studentData) || email == "") {
     res.status(400).send({
       error:
         'Malformed student registration request. Missing some required fields.',
@@ -40,11 +41,11 @@ students.post('/', catchAll(async (req, res) => {
 
   // Check email not in database already
   try {
-    let docRef = await db.collection('students').doc(studentData.email).get();
+    let docRef = await db.collection('students').doc(email).get();
 
     if (docRef.exists) {
       res.status(400).send({
-        error: `Student with email: ${studentData.email} already exists.`,
+        error: `Student with email: ${email} already exists.`,
       });
       return;
     }
@@ -54,7 +55,7 @@ students.post('/', catchAll(async (req, res) => {
 
   // Create student with email
   try {
-    await db.collection('students').doc(studentData.email).set(studentData);
+    await db.collection('students').doc(email).set(studentData);
   } catch (e: any) {
     res.status(400).send({ error: `Could not create student. ${e.message}` });
     return;

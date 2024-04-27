@@ -3,6 +3,7 @@ export interface student {
   lastName?: string;
   gradYear?: number;
   netid?: string;
+  school?: string;
   allergies?: string;
 }
 
@@ -13,7 +14,8 @@ export function isStudent(data: object): data is emailed_student {
     'firstName' in data &&
     'lastName' in data &&
     'gradYear' in data &&
-    'netid' in data
+    'netid' in data &&
+    'school' in data
   );
 }
 

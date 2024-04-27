@@ -71,7 +71,7 @@ students.put('/:email', catchAll(async (req, res) => {
   let studentData = req.body;
 
   // Check that email field exists on req.body
-  if (!isEmailedStudent(studentData)) {
+  if (email == "") {
     res.status(404).send({
       error: 'Student email not specified.',
     });

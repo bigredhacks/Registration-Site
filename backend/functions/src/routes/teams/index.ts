@@ -19,7 +19,7 @@ function catchAll(
 /**
  * Creates a new team
  * 
- * Requires teamName attribute
+ * Requires name attribute
  * Requires owner attribute
  */
 teams.post("/", catchAll(async (req, res) => {
@@ -32,21 +32,25 @@ teams.post("/", catchAll(async (req, res) => {
     }); return;
   }
 
-  try {
-    let docRef = await db.collection('teams').doc(data.name).get();
-
-    if (docRef.exists) {
-      res.status(400).send({
-        error: `Team with name: ${data.name} already exists.`
-      });
-      return;
-    }
-  } catch (e: any) {
-    res
-      .status(500)
-      .send({ error: `Problem with team validation. ${e.message}` });
+  // Check that owner exists in the database
+  let userRef = await db.collection('students').doc(data.name).get();
+  if (!userRef.exists) {
+    res.status(400).send({
+      error: 'User attempting to create team does not exist'
+    });
   }
 
+  // Check for team existence
+  let docRef = await db.collection('teams').doc(data.name).get();
+
+  if (docRef.exists) {
+    res.status(400).send({
+      error: `Team with name: ${data.name} already exists.`
+    });
+    return;
+  }
+
+  // Attempt to create team
   try {
     await db
       .collection('teams')

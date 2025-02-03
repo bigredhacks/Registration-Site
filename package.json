@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "emulate:frontend": "cd frontend && npm run dev",
-    "emulate:backend": "cd backend/functions && npm run emulate",
+    "emulate:backend": "cd backend && npm run dev",
     "install": "cd backend/functions && npm i && cd ../../frontend && npm i"
   },
   "license": "ISC"

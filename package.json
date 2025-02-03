@@ -6,7 +6,7 @@
   "scripts": {
     "emulate:frontend": "cd frontend && npm run dev",
     "emulate:backend": "cd backend && npm run dev",
-    "install": "cd backend/functions && npm i && cd ../../frontend && npm i"
+    "install": "cd backend && npm i && cd ../../frontend && npm i"
   },
   "license": "ISC"
 }

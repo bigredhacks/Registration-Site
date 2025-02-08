@@ -18,6 +18,10 @@ export const FormLayoutSchema = new Schmea({
     type: String,
     required: true,
   },
+  dueDate: {
+    type: Date,
+    required: true,
+  },
   formQuestions: {
     type: [FormQuestionSchema],
   }

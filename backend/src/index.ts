@@ -6,12 +6,18 @@ import dotenv from "dotenv";
 // Routers
 import layoutsRouter from './routes/layouts';
 
-dotenv.config({ path: `.env.${process.env.NODE_ENV || "development"}` });
-connectDB();
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+dotenv.config({ path: `.env.${NODE_ENV}` });
+
+const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017";
+const PORT = process.env.PORT || 5000;
+
+connectDB(MONGO_URI);
 
 //initialize express server
 const app = express();
-const PORT = process.env.PORT || 5000;
+
 
 // Middleware
 app.use(express.json());

@@ -2,6 +2,11 @@ import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 import { QuestionType } from "../types/questionType";
 
+/**
+ * FormQuestionSchema
+ * 
+ * Refer to API Docs for JSON Format.
+ */
 export const FormQuestionSchema = new Schema({
   name: {
     type: String,

@@ -3,6 +3,11 @@ const Schmea = mongoose.Schema;
 import { FormStatus } from "../types/formStatus";
 import { FormQuestionSchema } from "./FormQuestion";
 
+/**
+ * FormLayoutSchema
+ * 
+ * Refer to API Docs for JSON Format.
+ */
 export const FormLayoutSchema = new Schmea({
   title: {
     type: String,

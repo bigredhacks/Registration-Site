@@ -2,6 +2,14 @@ import FormLayoutModel from "../models/FormLayout";
 import { Request, Response } from "express";
 import { errorMessage, serverErrorMessage } from "../utils/resMessages";
 
+/**
+ * Fetches all form layouts.
+ * 
+ * GET: /layouts/
+ * 
+ * If successful, returns 200 OK with JSON array of all layouts.
+ * If an error occurs, returns 500 Internal Server Error withå error message.
+ */
 export const getAllLayouts = async (req: Request, res: Response) => {
   try {
     const layouts = await FormLayoutModel.find(); // fetch all layouts
@@ -11,6 +19,15 @@ export const getAllLayouts = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * Fetches a form layout by ID.
+ * 
+ * GET: /layouts/:id
+ * 
+ * If successful, returns 200 OK with JSON of the layout.
+ * If the layout is not found, returns 404 Not Found with error message.
+ * If an error occurs, returns 500 Internal Server Error with error message.
+ */
 export const getLayoutById = async (req: Request, res: Response) => {
   try {
     const layout = await FormLayoutModel.findById(req.params.id); // fetch layout by id
@@ -24,6 +41,17 @@ export const getLayoutById = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * Creates a new form layout.
+ * 
+ * POST: /layouts/
+ * 
+ * Request body: Refer to API Docs for required fields.
+ * 
+ * If successful, returns 201 Created with JSON of the created layout.
+ * If request body does not match specification (missing fields), returns 400 Bad Request with error message.
+ * If an error occurs, returns 500 Internal Server Error with error message.
+ */
 export const createLayout = async (req: Request, res: Response) => {
   const { title, status, description, dueDate, formQuestions } = req.body;
 
@@ -42,6 +70,17 @@ export const createLayout = async (req: Request, res: Response) => {
   }
 }
 
+/**
+ * Updates a form layout by ID.
+ * 
+ * PUT: /layouts/:id
+ * 
+ * Request body: Refer to API Docs for allowed fields.
+ * 
+ * If successful, returns 200 OK with JSON of the updated layout.
+ * If the layout is not found, returns 404 Not Found with error message.
+ * If an error occurs, returns 500 Internal Server Error with error message.
+ */
 export const updateLayout = async (req: Request, res: Response) => {
     // Validate that request body only contains allowed fields
     const allowedFields = ["title", "status", "description", "dueDate", "formQuestions"];
@@ -63,7 +102,15 @@ export const updateLayout = async (req: Request, res: Response) => {
     res.status(500).json(serverErrorMessage(err)); 
   }
 }
-
+/** 
+ * Deletes a form layout by ID.
+ * 
+ * DELETE: /layouts/:id
+ * 
+ * If successful, returns 200 OK with JSON of the deleted layout.
+ * If the layout is not found, returns 404 Not Found with error message.
+ * If an error occurs, returns 500 Internal Server Error with error message.
+*/
 export const deleteLayout = async (req: Request, res: Response) => {
   try {
     const deletedLayout = await FormLayoutModel.findByIdAndDelete(req.params.id); // delete layout by id

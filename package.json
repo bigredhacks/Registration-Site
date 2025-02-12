@@ -8,5 +8,10 @@
     "emulate:backend": "cd backend && npm run dev",
     "install": "cd backend && npm i && cd ../../frontend && npm i"
   },
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/material": "^6.4.3"
+  }
 }

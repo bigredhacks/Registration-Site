@@ -3,6 +3,9 @@ import cors from 'cors';
 import { connectDB } from './config/db';
 import dotenv from "dotenv";
 
+// Routers
+import layoutsRouter from './routes/layouts';
+
 const NODE_ENV = process.env.NODE_ENV || "development";
 
 dotenv.config({ path: `.env.${NODE_ENV}` });
@@ -16,7 +19,11 @@ connectDB(MONGO_URI);
 const app = express();
 
 
+// Middleware
 app.use(express.json());
 app.use(cors());
+
+// Routes
+app.use('/layouts', layoutsRouter);
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));

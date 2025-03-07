@@ -7,6 +7,6 @@
     "emulate:frontend": "cd frontend && npm run dev",
     "emulate:backend": "cd backend && npm run dev",
     "install": "cd backend && npm i && cd ../../frontend && npm i"
-  },
+   },
   "license": "ISC"
 }

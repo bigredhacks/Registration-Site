@@ -1,4 +1,5 @@
 import FormTypeModel from "../models/FormType";
+import FormLayoutModel from "../models/FormLayout";
 import { Request, Response } from "express";
 import { errorMessage, serverErrorMessage } from "../utils/resMessages";
 
@@ -63,21 +64,20 @@ export const createFormType = async (req: Request, res: Response) => {
     closeDate,
     startDate,
     endDate,
-    description,
-    dueDate,
-    status
+    status,
+    maxTeamSize
   } = req.body;
 
   // validate request body
-  if (!eventName || !eventDescription || !eventLocation || !layoutId || !openDate || !closeDate || !startDate || !endDate || !description || !dueDate || !status) {
+  if (!eventName || !eventDescription || !eventLocation || !layoutId || !openDate || !closeDate || !startDate || !endDate || !status || !maxTeamSize) {
     res.status(400).json(errorMessage("Missing required fields"));
     return
   }
 
   try {
-    const layout = await FormTypeModel.findById(layoutId); // fetch layout by id
+    const layout = await FormLayoutModel.findById(layoutId); // fetch layout by id
     if (!layout) {
-      res.status(404).json(errorMessage("Form Type not found"));
+      res.status(404).json(errorMessage("Form layout not found"));
       return
     }
     const formType = new FormTypeModel(req.body); // create new layout

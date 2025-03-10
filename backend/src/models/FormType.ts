@@ -41,14 +41,6 @@ export const FormTypeSchema = new Schmea({
     type: Date,
     required: true,
   },
-  description: {
-    type: String,
-    required: true,
-  },
-  dueDate: {
-    type: Date,
-    required: true,
-  },
   status: {
     type: String,
     enum: EventStatus,

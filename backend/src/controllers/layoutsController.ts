@@ -8,7 +8,7 @@ import { errorMessage, serverErrorMessage } from "../utils/resMessages";
  * GET: /layouts/
  * 
  * If successful, returns 200 OK with JSON array of all layouts.
- * If an error occurs, returns 500 Internal Server Error withå error message.
+ * If an error occurs, returns 500 Internal Server Error with an error message.
  */
 export const getAllLayouts = async (req: Request, res: Response) => {
   try {

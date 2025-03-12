@@ -1,5 +1,10 @@
 'use client';
 import { useState } from 'react';
+import SuggestionCard from './SuggestionCard';
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 
 export default function Form() {
     const [formData, setFormData] = useState({
@@ -97,17 +102,16 @@ export default function Form() {
     return (
         <div className="max-w-2xl mx-auto p-4">
             <form onSubmit={handleSubmit}>
-                <div className="card">
-                    <div className="card-header">
-                        <h1 className="card-title">Team Matcher</h1>
-                    </div>
-                    <div className="space-y-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Team Matcher</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
                         <div className="space-y-4">
                             <h3 className="text-lg font-medium">Contact Information</h3>
                             <div className="space-y-2">
-                                <label className="form-label">Name</label>
-                                <input
-                                    className="form-input text-black"
+                                <Input
+                                    id="name"
                                     name="name"
                                     placeholder="Name"
                                     value={formData.name}
@@ -116,9 +120,8 @@ export default function Form() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="form-label">Email</label>
-                                <input
-                                    className="form-input text-black"
+                                <Input
+                                    id="email"
                                     name="email"
                                     type="email"
                                     placeholder="Email"
@@ -128,9 +131,8 @@ export default function Form() {
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="form-label">Phone</label>
-                                <input
-                                    className="form-input text-black"
+                                <Input
+                                    id="phone"
                                     name="phone"
                                     type="tel"
                                     placeholder="Phone"
@@ -143,14 +145,14 @@ export default function Form() {
                         <div className="space-y-4">
                             <h3 className="text-lg font-medium">Role Preferences</h3>
                             <ul className="space-y-2">
-                                {formData.roles.map((role, index) => (
+                                {formData.roles.map((role) => (
                                     <li
                                         key={role}
                                         draggable
                                         onDragStart={() => handleDragStart(role)}
                                         onDragOver={handleDragOver}
                                         onDrop={(e) => handleDrop(e, role)}
-                                        className="draggable-item"
+                                        className="p-3 bg-secondary rounded-lg cursor-move hover:bg-secondary/80"
                                     >
                                         {role}
                                     </li>
@@ -161,57 +163,60 @@ export default function Form() {
                         <div className="space-y-4">
                             <h3 className="text-lg font-medium">Skills</h3>
                             <div className="flex gap-2">
-                                <input
-                                    className="form-input text-black"
+                                <Input
                                     type="text"
                                     placeholder="Add a skill"
                                     value={skillInput}
                                     onChange={(e) => setSkillInput(e.target.value)}
                                 />
-                                <button type="button" className="btn btn-primary" onClick={handleSkillAdd}>
+                                <Button 
+                                    type="button" 
+                                    onClick={handleSkillAdd}
+                                    variant="secondary"
+                                >
                                     Add Skill
-                                </button>
+                                </Button>
                             </div>
                             <ul className="space-y-2">
                                 {formData.skills.map((skill, index) => (
-                                    <li key={index} className="skill-item">
+                                    <li key={index} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
                                         <span>{skill}</span>
-                                        <button
+                                        <Button
                                             type="button"
-                                            className="btn btn-destructive btn-sm"
+                                            variant="destructive"
+                                            size="sm"
                                             onClick={() => handleSkillRemove(index)}
                                         >
-                                            X
-                                        </button>
+                                            ×
+                                        </Button>
                                     </li>
                                 ))}
                             </ul>
                         </div>
 
-                        <button type="submit" className="btn btn-primary w-full">
+                        <Button type="submit" className="w-full">
                             Submit
-                        </button>
-                    </div>
-                </div>
+                        </Button>
+                    </CardContent>
+                </Card>
             </form>
 
             {submissions.length > 0 && (
-                <div className="card mt-6">
-                    <div className="card-header">
-                        <h2 className="card-title">Submissions</h2>
-                    </div>
-                    <div className="space-y-4">
-                        {submissions.map((submission, index) => (
-                            <div key={index} className="pb-4 border-b last:border-b-0">
-                                <h3 className="font-medium">{submission.name}</h3>
-                                <p>Email: {submission.email}</p>
-                                <p>Phone: {submission.phone}</p>
-                                <p>Roles: {submission.roles.join(' > ')}</p>
-                                <p>Skills: {submission.skills.join(', ')}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
+                <Card className="mt-6">
+                    <CardHeader>
+                        <CardTitle>Submissions</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {submissions.map((submission, index) => (
+                                <SuggestionCard 
+                                    key={index} 
+                                    suggestion={submission}
+                                />
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
             )}
         </div>
     );

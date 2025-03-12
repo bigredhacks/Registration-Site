@@ -6,14 +6,18 @@ import {
     CardHeader,
     CardTitle,
 } from "@/components/ui/card"
-
+import { Button } from "@/components/ui/button"
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
 
-export default function SuggestionCard({ suggestion }) {
+export default function SuggestionCard({ suggestion, onDelete }) {
+    const handleReject = async () => {
+        onDelete(suggestion._id);
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -37,12 +41,17 @@ export default function SuggestionCard({ suggestion }) {
                     </Popover>
                 </CardDescription>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex justify-between">
                 <p>{suggestion.roles.join(', ')}</p>
+                <Button 
+                    variant="destructive" 
+                    onClick={handleReject}
+                >
+                    Reject
+                </Button>
             </CardFooter>
         </Card>
     )
-
 }
 
 

@@ -1,12 +1,10 @@
 'use client';
 import { useState } from 'react';
-import SuggestionCard from './SuggestionCard';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 
-export default function Form() {
+export default function Form({ onSubmitSuccess }) {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
@@ -15,7 +13,6 @@ export default function Form() {
         roles: ['Designer', 'Frontend', 'Backend']
     });
     const [skillInput, setSkillInput] = useState('');
-    const [submissions, setSubmissions] = useState([]);
     const [draggingItem, setDraggingItem] = useState(null);
 
     const handleInputChange = (e) => {
@@ -68,6 +65,7 @@ export default function Form() {
         }
     };
 
+    // In the handleSubmit function
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -83,10 +81,7 @@ export default function Form() {
                 throw new Error('Network response was not ok');
             }
             
-            const data = await response.json();
-            setSubmissions(prev => [...prev, data.data]);
-            
-            // Reset form
+            // Reset form after successful submission
             setFormData({
                 name: '',
                 email: '',
@@ -94,6 +89,9 @@ export default function Form() {
                 skills: [],
                 roles: ['Designer', 'Frontend', 'Backend']
             });
+            
+            // Call the callback if provided
+            onSubmitSuccess?.();
         } catch (error) {
             console.error('Error submitting form:', error);
         }
@@ -200,24 +198,6 @@ export default function Form() {
                     </CardContent>
                 </Card>
             </form>
-
-            {submissions.length > 0 && (
-                <Card className="mt-6">
-                    <CardHeader>
-                        <CardTitle>Submissions</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {submissions.map((submission, index) => (
-                                <SuggestionCard 
-                                    key={index} 
-                                    suggestion={submission}
-                                />
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            )}
         </div>
     );
 }

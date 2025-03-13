@@ -102,5 +102,96 @@ app.delete('/api/submissions/:id', async (req, res) => {
     }
 });
 
+app.get('/api/teams', async (req, res) => {
+    try {
+        const teamSize = parseInt(req.query.size as string) || 3;
+        const submissions = await Submission.find({}).lean();
+
+        if (submissions.length < teamSize) {
+            res.status(400).json({
+                error: "Not enough participants to form teams of the requested size"
+            });
+            return;
+        }
+
+        const validatedSubmissions = submissions.filter(submission => {
+            try {
+                submissionSchema.parse(submission);
+                return true;
+            } catch (error: unknown) {
+                if (error instanceof Error) {
+                    console.warn(`Invalid submission data: ${error.message}`, submission);
+                }
+                return false;
+            }
+        });
+
+        const requiredRoles = ["Frontend", "Backend", "Designer"];
+        const teams = [];
+        let availableParticipants = [...validatedSubmissions];
+
+        while (availableParticipants.length >= teamSize) {
+            const team = [];
+            const usedRoles = new Set();
+
+            // First pass: assign primary roles
+            for (const role of requiredRoles) {
+                const candidate = availableParticipants.find(p => p.roles?.[0] === role);
+                if (candidate) {
+                    team.push(candidate);
+                    availableParticipants = availableParticipants.filter(p => p._id.toString() !== candidate._id.toString());
+                    usedRoles.add(role);
+                }
+            }
+
+            // Second pass: fill missing roles with secondary role participants
+            for (const role of requiredRoles) {
+                if (!usedRoles.has(role)) {
+                    const candidate = availableParticipants.find(p => p.roles?.includes(role));
+                    if (candidate) {
+                        team.push(candidate);
+                        availableParticipants = availableParticipants.filter(p => p._id.toString() !== candidate._id.toString());
+                        usedRoles.add(role);
+                    }
+                }
+            }
+
+            // Check if team is valid
+            if (usedRoles.size < requiredRoles.length) {
+                break;
+            }
+
+            // Fill remaining slots
+            while (team.length < teamSize && availableParticipants.length > 0) {
+                team.push(availableParticipants[0]);
+                availableParticipants = availableParticipants.slice(1);
+            }
+
+            teams.push(team);
+        }
+
+        res.json({
+            success: true,
+            data: teams.map((team, index) => 
+                team.map(member => ({
+                    _id: member._id,
+                    name: member.name,
+                    email: member.email,
+                    phone: member.phone,
+                    roles: member.roles || [],
+                    skills: member.skills || []
+                }))
+            )
+        });
+        return;
+
+    } catch (error) {
+        console.error('Error forming teams:', error);
+        res.status(500).json({ error: 'Failed to form teams' });
+        return;
+    }
+});
+
+
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));
 

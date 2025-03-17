@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { EventStatus } from '../types/eventStatus';
 
+// Full Schema for Event (POST requests)
 export const eventSchema = z.object({
   eventName: z.string(),
   eventDescription: z.string(),
@@ -13,6 +14,9 @@ export const eventSchema = z.object({
   status: z.nativeEnum(EventStatus),
   maxTeamSize: z.number().int().positive(),
 })
+
+// Schema for PATCH requests (all fields optional)
+export const eventPatchSchema = eventSchema.partial();
 
 type Event = z.infer<typeof eventSchema>;
 

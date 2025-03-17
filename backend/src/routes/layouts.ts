@@ -1,7 +1,7 @@
 import express from 'express';
 import * as layoutsController from '../controllers/layoutsController';
 import { validateRequest } from '../middleware/validation';
-import { formLayoutSchema } from '../zod-schemas/formLayoutSchemas';
+import { formLayoutSchema, formLayoutPatchSchema } from '../zod-schemas/formLayoutSchemas';
 
 const layoutsRouter = express.Router();
 
@@ -11,7 +11,7 @@ layoutsRouter.route("/")
 
 layoutsRouter.route("/:id")
   .get(layoutsController.getLayoutById)
-  .patch(layoutsController.updateLayout)
+  .patch(validateRequest({ body: formLayoutPatchSchema }), layoutsController.updateLayout)
   .delete(layoutsController.deleteLayout);
 
 export default layoutsRouter;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { QuestionType } from '../types/questionType';
 
-
+// Full Schema for FormQuestion
 export const formQuestionSchema = z.object({
   name: z.string(),
   required: z.boolean(),
@@ -11,6 +11,9 @@ export const formQuestionSchema = z.object({
   minLength: z.number().int().positive().optional(),
   maxLength: z.number().int().positive().optional(),
 })
+
+// Schema for PATCH requests (all fields optional)
+export const formQuestionPatchSchema = formQuestionSchema.partial();
 
 type FormQuestion = z.infer<typeof formQuestionSchema>;
 

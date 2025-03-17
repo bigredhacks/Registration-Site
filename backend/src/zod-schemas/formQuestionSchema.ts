@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { QuestionType } from '../types/questionType';
 
-// Full Schema for FormQuestion
+// Full Schema for FormQuestion (POST requests)
 export const formQuestionSchema = z.object({
   name: z.string(),
   required: z.boolean(),

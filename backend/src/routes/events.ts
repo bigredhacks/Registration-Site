@@ -1,16 +1,15 @@
 import express from 'express';
-import * as eventsController from '../controllers/formTypesController';
+import * as eventsController from '../controllers/eventsController';
 
 const eventsRouter = express.Router();
 
 eventsRouter.route("/")
-  .get(eventsController.getAllFormTypes)
-  .post(eventsController.createFormType);
+  .get(eventsController.getAllEvents)
+  .post(eventsController.createEvent);
 
 eventsRouter.route("/:id")
-  .get(eventsController.getFormTypeById)
-  .patch(eventsController.updateFormType)
-  .delete(eventsController.deleteFormType);
-
+  .get(eventsController.getEventById)
+  .patch(eventsController.updateEvent)
+  .delete(eventsController.deleteEvent);
 
 export default eventsRouter;

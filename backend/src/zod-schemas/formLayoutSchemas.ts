@@ -9,3 +9,7 @@ export const formLayoutSchema = z.object({
   dueDate: z.date(),
   formQuestions: z.array(formQuestionSchema),
 })
+
+type FormLayout = z.infer<typeof formLayoutSchema>;
+
+export default FormLayout;

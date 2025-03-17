@@ -11,3 +11,7 @@ export const formQuestionSchema = z.object({
   minLength: z.number().int().positive().optional(),
   maxLength: z.number().int().positive().optional(),
 })
+
+type FormQuestion = z.infer<typeof formQuestionSchema>;
+
+export default FormQuestion;

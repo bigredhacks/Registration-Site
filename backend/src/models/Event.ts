@@ -3,11 +3,11 @@ const Schmea = mongoose.Schema;
 import { EventStatus } from "../types/eventStatus";
 
 /**
- * FormTypeSchema
+ * EventSchema
  * 
  * Refer to API Docs for JSON Format.
  */
-export const FormTypeSchema = new Schmea({
+export const EventSchema = new Schmea({
   eventName: {
     type: String,
     required: true,
@@ -53,6 +53,6 @@ export const FormTypeSchema = new Schmea({
   },
 })
 
-const FormTypeModel = mongoose.model("FormType", FormTypeSchema);
+const EventModel = mongoose.model("Event", EventSchema);
 
-export default FormTypeModel
+export default EventModel;

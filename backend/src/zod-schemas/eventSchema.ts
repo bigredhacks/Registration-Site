@@ -13,3 +13,7 @@ export const eventSchema = z.object({
   status: z.nativeEnum(EventStatus),
   maxTeamSize: z.number().int().positive(),
 })
+
+type Event = z.infer<typeof eventSchema>;
+
+export default Event;

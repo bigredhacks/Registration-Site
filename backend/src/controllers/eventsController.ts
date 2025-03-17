@@ -1,19 +1,19 @@
-import FormTypeModel from "../models/FormType";
+import Event from "../models/Event";
 import FormLayoutModel from "../models/FormLayout";
 import { Request, Response } from "express";
 import { errorMessage, serverErrorMessage } from "../utils/resMessages";
 
 /**
- * Fetches all form types.
+ * Fetches all events.
  * 
- * GET: /formtypes/
+ * GET: /events/
  * 
- * If successful, returns 200 OK with JSON array of all form types.
+ * If successful, returns 200 OK with JSON array of all events.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const getAllFormTypes = async (req: Request, res: Response) => {
   try {
-    const formTypes = await FormTypeModel.find(); // fetch all form types
+    const formTypes = await Event.find(); // fetch all form types
     res.status(200).json(formTypes);
   } catch (err: any) {
     res.status(500).json(errorMessage(err)); 
@@ -23,15 +23,15 @@ export const getAllFormTypes = async (req: Request, res: Response) => {
 /**
  * Fetches a form type by ID.
  * 
- * GET: /formtypes/:id
+ * GET: /events/:id
  * 
  * If successful, returns 200 OK with JSON of the layout.
- * If the form type is not found, returns 404 Not Found with error message.
+ * If the event is not found, returns 404 Not Found with error message.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const getFormTypeById = async (req: Request, res: Response) => {
   try {
-    const layout = await FormTypeModel.findById(req.params.id); // fetch layout by id
+    const layout = await Event.findById(req.params.id); // fetch event by id
     if (!layout) {
       res.status(404).json(errorMessage("Form Type not found"));
       return
@@ -43,15 +43,15 @@ export const getFormTypeById = async (req: Request, res: Response) => {
 }
 
 /**
- * Creates a new form type.
+ * Creates a new event.
  * 
- * POST: /formtypes/
+ * POST: /events/
  * 
  * Request body: Refer to API Docs for required fields.
  * 
- * If successful, returns 201 Created with JSON of the created form type.
+ * If successful, returns 201 Created with JSON of the created events.
  * If request body does not match specification (missing fields), returns 400 Bad Request with error message.
- * If the form type id is not found, returns 404 Not Found with error message.
+ * If the event id is not found, returns 404 Not Found with error message.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const createFormType = async (req: Request, res: Response) => {
@@ -80,7 +80,7 @@ export const createFormType = async (req: Request, res: Response) => {
       res.status(404).json(errorMessage("Form layout not found"));
       return
     }
-    const formType = new FormTypeModel(req.body); // create new layout
+    const formType = new Event(req.body); // create new Event
     await formType.save();
     res.status(201).json(formType);
   } catch (err: any) {
@@ -89,14 +89,14 @@ export const createFormType = async (req: Request, res: Response) => {
 }
 
 /**
- * Updates a form type by ID.
+ * Updates an event by ID.
  * 
- * PUT: /formtypes/:id
+ * PUT: /events/:id
  * 
  * Request body: Refer to API Docs for fields that can be updated.
  * 
- * If successful, returns 200 OK with JSON of the updated form type.
- * If the form type id  is not found, returns 404 Not Found with error message.
+ * If successful, returns 200 OK with JSON of the updated events.
+ * If the event id  is not found, returns 404 Not Found with error message.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const updateFormType = async (req: Request, res: Response) => {
@@ -123,7 +123,7 @@ export const updateFormType = async (req: Request, res: Response) => {
       }
   
     try {
-      const formType = await FormTypeModel.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); 
+      const formType = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); 
       if (!formType) {
         res.status(404).json(errorMessage("Form Type not found"));
         return
@@ -135,17 +135,17 @@ export const updateFormType = async (req: Request, res: Response) => {
 }
 
 /**
- * Deletes a form type by ID.
+ * Deletes an event by ID.
  * 
- * DELETE: /formtypes/:id
+ * DELETE: /events/:id
  * 
- * If successful, returns 200 OK with JSON of the deleted form type.
- * If the form type is not found, returns 404 Not Found with error message.
+ * If successful, returns 200 OK with JSON of the deleted event.
+ * If the event is not found, returns 404 Not Found with error message.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const deleteFormType = async (req: Request, res: Response) => {
   try {
-    const deletedFormType = await FormTypeModel.findByIdAndDelete(req.params.id); // delete layout by id
+    const deletedFormType = await Event.findByIdAndDelete(req.params.id); // delete layout by id
     if (!deletedFormType) {
       res.status(404).json(errorMessage("Form Type not found"));
       return

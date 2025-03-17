@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 
 // Routers
 import layoutsRouter from './routes/layouts';
-import formTypesRouter from './routes/formTypes';
+import formTypesRouter from './routes/events';
 
 const NODE_ENV = process.env.NODE_ENV || "development";
 
@@ -26,6 +26,6 @@ app.use(cors());
 
 // Routes
 app.use('/layouts', layoutsRouter);
-app.use("/formtypes", formTypesRouter);
+app.use("/events", formTypesRouter);
 
 app.listen(PORT, () => console.log(`🚀 Server running on http://localhost:${PORT}`));

@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { FormStatus } from '../types/formStatus';
+import { FormStatus } from '../../types/formStatus';
 import { formQuestionSchema } from './formQuestionSchema';
+import { validDate } from '../string-validation/validDate';
 
 
 // Full Schema for FormLayout (POST requests)
@@ -8,7 +9,7 @@ export const formLayoutSchema = z.object({
   title: z.string(),
   status: z.nativeEnum(FormStatus),
   description: z.string(),
-  dueDate: z.date(),
+  dueDate: validDate,
   formQuestions: z.array(formQuestionSchema),
 })
 

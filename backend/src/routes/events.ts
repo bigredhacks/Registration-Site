@@ -1,8 +1,8 @@
 import express from 'express';
 import * as eventsController from '../controllers/eventsController';
 import { validateRequest } from '../middleware/validation';
-import { eventSchema, eventPatchSchema } from '../zod-schemas/eventSchema';
-import { mongoIdSchema } from '../zod-schemas/mongoIdSchema';
+import { eventSchema, eventPatchSchema } from '../zod-validation/zod-schemas/eventSchema';
+import { mongoIdSchema } from '../zod-validation/zod-schemas/mongoIdSchema';
 
 const eventsRouter = express.Router();
 

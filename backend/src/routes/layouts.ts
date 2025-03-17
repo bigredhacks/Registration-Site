@@ -1,8 +1,8 @@
 import express from 'express';
 import * as layoutsController from '../controllers/layoutsController';
 import { validateRequest } from '../middleware/validation';
-import { formLayoutSchema, formLayoutPatchSchema } from '../zod-schemas/formLayoutSchemas';
-import { mongoIdSchema } from '../zod-schemas/mongoIdSchema';
+import { formLayoutSchema, formLayoutPatchSchema } from '../zod-validation/zod-schemas/formLayoutSchemas';
+import { mongoIdSchema } from '../zod-validation/zod-schemas/mongoIdSchema';
 
 const layoutsRouter = express.Router();
 

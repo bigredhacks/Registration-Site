@@ -1,17 +1,18 @@
 import { z } from 'zod';
-import { EventStatus } from '../types/eventStatus';
-import { mongoIdSchema } from './mongoIdSchema';
+import { EventStatus } from '../../types/eventStatus';
+import { validMongoId } from '../string-validation/validMongoId';
+import { validDate } from '../string-validation/validDate';
 
 // Full Schema for Event (POST requests)
 export const eventSchema = z.object({
   eventName: z.string(),
   eventDescription: z.string(),
   eventLocation: z.string(),
-  layoutId: mongoIdSchema,
-  openDate: z.date(),
-  closeDate: z.date(),
-  startDate: z.date(),
-  endDate: z.date(),
+  layoutId: validMongoId,
+  openDate: validDate,
+  closeDate: validDate,
+  startDate: validDate,
+  endDate: validDate,
   status: z.nativeEnum(EventStatus),
   maxTeamSize: z.number().int().positive(),
 })

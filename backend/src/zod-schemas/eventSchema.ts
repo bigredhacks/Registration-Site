@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { EventStatus } from '../types/eventStatus';
+import { mongoIdSchema } from './mongoIdSchema';
 
 // Full Schema for Event (POST requests)
 export const eventSchema = z.object({
   eventName: z.string(),
   eventDescription: z.string(),
   eventLocation: z.string(),
-  layoutId: z.string(),
+  layoutId: mongoIdSchema,
   openDate: z.date(),
   closeDate: z.date(),
   startDate: z.date(),

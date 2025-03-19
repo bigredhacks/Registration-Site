@@ -28,10 +28,13 @@ export default function SuggestionCard({ suggestion, onDelete }) {
             <CardContent>
                 <CardDescription>
                     <Popover>
-                        <PopoverTrigger>
-                            <button className="flex rounded-md border border-input px-4 py-2 font-medium hover:bg-accent hover:text-accent-foreground">
-                            Skills
-                            </button>
+                        <PopoverTrigger asChild>
+                            <div 
+                                className="flex rounded-md border border-input px-2 py-2 font-medium hover:bg-accent hover:text-accent-foreground"
+                                onMouseEnter={(e) => e.currentTarget.click()}
+                            >
+                                Skills
+                            </div>
                         </PopoverTrigger>
                         <PopoverContent>
                             {suggestion.skills.map((skill, index) => (
@@ -42,7 +45,7 @@ export default function SuggestionCard({ suggestion, onDelete }) {
                 </CardDescription>
             </CardContent>
             <CardFooter className="flex justify-between">
-                <p>{suggestion.roles.join(', ')}</p>
+                <p>{suggestion.roles?.length ? suggestion.roles.join(', ') : 'any'}</p>
                 <Button 
                     variant="destructive" 
                     onClick={handleReject}

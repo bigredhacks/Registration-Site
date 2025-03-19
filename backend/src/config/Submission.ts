@@ -5,7 +5,8 @@ const submissionSchema = new mongoose.Schema({
     email: { type: String, required: true },
     phone: { type: String, required: true },
     skills: [{ type: String }],
-    roles: [{ type: String }]
+    roles: [{ type: String }],
+    firstTimeHacker: { type: Boolean, default: false },
 }, { timestamps: true });
 
 export const Submission = mongoose.model('Submission', submissionSchema);

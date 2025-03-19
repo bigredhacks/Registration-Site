@@ -47,11 +47,11 @@ export default function PeopleBoard({ refreshTrigger }) {
     }
 
     return (
-        <Card className="w-full p-8 shadow-xl rounded-xl bg-white border-2 border-gray-200">
-            <CardHeader className="flex flex-row items-center justify-between">
+        <Card className="w-full h-[calc(100vh-2rem)] overflow-y-auto p-4 shadow-xl rounded-xl bg-white border-2 border-gray-200">
+            <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-white z-10 pb-4">
                 <CardTitle>People Board</CardTitle>
             </CardHeader>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {submissions.map((submission) => (
                     <SuggestionCard 
                         key={submission._id}

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from '@/components/ui/checkbox';
 
 export default function Form({ onSubmitSuccess }) {
     const [formData, setFormData] = useState({
@@ -10,7 +11,8 @@ export default function Form({ onSubmitSuccess }) {
         email: '',
         phone: '',
         skills: [],
-        roles: ['Designer', 'Frontend', 'Backend']
+        roles: ['Designer', 'Frontend', 'Backend', 'Any'],
+        firstTimeHacker: false
     });
     const [skillInput, setSkillInput] = useState('');
     const [draggingItem, setDraggingItem] = useState(null);
@@ -37,6 +39,20 @@ export default function Form({ onSubmitSuccess }) {
         setFormData(prev => ({
             ...prev,
             skills: prev.skills.filter((_, index) => index !== indexToRemove)
+        }));
+    };
+
+    const handleCheckboxChange = (checked) => {
+        setFormData(prev => ({
+            ...prev,
+            firstTimeHacker: checked
+        }))
+    }
+
+    const handleRoleRemove = (roleToRemove) => {
+        setFormData(prev => ({
+            ...prev,
+            roles: prev.roles.filter(role => role !== roleToRemove)
         }));
     };
 
@@ -87,7 +103,8 @@ export default function Form({ onSubmitSuccess }) {
                 email: '',
                 phone: '',
                 skills: [],
-                roles: ['Designer', 'Frontend', 'Backend']
+                roles: ['Designer', 'Frontend', 'Backend', 'Any'],
+                firstTimeHacker: false
             });
             
             // Call the callback if provided
@@ -141,7 +158,7 @@ export default function Form({ onSubmitSuccess }) {
                         </div>
 
                         <div className="space-y-4">
-                            <h3 className="text-lg font-medium">Role Preferences</h3>
+                            <h3 className="text-lg font-medium">Role Preferences (Drag)</h3>
                             <ul className="space-y-2">
                                 {formData.roles.map((role) => (
                                     <li
@@ -152,7 +169,16 @@ export default function Form({ onSubmitSuccess }) {
                                         onDrop={(e) => handleDrop(e, role)}
                                         className="p-3 bg-secondary rounded-lg cursor-move hover:bg-secondary/80"
                                     >
-                                        {role}
+                                        <span>{role}</span>
+                                        <Button 
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleRoleRemove(role)}
+                                            className="h-6 w-6 p-0 ml-auto"
+                                        >
+                                            ×
+                                        </Button>
                                     </li>
                                 ))}
                             </ul>
@@ -190,6 +216,20 @@ export default function Form({ onSubmitSuccess }) {
                                     </li>
                                 ))}
                             </ul>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                        <Checkbox 
+                            id="firstTimeHacker"
+                            checked={formData.firstTimeHacker}
+                            onCheckedChange={handleCheckboxChange}
+                        />
+                        <label
+                            htmlFor="firstTimeHacker"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                        >
+                            First Time Hacker?
+                        </label>
                         </div>
 
                         <Button type="submit" className="w-full">

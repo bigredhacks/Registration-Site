@@ -55,26 +55,8 @@ export const getEventById = async (req: Request, res: Response) => {
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const createEvent = async (req: Request, res: Response) => {
-  const {
-    eventName,
-    eventDescription,
-    eventLocation,
-    layoutId,
-    openDate,
-    closeDate,
-    startDate,
-    endDate,
-    status,
-    maxTeamSize
-  } = req.body;
-
-  // validate request body
-  if (!eventName || !eventDescription || !eventLocation || !layoutId || !openDate || !closeDate || !startDate || !endDate || !status || !maxTeamSize) {
-    res.status(400).json(errorMessage("Missing required fields"));
-    return
-  }
-
   try {
+    const layoutId = req.body.layoutId;
     const layout = await FormLayoutModel.findById(layoutId); // fetch layout by id
     if (!layout) {
       res.status(404).json(errorMessage("Form layout not found"));
@@ -91,41 +73,19 @@ export const createEvent = async (req: Request, res: Response) => {
 /**
  * Updates an event by ID.
  * 
- * PUT: /events/:id
+ * PATCH: /events/:id
  * 
  * Request body: Refer to API Docs for fields that can be updated.
  * 
  * If successful, returns 200 OK with JSON of the updated events.
- * If the event id  is not found, returns 404 Not Found with error message.
+ * If the event id is not found, returns 404 Not Found with error message.
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const updateEvent = async (req: Request, res: Response) => {
-      // Validate that request body only contains allowed fields
-      const allowedFields = [
-        "eventName",
-        "eventDescription",
-        "eventLocation",
-        "layoutId",
-        "openDate",
-        "closeDate",
-        "startDate",
-        "endDate",
-        "description",
-        "dueDate",
-        "status",
-        "maxTeamSize"
-      ];
-      const isValidUpdate = Object.keys(req.body).every((key) => allowedFields.includes(key));
-  
-      if (!isValidUpdate) {
-        res.status(400).json({ error: "Invalid update fields provided" });
-        return
-      }
-  
     try {
       const event = await Event.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); 
       if (!event) {
-        res.status(404).json(errorMessage("Form Type not found"));
+        res.status(404).json(errorMessage("Form layout not found"));
         return
       }
       res.status(200).json(event);

@@ -53,14 +53,6 @@ export const getLayoutById = async (req: Request, res: Response) => {
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const createLayout = async (req: Request, res: Response) => {
-  const { title, status, description, dueDate, formQuestions } = req.body;
-
-  // validate request body
-  if (!title || !status || !description || !dueDate || !formQuestions) {
-    res.status(400).json(errorMessage("Missing required fields"));
-    return
-  }
-
   try {
     const layout = new FormLayoutModel(req.body); // create new layout
     await layout.save();
@@ -73,7 +65,7 @@ export const createLayout = async (req: Request, res: Response) => {
 /**
  * Updates a form layout by ID.
  * 
- * PUT: /layouts/:id
+ * PATCH: /layouts/:id
  * 
  * Request body: Refer to API Docs for allowed fields.
  * 
@@ -82,15 +74,6 @@ export const createLayout = async (req: Request, res: Response) => {
  * If an error occurs, returns 500 Internal Server Error with error message.
  */
 export const updateLayout = async (req: Request, res: Response) => {
-    // Validate that request body only contains allowed fields
-    const allowedFields = ["title", "status", "description", "dueDate", "formQuestions"];
-    const isValidUpdate = Object.keys(req.body).every((key) => allowedFields.includes(key));
-
-    if (!isValidUpdate) {
-      res.status(400).json({ error: "Invalid update fields provided" });
-      return
-    }
-
   try {
     const layout = await FormLayoutModel.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true }); 
     if (!layout) {
@@ -102,6 +85,7 @@ export const updateLayout = async (req: Request, res: Response) => {
     res.status(500).json(serverErrorMessage(err)); 
   }
 }
+
 /** 
  * Deletes a form layout by ID.
  * 

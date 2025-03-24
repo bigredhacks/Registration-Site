@@ -1,10 +1,10 @@
-'use client';
-import { useState } from 'react';
-import Form from './components/Form';
-import PeopleBoard from './components/PeopleBoard';
-import TeamMatches from './components/TeamMatches';
-import AdminLogin from './components/AdminLogin';
-import { AuthProvider, useAuth } from './context/AuthContext';
+"use client";
+import { useState } from "react";
+import Form from "./components/Form";
+import PeopleBoard from "./components/PeopleBoard";
+import TeamMatches from "./components/TeamMatches";
+import AdminLogin from "./components/AdminLogin";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import { Button } from "@/components/ui/button";
 
 function MainContent() {
@@ -12,14 +12,16 @@ function MainContent() {
   const { isAdmin, logout } = useAuth();
 
   const handleFormSubmit = () => {
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshTrigger((prev) => prev + 1);
   };
 
   if (isAdmin) {
     return (
       <div className="min-h-screen p-6">
         <div className="flex justify-end mb-4">
-          <Button variant="ghost" className='font-black' onClick={logout}>Logout</Button>
+          <Button variant="ghost" className="font-black" onClick={logout}>
+            Logout
+          </Button>
         </div>
         <div className="space-y-6">
           <PeopleBoard refreshTrigger={refreshTrigger} />

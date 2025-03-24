@@ -1,7 +1,6 @@
 import { GalleryVerticalEnd } from "lucide-react"
 import { useState } from 'react';
 import Form from "./Form"
-import TeamMatches from './TeamMatches'
 import PeopleBoard from './PeopleBoard'
 
 export default function LoginPage() {

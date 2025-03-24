@@ -4,16 +4,35 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from '@/components/ui/checkbox';
+import Skills from "./Skills";
 
 export default function Form({ onSubmitSuccess }) {
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        skills: [],
-        roles: ['Designer', 'Frontend', 'Backend', 'Any'],
-        firstTimeHacker: false
+  const [selectedSkills, setSelectedSkills] = useState([]);
+  const [isSkillsOpen, setIsSkillsOpen] = useState(false);
+  
+  const handleSkillToggle = (skill) => {
+    setSelectedSkills(prev => {
+      const newSkills = prev.includes(skill) 
+        ? prev.filter(s => s !== skill)
+        : [...prev, skill];
+      
+      setFormData(prevForm => ({
+        ...prevForm,
+        skills: newSkills
+      }));
+      
+      return newSkills;
     });
+  };
+
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    skills: [], // This will now be updated when selectedSkills changes
+    roles: ['Designer', 'Frontend', 'Backend', 'Any'],
+    firstTimeHacker: false
+  });
     const [skillInput, setSkillInput] = useState('');
     const [draggingItem, setDraggingItem] = useState(null);
 
@@ -22,23 +41,6 @@ export default function Form({ onSubmitSuccess }) {
         setFormData(prev => ({
             ...prev,
             [name]: value
-        }));
-    };
-
-    const handleSkillAdd = () => {
-        if (skillInput.trim()) {
-            setFormData(prev => ({
-                ...prev,
-                skills: [...prev.skills, skillInput.trim()]
-            }));
-            setSkillInput('');
-        }
-    };
-
-    const handleSkillRemove = (indexToRemove) => {
-        setFormData(prev => ({
-            ...prev,
-            skills: prev.skills.filter((_, index) => index !== indexToRemove)
         }));
     };
 
@@ -184,40 +186,30 @@ export default function Form({ onSubmitSuccess }) {
                             </ul>
                         </div>
 
-                        <div className="space-y-4">
-                            <h3 className="text-lg font-medium">Skills</h3>
-                            <div className="flex gap-2">
-                                <Input
-                                    type="text"
-                                    placeholder="Add a skill"
-                                    value={skillInput}
-                                    onChange={(e) => setSkillInput(e.target.value)}
-                                />
-                                <Button 
-                                    type="button" 
-                                    onClick={handleSkillAdd}
-                                    variant="secondary"
-                                >
-                                    Add Skill
-                                </Button>
+                        <div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="w-full justify-start"
+                                onClick={() => setIsSkillsOpen(true)}
+                            >
+                                {selectedSkills.length > 0 
+                                ? `Selected ${selectedSkills.length} skills`
+                                : "Select skills..."}
+                            </Button>
+                            
+                            {isSkillsOpen && (
+                                <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
+                                <div className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%]">
+                                    <Skills
+                                    selectedSkills={selectedSkills}
+                                    onSkillToggle={handleSkillToggle}
+                                    onClose={() => setIsSkillsOpen(false)}
+                                    />
+                                </div>
+                                </div>
+                            )}
                             </div>
-                            <ul className="space-y-2">
-                                {formData.skills.map((skill, index) => (
-                                    <li key={index} className="flex items-center justify-between p-3 bg-secondary rounded-lg">
-                                        <span>{skill}</span>
-                                        <Button
-                                            type="button"
-                                            variant="destructive"
-                                            size="sm"
-                                            onClick={() => handleSkillRemove(index)}
-                                        >
-                                            ×
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
                         <div className="flex items-center space-x-2">
                         <Checkbox 
                             id="firstTimeHacker"

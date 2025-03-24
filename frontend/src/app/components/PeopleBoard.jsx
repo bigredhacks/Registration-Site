@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle} from "@/components/ui/card";
 import SuggestionCard from './SuggestionCard';
 
 export default function PeopleBoard({ refreshTrigger }) {

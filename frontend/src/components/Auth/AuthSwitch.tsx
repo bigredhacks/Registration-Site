@@ -36,7 +36,6 @@ export default function AuthSwitch({
           {isLogin ? "Create New Account" : "Already have an account? Login"}
         </button>
       </div>
-      {/* DELETE */}
     </>
   );
 }

@@ -27,7 +27,7 @@ export default function Sidebar({ activePage, setActivePage }: SidebarProps) {
       </div>
 
       {/* Menu */}
-      <nav className="flex-1 space-y-2">
+      <nav className="space-y-2">
         {menuItems.map((item) => (
           <button
             key={item.href}

@@ -15,7 +15,7 @@ export default function RegisterForm() {
 
         {/* Password */}
         <InputField
-          label="Password"
+          label="New Password"
           type="password"
           placeholder="Password"
           required
@@ -23,7 +23,7 @@ export default function RegisterForm() {
 
         {/* Confirm Password */}
         <InputField
-          label="Confirm"
+          label="Confirm Password"
           type="password"
           placeholder="Password"
           required

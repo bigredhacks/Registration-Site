@@ -241,6 +241,11 @@ app.get('/api/teams', async (req, res) => {
       teams.push(team);
     }
 
+    // Add remaining participants as a smaller team if any exist
+    if (availableParticipants.length > 0) {
+      teams.push(availableParticipants);
+    }
+
     res.json({
       success: true,
       data: teams.map((team, index) =>

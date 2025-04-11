@@ -5,8 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from '@/components/ui/checkbox';
 import Skills from "./Skills";
+import { useToast } from "@/components/ui/use-toast"
+
+const ALL_ROLES = ['Designer', 'Frontend', 'Backend', 'Any'];
 
 export default function Form({ onSubmitSuccess }) {
+  const { toast } = useToast();
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [isSkillsOpen, setIsSkillsOpen] = useState(false);
   
@@ -33,7 +37,6 @@ export default function Form({ onSubmitSuccess }) {
     roles: ['Designer', 'Frontend', 'Backend', 'Any'],
     firstTimeHacker: false
   });
-    const [skillInput, setSkillInput] = useState('');
     const [draggingItem, setDraggingItem] = useState(null);
 
     const handleInputChange = (e) => {
@@ -83,7 +86,67 @@ export default function Form({ onSubmitSuccess }) {
         }
     };
 
-    // In the handleSubmit function
+    const handleAddRole = (role) => {
+      if (!formData.roles.includes(role)) {
+        setFormData(prev => ({
+          ...prev,
+          roles: [...prev.roles, role]
+        }));
+      }
+    };
+
+    const renderRolesList = () => {
+      const availableRoles = ALL_ROLES.filter(role => !formData.roles.includes(role));
+      
+      return (
+        <div className="space-y-4">
+          <h3 className="text-lg font-medium">Role Preferences (Drag)</h3>
+          <ul className="space-y-2">
+            {formData.roles.map((role) => (
+              <li
+                key={role}
+                draggable
+                onDragStart={() => handleDragStart(role)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, role)}
+                className="p-3 bg-secondary rounded-lg cursor-move hover:bg-secondary/80 flex items-center justify-between"
+              >
+                <span>{role}</span>
+                <Button 
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleRoleRemove(role)}
+                  className="h-6 w-6 p-0"
+                >
+                  ×
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {availableRoles.length > 0 && (
+            <select
+              className="w-full p-2 rounded-md border border-input bg-transparent text-sm"
+              onChange={(e) => {
+                if (e.target.value) {
+                  handleAddRole(e.target.value);
+                  e.target.value = '';
+                }
+              }}
+              value=""
+            >
+              <option value="">Add role...</option>
+              {availableRoles.map(role => (
+                <option key={role} value={role}>
+                  {role}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      );
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
@@ -99,7 +162,7 @@ export default function Form({ onSubmitSuccess }) {
                 throw new Error('Network response was not ok');
             }
             
-            // Reset form after successful submission
+            // Reset form and show success toast
             setFormData({
                 name: '',
                 email: '',
@@ -109,10 +172,21 @@ export default function Form({ onSubmitSuccess }) {
                 firstTimeHacker: false
             });
             
-            // Call the callback if provided
+            toast({
+                title: "Success!",
+                description: "Your form has been submitted successfully.",
+                className: "bg-white border-green-500 text-green-800",
+            });
+            
             onSubmitSuccess?.();
         } catch (error) {
             console.error('Error submitting form:', error);
+            toast({
+                variant: "default",
+                title: "Submission Failed",
+                description: "Unable to submit form. Please try again.",
+                className: "bg-white border-red-500 text-red-800",
+            });
         }
     };
 
@@ -160,45 +234,21 @@ export default function Form({ onSubmitSuccess }) {
                         </div>
 
                         <div className="space-y-4">
-                            <h3 className="text-lg font-medium">Role Preferences (Drag)</h3>
-                            <ul className="space-y-2">
-                                {formData.roles.map((role) => (
-                                    <li
-                                        key={role}
-                                        draggable
-                                        onDragStart={() => handleDragStart(role)}
-                                        onDragOver={handleDragOver}
-                                        onDrop={(e) => handleDrop(e, role)}
-                                        className="p-3 bg-secondary rounded-lg cursor-move hover:bg-secondary/80"
-                                    >
-                                        <span>{role}</span>
-                                        <Button 
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleRoleRemove(role)}
-                                            className="h-6 w-6 p-0 ml-auto"
-                                        >
-                                            ×
-                                        </Button>
-                                    </li>
-                                ))}
-                            </ul>
+                            {renderRolesList()}
                         </div>
-
-                        <div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="w-full justify-start"
-                                onClick={() => setIsSkillsOpen(true)}
-                            >
-                                {selectedSkills.length > 0 
-                                ? `Selected ${selectedSkills.length} skills`
-                                : "Select skills..."}
-                            </Button>
-                            
-                            {isSkillsOpen && (
+                            <div>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    className="w-full justify-start"
+                                    onClick={() => setIsSkillsOpen(true)}
+                                >
+                                    {selectedSkills.length > 0 
+                                    ? `Selected ${selectedSkills.length} skills`
+                                    : "Select skills..."}
+                                </Button>
+                                
+                                {isSkillsOpen && (
                                 <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm">
                                 <div className="fixed left-[50%] top-[50%] z-50 w-full max-w-lg translate-x-[-50%] translate-y-[-50%]">
                                     <Skills

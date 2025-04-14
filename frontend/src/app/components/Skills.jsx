@@ -7,41 +7,36 @@ import { useState } from "react";
 
 const skillCategories = {
     "Frontend Development": [
-        "React", "Next.js", "Vue.js", "Bootstrap", "Tailwind CSS", "Parcel", "SvelteKit"
+        "Angular", "React", "Next.js", "Vue.js", "Bootstrap", "Tailwind CSS", "Parcel", "SvelteKit", "Streamlit"
     ],
     "UI Libraries": [
-        "Shadcn UI", "Cult UI", "Magic UI"
+        "Shadcn UI", "Cult UI", "Magic UI",
     ],
     "Backend Development": [
-        "Express.js", "FastAPI", "Flask", "Firebase Functions", "Manifest", "Hasura", "ASP.NET"
+        "Express.js", "FastAPI", "Flask", "Firebase Functions", "Manifest", "Hasura", "ASP.NET", "Spring Boot", "Django", "Node.js"
     ],
     "Mobile Development": [
-        "Expo (React Native)", "Flutter", "Ionic", "Firebase Cloud Messaging (FCM)"
+        "React Native", "Flutter", "Electron", "Ionic",
     ],
     "Database & Storage": [
-        "Firebase Firestore", "Supabase", "MongoDB Atlas", "PlanetScale", "Airtable"
+        "Firestore", "Supabase", "MongoDB", "PlanetScale", "Airtable", "PostgreSQL", "SQLite"
     ],
     "Authentication & Authorization": [
-        "Firebase Auth", "Auth0", "Clerk.dev", "Magic Link", "SuperTokens", 
-        "Firebase Anonymous Auth", "NextAuth.js"
-    ],
-    "APIs & Data Access": [
-        "RapidAPI", "Swagger UI", "OpenAI API", "Twilio", "NewsAPI", "Mapbox", 
-        "SheetDB", "Mocky", "Mockaroo", "JsonPlaceholder", "CoinGecko", "DBeaver Community"
+        "Firebase Auth", "Auth0", "Clerk.dev", "Magic Link", "SuperTokens", "NextAuth.js"
     ],
     "AI & ML": [
-        "Hugging Face Transformers", "Teachable Machine", "Google Colab", 
-        "IBM Watson AI", "RunwayML", "Replicate"
+        "Hugging Face", "Teachable Machine", "Google Colab", 
+        "OpenCV", "TensorFlow/PyTorch"
     ],
     "Data Engineering & Big Data": [
         "Google BigQuery Sandbox", "Apache Kafka", "Looker Studio", 
-        "Fivetran", "Pandas Profiling", "Kaggle Datasets"
+        "Fivetran", "Pandas", "Kaggle"
     ],
     "Cybersecurity": [
-        "Nuclei", "OWASP ZAP"
+        "Nuclei", "OWASP ZAP", "Burp Suite", "Metasploit", "Wireshark", 
     ],
     "Design Tools": [
-        "Figma", "Blender", "Pixilart", "v0"
+        "Figma", "Blender", "Pixilart", "v0", "Canva", "Adobe Express", 
     ]
 };
 

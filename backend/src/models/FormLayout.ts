@@ -1,14 +1,47 @@
 import mongoose from "mongoose";
-const Schmea = mongoose.Schema;
-import { FormStatus } from "../types/formStatus";
-import { FormQuestionSchema } from "./FormQuestion";
+import { FormStatus, QuestionType } from "../types/enums";
+const Schema = mongoose.Schema;
+
+/**
+ * FormQuestionSchema
+ * 
+ * Refer to API Docs for JSON Format.
+ */
+export const FormQuestionSchema = new Schema({
+  name: {
+    type: String,
+    required: true,
+  },
+  required: {
+    type: Boolean,
+    default: false,
+    required: true,
+  },
+  type:{
+    type: String,
+    enum: QuestionType,
+    default: QuestionType.SHORT_TEXT,
+  },
+  defaultValue: {
+    type: String,
+  },
+  options: {
+    type: [String],
+  },
+  minLength: {
+    type: Number,
+  },
+  maxLength: {
+    type: Number,
+  }
+});
 
 /**
  * FormLayoutSchema
  * 
  * Refer to API Docs for JSON Format.
  */
-export const FormLayoutSchema = new Schmea({
+export const FormLayoutSchema = new Schema({
   title: {
     type: String,
     required: true,
@@ -33,6 +66,8 @@ export const FormLayoutSchema = new Schmea({
 
 })
 
+const FormQuestionModel = mongoose.model("FormQuestion", FormQuestionSchema);
 const FormLayoutModel = mongoose.model("FormLayout", FormLayoutSchema);
 
-export default FormLayoutModel
+export { FormQuestionModel };
+export { FormLayoutModel}

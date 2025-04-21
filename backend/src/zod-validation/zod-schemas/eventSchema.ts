@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EventStatus } from '../../types/eventStatus';
+import { EventStatus } from '../../types/enums';
 import { validMongoId } from '../string-validation/validMongoId';
 import { validDate } from '../string-validation/validDate';
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { QuestionType } from '../../types/questionType';
+import { QuestionType } from '../../types/enums';
 
 // Full Schema for FormQuestion (POST requests)
 export const formQuestionSchema = z.object({

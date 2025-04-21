@@ -1,5 +1,5 @@
 import Event from "../models/Event";
-import FormLayoutModel from "../models/FormLayout";
+import { FormLayoutModel } from "../models/FormLayout";
 import { Request, Response } from "express";
 import { errorMessage, serverErrorMessage } from "../utils/resMessages";
 
@@ -13,7 +13,7 @@ import { errorMessage, serverErrorMessage } from "../utils/resMessages";
  */
 export const getAllEvents = async (req: Request, res: Response) => {
   try {
-    const events = await Event.find(); // fetch all form types
+    const events = await Event.find(); // fetch all events
     res.status(200).json(events);
   } catch (err: any) {
     res.status(500).json(errorMessage(err)); 
@@ -21,7 +21,7 @@ export const getAllEvents = async (req: Request, res: Response) => {
 }
 
 /**
- * Fetches a form type by ID.
+ * Fetches an event by ID.
  * 
  * GET: /events/:id
  * 

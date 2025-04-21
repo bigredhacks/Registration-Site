@@ -1,4 +1,4 @@
-import FormLayoutModel from "../models/FormLayout";
+import { FormLayoutModel } from "../models/FormLayout";
 import { Request, Response } from "express";
 import { errorMessage, serverErrorMessage } from "../utils/resMessages";
 

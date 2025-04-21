@@ -1,13 +1,13 @@
 import mongoose from "mongoose";
-const Schmea = mongoose.Schema;
-import { EventStatus } from "../types/eventStatus";
+const Schema = mongoose.Schema;
+import { EventStatus } from "../types/enums";
 
 /**
  * EventSchema
  * 
  * Refer to API Docs for JSON Format.
  */
-export const EventSchema = new Schmea({
+export const EventSchema = new Schema({
   eventName: {
     type: String,
     required: true,
@@ -21,7 +21,7 @@ export const EventSchema = new Schmea({
     required: true,
   },
   layoutId: {
-    type: Schmea.Types.ObjectId,
+    type: Schema.Types.ObjectId,
     ref: "FormLayout",
     required: true,
   },

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FormStatus } from '../../types/formStatus';
+import { FormStatus } from '../../types/enums';
 import { formQuestionSchema } from './formQuestionSchema';
 import { validDate } from '../string-validation/validDate';
 

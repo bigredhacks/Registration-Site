@@ -18,7 +18,7 @@ export const validateRequest = (validator: RequestValidator) => {
       next();
     } catch (err) {
       if (err instanceof ZodError) {
-        res.status(422); // Unprocessable Entity
+        res.status(400); // Unprocessable Entity
       }
       next(err)
     }

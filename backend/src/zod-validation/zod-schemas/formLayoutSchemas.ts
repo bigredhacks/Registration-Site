@@ -8,7 +8,7 @@ import { validDate } from '../string-validation/validDate';
 export const formLayoutSchema = z.object({
   title: z.string(),
   status: z.nativeEnum(FormStatus),
-  description: z.string(),
+  description: z.string().optional(),
   dueDate: validDate,
   formQuestions: z.array(formQuestionSchema),
 })

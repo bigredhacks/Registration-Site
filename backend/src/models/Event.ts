@@ -25,19 +25,19 @@ export const EventSchema = new Schema({
     ref: "FormLayout",
     required: true,
   },
-  openDate: {
+  formOpenDate: {
     type: Date,
     required: true,
   },
-  closeDate: {
+  formCloseDate: {
     type: Date,
     required: true,
   },
-  startDate: {
+  eventStartDate: {
     type: Date,
     required: true,
   },
-  endDate: {
+  eventEndDate: {
     type: Date,
     required: true,
   },

@@ -44,7 +44,7 @@ export const EventSchema = new Schema({
   status: {
     type: String,
     enum: EventStatus,
-    default: EventStatus.UPCOMING,
+    default: EventStatus.OPEN,
     required: true,
   },
   maxTeamSize: {

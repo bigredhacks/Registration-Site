@@ -1,8 +1,7 @@
 export enum EventStatus {
-  UPCOMING = "UPCOMING",
-  ACTIVE = "ACTIVE",
-  CLOSED = "CLOSED",
-  CANCELLED = "CANCELLED",
+  OPEN = "OPEN", // actively shown to hackers
+  CLOSED = "CLOSED", // event that isn't shown to users (eg. future event, or temporarily closed event)
+  ARCHIVED = "ARCHIVED", // past event (only maintian general statistics)
 }
 
 export enum FormStatus {

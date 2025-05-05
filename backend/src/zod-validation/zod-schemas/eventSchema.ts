@@ -43,8 +43,8 @@ export const eventSchema = baseEventSchema
 )
 
 .superRefine(async (data, ctx) => {
-  if (data.status === EventStatus.ACTIVE) {
-    const activeEvent = await Event.findOne({ status: EventStatus.ACTIVE });
+  if (data.status === EventStatus.OPEN) {
+    const activeEvent = await Event.findOne({ status: EventStatus.OPEN });
     if (activeEvent) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

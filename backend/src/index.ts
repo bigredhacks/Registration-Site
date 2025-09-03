@@ -1,28 +1,43 @@
 import express from 'express';
 import cors from 'cors';
-import { connectDB } from './config/db';
+import { initDatabase, createTables } from './config/database';
+import { ParticipantModel, Participant } from './models/Participant';
+import { TeamModel } from './models/Team';
+import { TeamMatcher } from './utils/teamMatcher';
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import { Submission } from './config/Submission';
-import { Team } from './config/Team';
 
-const submissionSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
+const participantSchema = z.object({
   email: z.string().email('Invalid email'),
-  phone: z.string().min(1, 'Phone is required'),
-  skills: z.array(z.string()).min(1, 'Skills are required'),
-  firstTimeHacker: z.boolean().optional().default(false),
-  roles: z.array(z.string()),
+  fullName: z.string().min(1, 'Full name is required'),
+  frontendExperience: z.enum(['Beginner', 'Intermediate', 'Advanced']),
+  backendExperience: z.enum(['Beginner', 'Intermediate', 'Advanced']),
+  designExperience: z.enum(['Beginner', 'Intermediate', 'Advanced']),
+  hardwareExperience: z.enum(['Beginner', 'Intermediate', 'Advanced']),
+  frontendPreference: z.number().min(1).max(5),
+  backendPreference: z.number().min(1).max(5),
+  designPreference: z.number().min(1).max(5),
+  hardwarePreference: z.number().min(1).max(5),
+  anyRolePreference: z.number().min(1).max(5),
+  frontendSkills: z.array(z.string()),
+  backendSkills: z.array(z.string()),
+  designSkills: z.array(z.string()),
+  hardwareSkills: z.array(z.string()),
+  hackerType: z.enum(['FirstTimeHacker', 'VeteranHacker']),
+  poolId: z.string().optional().default('default')
 });
 
 const NODE_ENV = process.env.NODE_ENV || 'development';
 
 dotenv.config({ path: `.env.${NODE_ENV}` });
 
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017';
+const DB_PATH = process.env.DB_PATH || './database.sqlite';
 const PORT = process.env.PORT || 5000;
 
-connectDB(MONGO_URI);
+// Initialize database
+initDatabase(DB_PATH).then(() => {
+  createTables();
+}).catch(console.error);
 
 //initialize express server
 const app = express();
@@ -30,17 +45,24 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-// Form submission api
-app.post('/api/submit', async (req, res) => {
+// Participant registration API
+app.post('/api/participants', async (req, res) => {
   try {
-    const validatedData = submissionSchema.parse(req.body);
+    const validatedData = participantSchema.parse(req.body);
+    
+    // Parse netId from email
+    const netId = validatedData.email.split('@')[0];
+    
+    const participantData: Participant = {
+      ...validatedData,
+      netId
+    };
 
-    // Create new submission in MongoDB
-    const submission = await Submission.create(validatedData);
-    console.log('Submission saved:', submission);
+    const participant = await ParticipantModel.create(participantData);
+    console.log('Participant saved:', participant);
     res.status(201).json({
       success: true,
-      data: submission,
+      data: participant,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -49,7 +71,7 @@ app.post('/api/submit', async (req, res) => {
         errors: error.errors,
       });
     } else {
-      console.error('Error saving submission:', error);
+      console.error('Error saving participant:', error);
       res.status(500).json({
         success: false,
         error: 'Internal server error',
@@ -58,17 +80,18 @@ app.post('/api/submit', async (req, res) => {
   }
 });
 
-// Forms retrival API
-app.get('/api/submissions', async (req, res) => {
+// Get participants API
+app.get('/api/participants', async (req, res) => {
   try {
-    const submissions = await Submission.find().sort({ createdAt: -1 });
-    console.log('Submissions fetched:', submissions);
+    const poolId = (req.query.poolId as string) || 'default';
+    const participants = await ParticipantModel.findAll(poolId);
+    console.log('Participants fetched:', participants.length);
     res.status(200).json({
       success: true,
-      data: submissions,
+      data: participants,
     });
   } catch (error) {
-    console.error('Error fetching submissions:', error);
+    console.error('Error fetching participants:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -76,24 +99,24 @@ app.get('/api/submissions', async (req, res) => {
   }
 });
 
-app.delete('/api/submissions/:id', async (req, res) => {
+app.delete('/api/participants/:id', async (req, res) => {
   try {
-    const id = req.params.id;
-    const submission = await Submission.findByIdAndDelete(id);
-    if (!submission) {
+    const id = parseInt(req.params.id);
+    const deleted = await ParticipantModel.deleteById(id);
+    if (!deleted) {
       res.status(404).json({
         success: false,
-        error: 'Submission not found',
+        error: 'Participant not found',
       });
       return;
     }
     res.status(200).json({
       success: true,
-      data: submission,
+      message: 'Participant deleted successfully',
     });
     return;
   } catch (error) {
-    console.error('Error deleting submission:', error);
+    console.error('Error deleting participant:', error);
     res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -102,162 +125,65 @@ app.delete('/api/submissions/:id', async (req, res) => {
   }
 });
 
+// Delete all participants in a pool
+app.delete('/api/participants', async (req, res) => {
+  try {
+    const poolId = (req.query.poolId as string) || 'default';
+    const deletedCount = await ParticipantModel.deleteByPoolId(poolId);
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${deletedCount} participants from pool: ${poolId}`,
+    });
+  } catch (error) {
+    console.error('Error deleting participants:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
+});
+
+// Team formation API
 app.get('/api/teams', async (req, res) => {
   try {
-    const teamSize = parseInt(req.query.size as string) || 3;
-    const submissions = await Submission.find({}).lean();
+    const teamSize = parseInt(req.query.size as string) || 4;
+    const poolId = (req.query.poolId as string) || 'default';
+    const participants = await ParticipantModel.findAll(poolId);
 
-    if (submissions.length < teamSize) {
+    if (participants.length < teamSize) {
       res.status(400).json({
         error: 'Not enough participants to form teams of the requested size',
       });
       return;
     }
 
-    const validatedSubmissions = submissions.filter((submission) => {
-      try {
-        submissionSchema.parse(submission);
-        return true;
-      } catch (error: unknown) {
-        if (error instanceof Error) {
-          console.warn(`Invalid submission data: ${error.message}`, submission);
-        }
-        return false;
-      }
-    });
-
-    const requiredRoles = ['Frontend', 'Backend', 'Designer'];
-    const teams = [];
+    const teams = TeamMatcher.formTeams(participants, teamSize, poolId);
     
-    // Separate first-time hackers and experienced hackers 
-    let firstTimeHackers = validatedSubmissions.filter(p => p.firstTimeHacker);
-    let experiencedHackers = validatedSubmissions.filter(p => !p.firstTimeHacker);
-    
-    // Sort both groups by number of roles
-    firstTimeHackers.sort((a, b) => (a.roles?.length || 0) - (b.roles?.length || 0));
-    experiencedHackers.sort((a, b) => (a.roles?.length || 0) - (b.roles?.length || 0));
-
-    // First, try to form teams with first-time hackers
-    while (firstTimeHackers.length >= teamSize) {
-        const team = [];
-        const usedRoles = new Set();
-
-        // Team formation logic for first-time hackers
-        for (const role of requiredRoles) {
-            if (usedRoles.has(role)) continue;
-            const candidate = firstTimeHackers.find(p => 
-                p.roles?.[0] === role || 
-                p.roles?.includes('Any')
-            );
-            if (candidate) {
-                team.push(candidate);
-                firstTimeHackers = firstTimeHackers.filter(p => p._id.toString() !== candidate._id.toString());
-                usedRoles.add(role);
-            }
-        }
-
-        // Fill remaining roles from first-time hackers
-        for (const role of requiredRoles) {
-            if (!usedRoles.has(role)) {
-                const candidate = firstTimeHackers.find(p => 
-                    p.roles?.includes(role) || 
-                    p.roles?.includes('Any')
-                );
-                if (candidate) {
-                    team.push(candidate);
-                    firstTimeHackers = firstTimeHackers.filter(p => p._id.toString() !== candidate._id.toString());
-                    usedRoles.add(role);
-                }
-            }
-        }
-
-        if (usedRoles.size < requiredRoles.length) {
-            break;
-        }
-
-        while (team.length < teamSize && firstTimeHackers.length > 0) {
-            team.push(firstTimeHackers[0]);
-            firstTimeHackers = firstTimeHackers.slice(1);
-        }
-
-        teams.push(team);
-    }
-
-    // Combine remaining participants
-    let availableParticipants = [...firstTimeHackers, ...experiencedHackers];
-
-    // Continue with the existing team formation logic for mixed teams
-    while (availableParticipants.length >= teamSize) {
-        const team = [];
-        const usedRoles = new Set();
-    
-        // First pass: assign participants with fewer roles
-        for (const role of requiredRoles) {
-            if (usedRoles.has(role)) continue;
-    
-            // Look for exact role match first
-            const candidate = availableParticipants.find(p => 
-                p.roles?.[0] === role || 
-                p.roles?.includes('Any')
-            );
-    
-            if (candidate) {
-                team.push(candidate);
-                availableParticipants = availableParticipants.filter(
-                    p => p._id.toString() !== candidate._id.toString()
-                );
-                usedRoles.add(role);
-            }
-        }
-    
-        // Second pass: fill remaining roles with any available matches
-        for (const role of requiredRoles) {
-            if (!usedRoles.has(role)) {
-                const candidate = availableParticipants.find(p => 
-                    p.roles?.includes(role) || 
-                    p.roles?.includes('Any')
-                );
-                if (candidate) {
-                    team.push(candidate);
-                    availableParticipants = availableParticipants.filter(
-                        p => p._id.toString() !== candidate._id.toString()
-                    );
-                    usedRoles.add(role);
-                }
-            }
-        }
-
-      // Check if team size is valid
-      if (usedRoles.size < requiredRoles.length) {
-        break;
-      }
-
-      // Backfill
-      while (team.length < teamSize && availableParticipants.length > 0) {
-        team.push(availableParticipants[0]);
-        availableParticipants = availableParticipants.slice(1);
-      }
-
-      teams.push(team);
-    }
-
-    // Add remaining participants as a smaller team if any exist
-    if (availableParticipants.length > 0) {
-      teams.push(availableParticipants);
-    }
-
     res.json({
       success: true,
-      data: teams.map((team, index) =>
-        team.map((member) => ({
-          _id: member._id,
-          name: member.name,
+      data: teams.map((team, index) => ({
+        teamNumber: index + 1,
+        members: team.map((member) => ({
+          id: member.id,
           email: member.email,
-          phone: member.phone,
-          roles: member.roles || [],
-          skills: member.skills || [],
+          fullName: member.fullName,
+          netId: member.netId,
+          frontendExperience: member.frontendExperience,
+          backendExperience: member.backendExperience,
+          designExperience: member.designExperience,
+          hardwareExperience: member.hardwareExperience,
+          frontendPreference: member.frontendPreference,
+          backendPreference: member.backendPreference,
+          designPreference: member.designPreference,
+          hardwarePreference: member.hardwarePreference,
+          anyRolePreference: member.anyRolePreference,
+          frontendSkills: member.frontendSkills,
+          backendSkills: member.backendSkills,
+          designSkills: member.designSkills,
+          hardwareSkills: member.hardwareSkills,
+          hackerType: member.hackerType
         }))
-      ),
+      })),
     });
     return;
   } catch (error) {
@@ -275,14 +201,16 @@ app.post('/api/teams/save', async (req, res) => {
     try {
         const { teams } = req.body;
         
-        // Clear existing teams
-        await Team.deleteMany({});
+        // Clear existing teams for the pool
+        const poolId = req.body.poolId || 'default';
+        await TeamModel.deleteByPoolId(poolId);
         
         // Save new teams
         const savedTeams = await Promise.all(teams.map(async (teamMembers: any, index: number) => {
-            return await Team.create({
+            return await TeamModel.create({
                 members: teamMembers,
-                teamNumber: index + 1
+                teamNumber: index + 1,
+                poolId: poolId
             });
         }));
 

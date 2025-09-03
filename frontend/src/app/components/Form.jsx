@@ -7,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import Skills from "./Skills";
 import { useToast } from "@/components/ui/use-toast"
 
-const ALL_ROLES = ['Designer', 'Frontend', 'Backend', 'Any'];
+const ALL_ROLES = ['Designer', 'Frontend', 'Backend', 'Hardware', 'Any'];
+const EXPERIENCE_LEVELS = ['Beginner', 'Intermediate', 'Advanced'];
 
 export default function Form({ onSubmitSuccess }) {
   const { toast } = useToast();
@@ -29,13 +30,44 @@ export default function Form({ onSubmitSuccess }) {
     });
   };
 
+  const initialRoles = ['Designer', 'Frontend', 'Backend', 'Hardware', 'Any'];
+  const initialPreferences = (() => {
+    const prefs = {};
+    initialRoles.forEach((role, index) => {
+      const preference = Math.max(1, 5 - index);
+      
+      switch(role.toLowerCase()) {
+        case 'frontend':
+          prefs.frontendPreference = preference;
+          break;
+        case 'backend':
+          prefs.backendPreference = preference;
+          break;
+        case 'designer':
+          prefs.designPreference = preference;
+          break;
+        case 'hardware':
+          prefs.hardwarePreference = preference;
+          break;
+        case 'any':
+          prefs.anyRolePreference = preference;
+          break;
+      }
+    });
+    return prefs;
+  })();
+
   const [formData, setFormData] = useState({
-    name: '',
+    fullName: '',
     email: '',
-    phone: '',
-    skills: [], // This will now be updated when selectedSkills changes
-    roles: ['Designer', 'Frontend', 'Backend', 'Any'],
-    firstTimeHacker: false
+    frontendExperience: 'Beginner',
+    backendExperience: 'Beginner',
+    designExperience: 'Beginner',
+    hardwareExperience: 'Beginner',
+    ...initialPreferences,
+    skills: [],
+    roles: initialRoles,
+    hackerType: 'FirstTimeHacker'
   });
     const [draggingItem, setDraggingItem] = useState(null);
 
@@ -50,15 +82,29 @@ export default function Form({ onSubmitSuccess }) {
     const handleCheckboxChange = (checked) => {
         setFormData(prev => ({
             ...prev,
-            firstTimeHacker: checked
+            hackerType: checked ? 'FirstTimeHacker' : 'VeteranHacker'
         }))
     }
 
-    const handleRoleRemove = (roleToRemove) => {
+    const handleExperienceChange = (field, value) => {
         setFormData(prev => ({
             ...prev,
-            roles: prev.roles.filter(role => role !== roleToRemove)
+            [field]: value
         }));
+    };
+
+
+    const handleRoleRemove = (roleToRemove) => {
+        setFormData(prev => {
+            const updatedRoles = prev.roles.filter(role => role !== roleToRemove);
+            const updatedPreferences = updatePreferencesFromRoles(updatedRoles);
+            
+            return {
+                ...prev,
+                roles: updatedRoles,
+                ...updatedPreferences
+            };
+        });
     };
 
     const handleDragStart = (role) => {
@@ -67,6 +113,35 @@ export default function Form({ onSubmitSuccess }) {
 
     const handleDragOver = (e) => {
         e.preventDefault();
+    };
+
+    const updatePreferencesFromRoles = (roles) => {
+        const maxPreference = 5;
+        const preferences = {};
+        
+        roles.forEach((role, index) => {
+            const preference = Math.max(1, maxPreference - index);
+            
+            switch(role.toLowerCase()) {
+                case 'frontend':
+                    preferences.frontendPreference = preference;
+                    break;
+                case 'backend':
+                    preferences.backendPreference = preference;
+                    break;
+                case 'designer':
+                    preferences.designPreference = preference;
+                    break;
+                case 'hardware':
+                    preferences.hardwarePreference = preference;
+                    break;
+                case 'any':
+                    preferences.anyRolePreference = preference;
+                    break;
+            }
+        });
+        
+        return preferences;
     };
 
     const handleDrop = (e, targetRole) => {
@@ -80,7 +155,14 @@ export default function Form({ onSubmitSuccess }) {
                     updatedRoles[targetIndex],
                     updatedRoles[draggingIndex],
                 ];
-                return { ...prev, roles: updatedRoles };
+                
+                const updatedPreferences = updatePreferencesFromRoles(updatedRoles);
+                
+                return { 
+                    ...prev, 
+                    roles: updatedRoles,
+                    ...updatedPreferences
+                };
             });
             setDraggingItem(null);
         }
@@ -88,10 +170,16 @@ export default function Form({ onSubmitSuccess }) {
 
     const handleAddRole = (role) => {
       if (!formData.roles.includes(role)) {
-        setFormData(prev => ({
-          ...prev,
-          roles: [...prev.roles, role]
-        }));
+        setFormData(prev => {
+          const updatedRoles = [...prev.roles, role];
+          const updatedPreferences = updatePreferencesFromRoles(updatedRoles);
+          
+          return {
+            ...prev,
+            roles: updatedRoles,
+            ...updatedPreferences
+          };
+        });
       }
     };
 
@@ -100,7 +188,7 @@ export default function Form({ onSubmitSuccess }) {
       
       return (
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Role Preferences (Drag)</h3>
+          <h3 className="text-lg font-medium">Role Preferences (Drag to reorder - top = most preferred)</h3>
           <ul className="space-y-2">
             {formData.roles.map((role) => (
               <li
@@ -150,27 +238,54 @@ export default function Form({ onSubmitSuccess }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:5000/api/submit', {
+            // Transform data for backend - put all skills in frontendSkills
+            const backendData = {
+                email: formData.email,
+                fullName: formData.fullName,
+                frontendExperience: formData.frontendExperience,
+                backendExperience: formData.backendExperience,
+                designExperience: formData.designExperience,
+                hardwareExperience: formData.hardwareExperience,
+                frontendPreference: formData.frontendPreference,
+                backendPreference: formData.backendPreference,
+                designPreference: formData.designPreference,
+                hardwarePreference: formData.hardwarePreference,
+                anyRolePreference: formData.anyRolePreference,
+                frontendSkills: formData.skills, // All skills go here
+                backendSkills: [],
+                designSkills: [],
+                hardwareSkills: [],
+                hackerType: formData.hackerType
+            };
+
+            const response = await fetch('http://localhost:5000/api/participants', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify(formData)
+                body: JSON.stringify(backendData)
             });
             
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
+            const result = await response.json();
+            
+            if (!response.ok || !result.success) {
+                throw new Error(result.error || 'Submission failed');
             }
             
             // Reset form and show success toast
             setFormData({
-                name: '',
+                fullName: '',
                 email: '',
-                phone: '',
+                frontendExperience: 'Beginner',
+                backendExperience: 'Beginner',
+                designExperience: 'Beginner',
+                hardwareExperience: 'Beginner',
+                ...initialPreferences,
                 skills: [],
-                roles: ['Designer', 'Frontend', 'Backend', 'Any'],
-                firstTimeHacker: false
+                roles: initialRoles,
+                hackerType: 'FirstTimeHacker'
             });
+            setSelectedSkills([]);
             
             toast({
                 title: "Success!",
@@ -202,10 +317,10 @@ export default function Form({ onSubmitSuccess }) {
                             <h3 className="text-lg font-medium">Contact Information</h3>
                             <div className="space-y-2">
                                 <Input
-                                    id="name"
-                                    name="name"
-                                    placeholder="Name"
-                                    value={formData.name}
+                                    id="fullName"
+                                    name="fullName"
+                                    placeholder="Full Name"
+                                    value={formData.fullName}
                                     onChange={handleInputChange}
                                     required
                                 />
@@ -221,17 +336,62 @@ export default function Form({ onSubmitSuccess }) {
                                     required
                                 />
                             </div>
-                            <div className="space-y-2">
-                                <Input
-                                    id="phone"
-                                    name="phone"
-                                    type="tel"
-                                    placeholder="Phone"
-                                    value={formData.phone}
-                                    onChange={handleInputChange}
-                                />
+                        </div>
+
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-medium">Experience Levels</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Frontend Experience</label>
+                                    <select
+                                        className="w-full p-2 rounded-md border border-input bg-transparent text-sm"
+                                        value={formData.frontendExperience}
+                                        onChange={(e) => handleExperienceChange('frontendExperience', e.target.value)}
+                                    >
+                                        {EXPERIENCE_LEVELS.map(level => (
+                                            <option key={level} value={level}>{level}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Backend Experience</label>
+                                    <select
+                                        className="w-full p-2 rounded-md border border-input bg-transparent text-sm"
+                                        value={formData.backendExperience}
+                                        onChange={(e) => handleExperienceChange('backendExperience', e.target.value)}
+                                    >
+                                        {EXPERIENCE_LEVELS.map(level => (
+                                            <option key={level} value={level}>{level}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Design Experience</label>
+                                    <select
+                                        className="w-full p-2 rounded-md border border-input bg-transparent text-sm"
+                                        value={formData.designExperience}
+                                        onChange={(e) => handleExperienceChange('designExperience', e.target.value)}
+                                    >
+                                        {EXPERIENCE_LEVELS.map(level => (
+                                            <option key={level} value={level}>{level}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Hardware Experience</label>
+                                    <select
+                                        className="w-full p-2 rounded-md border border-input bg-transparent text-sm"
+                                        value={formData.hardwareExperience}
+                                        onChange={(e) => handleExperienceChange('hardwareExperience', e.target.value)}
+                                    >
+                                        {EXPERIENCE_LEVELS.map(level => (
+                                            <option key={level} value={level}>{level}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
                         </div>
+
 
                         <div className="space-y-4">
                             {renderRolesList()}
@@ -263,7 +423,7 @@ export default function Form({ onSubmitSuccess }) {
                         <div className="flex items-center space-x-2">
                         <Checkbox 
                             id="firstTimeHacker"
-                            checked={formData.firstTimeHacker}
+                            checked={formData.hackerType === 'FirstTimeHacker'}
                             onCheckedChange={handleCheckboxChange}
                         />
                         <label

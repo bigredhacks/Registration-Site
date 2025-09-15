@@ -49,7 +49,7 @@ export default function PeopleBoard({ refreshTrigger, poolId = 'default' }) {
     return (
         <Card className="w-full h-[calc(100vh-2rem)] overflow-y-auto p-4 shadow-xl rounded-xl bg-white border-2 border-gray-200">
             <CardHeader className="flex flex-row items-center justify-between sticky top-0 bg-white z-10 pb-4">
-                <CardTitle>People Board ({poolId})</CardTitle>
+                <CardTitle>People Board</CardTitle>
             </CardHeader>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                 {participants.map((participant) => (

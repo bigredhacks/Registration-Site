@@ -28,22 +28,38 @@ export class TeamMatcher {
     const veteranHackers = participants.filter(p => p.hackerType === 'VeteranHacker');
 
     const teams: Participant[][] = [];
-    
+    const usedParticipantIds = new Set<number>();
+
     // Form teams with first-time hackers first
     const firstTimeTeams = this.formTeamsForGroup(firstTimeHackers, teamSize);
     teams.push(...firstTimeTeams);
 
-    // Get remaining participants
-    const remainingFirstTime = firstTimeHackers.slice(firstTimeTeams.length * teamSize);
+    // Track used participants from first-time teams
+    firstTimeTeams.forEach(team => {
+      team.forEach(participant => {
+        usedParticipantIds.add(participant.id!);
+      });
+    });
+
+    // Get remaining participants (unused first-timers + all veterans)
+    const remainingFirstTime = firstTimeHackers.filter(p => !usedParticipantIds.has(p.id!));
     const allRemaining = [...remainingFirstTime, ...veteranHackers];
 
     // Form mixed teams with remaining participants
     const mixedTeams = this.formTeamsForGroup(allRemaining, teamSize);
     teams.push(...mixedTeams);
 
-    // Add any remaining participants as a smaller team
-    const remainingParticipants = allRemaining.slice(mixedTeams.length * teamSize);
-    if (remainingParticipants.length > 0) {
+    // Track used participants from mixed teams
+    mixedTeams.forEach(team => {
+      team.forEach(participant => {
+        usedParticipantIds.add(participant.id!);
+      });
+    });
+
+    // Only add remaining participants if they form a meaningful team (at least 2 people)
+    // and avoid duplicates by checking against usedParticipantIds
+    const remainingParticipants = allRemaining.filter(p => !usedParticipantIds.has(p.id!));
+    if (remainingParticipants.length >= 2) {
       teams.push(remainingParticipants);
     }
 

@@ -114,7 +114,7 @@ export default function TeamMatches({ poolId = 'default' }) {
         <div className="max-w-7xl mx-auto p-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Team Matches ({poolId})</CardTitle>
+                    <CardTitle>Team Matches</CardTitle>
                     <div className="flex gap-2">
                         <Button onClick={fetchTeams} disabled={loading}>
                             {loading ? 'Generating...' : 'Generate Teams'}
@@ -132,7 +132,7 @@ export default function TeamMatches({ poolId = 'default' }) {
                     {error && (
                         <div className="text-red-500 mb-4">{error}</div>
                     )}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {teams.map((team, teamIndex) => (
                             <Card key={teamIndex} className="p-4">
                                 <h3 className="font-medium mb-2">Team {team.teamNumber || teamIndex + 1}</h3>

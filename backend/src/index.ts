@@ -6,6 +6,8 @@ import { TeamModel } from './models/Team';
 import { TeamMatcher } from './utils/teamMatcher';
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 const participantSchema = z.object({
   email: z.string().email('Invalid email'),
@@ -200,23 +202,67 @@ app.listen(PORT, () =>
 app.post('/api/teams/save', async (req, res) => {
     try {
         const { teams } = req.body;
-        
-        // Clear existing teams for the pool
+
+        console.log('Received teams data:', JSON.stringify(teams, null, 2));
+
+        // Generate CSV content with team emails first
+        const csvLines: string[] = [];
+        teams.forEach((team: any, index: number) => {
+            // Handle different possible data structures
+            let teamMembers;
+            if (Array.isArray(team)) {
+                teamMembers = team;
+            } else if (team.members && Array.isArray(team.members)) {
+                teamMembers = team.members;
+            } else {
+                console.error('Unexpected team structure:', team);
+                return;
+            }
+
+            const teamEmails = teamMembers.map((member: any) => member.email).join(',');
+            const teamNames = teamMembers.map((member: any) => member.fullName).join(', ');
+            csvLines.push(teamEmails);
+            csvLines.push(teamNames);
+        });
+
+        // Write CSV file
+        const csvContent = csvLines.join('\n');
+        const csvFilePath = path.join(__dirname, '..', 'team_emails.csv');
+        fs.writeFileSync(csvFilePath, csvContent, 'utf8');
+
+        console.log(`Team emails saved to CSV: ${csvFilePath}`);
+
+        // Clear existing teams for the pool and save new teams sequentially to avoid transaction conflicts
         const poolId = req.body.poolId || 'default';
         await TeamModel.deleteByPoolId(poolId);
-        
-        // Save new teams
-        const savedTeams = await Promise.all(teams.map(async (teamMembers: any, index: number) => {
-            return await TeamModel.create({
+
+        // Save new teams one by one to avoid nested transactions
+        const savedTeams = [];
+        for (let i = 0; i < teams.length; i++) {
+            const team = teams[i];
+            let teamMembers;
+
+            if (Array.isArray(team)) {
+                teamMembers = team;
+            } else if (team.members && Array.isArray(team.members)) {
+                teamMembers = team.members;
+            } else {
+                console.error('Unexpected team structure for database save:', team);
+                continue;
+            }
+
+            const savedTeam = await TeamModel.create({
                 members: teamMembers,
-                teamNumber: index + 1,
+                teamNumber: i + 1,
                 poolId: poolId
             });
-        }));
+            savedTeams.push(savedTeam);
+        }
 
         res.status(201).json({
             success: true,
-            data: savedTeams
+            data: savedTeams,
+            csvPath: csvFilePath
         });
     } catch (error) {
         console.error('Error saving teams:', error);

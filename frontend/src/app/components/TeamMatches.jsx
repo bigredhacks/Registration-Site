@@ -114,7 +114,7 @@ export default function TeamMatches({ poolId = 'default' }) {
         <div className="max-w-7xl mx-auto p-4">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>Team Matches</CardTitle>
+                    {/* <CardTitle>Team Matches</CardTitle> */}
                     <div className="flex gap-2">
                         <Button onClick={fetchTeams} disabled={loading}>
                             {loading ? 'Generating...' : 'Generate Teams'}

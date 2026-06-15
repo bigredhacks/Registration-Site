@@ -5,10 +5,6 @@
 <!-- Feel free to break this into sub-sections, i.e. features, fixes, etc. -->
 <!-- Some examples are shown below. -->
 
-This pull request implements Foo
-
-- [x] implemented X
-- [ ] fixed Y
 
 ### Test Plan <!-- Required -->
 
@@ -18,9 +14,9 @@ This pull request implements Foo
 
 <!--- List any important or subtle points, future considerations, or other items of note. -->
 
-### Breaking Changes  <!-- Optional -->
+### Breaking Changes <!-- Optional -->
 
 <!-- Uncomment items that apply: -->
 
-<!-- - Database schema change (anything that changes DynamoDB document structure)
+<!-- - Database schema change
 <!-- - Other change that could cause problems (Detailed in notes)

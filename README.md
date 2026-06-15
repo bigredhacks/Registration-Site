@@ -1,21 +1,36 @@
-# BigRed//Hacks Registration Site (Catchy Name TBD)
+# BigRed//Hacks Registration Site
 
-## About
+Standalone registration portal for BigRed//Hacks. This repo contains the auth, dashboard, profile, application form, team matching UI, and Express/Supabase API that were previously colocated with the event site.
 
-Registration System for BigRed//Hacks. Please refer to the [wiki](https://github.com/bigredhacks/Registration-Site/wiki) for detailed information about this project.
+## Structure
 
-## Contributors
+```text
+frontend/  React + TypeScript + Vite + Tailwind
+backend/   Express + TypeScript + Supabase
+```
 
-**Current Contributors**
+## Setup
 
-- **Colin Wu** - Software Lead
-- **Liesel Wong** - Fullstack Software Developer
-- **Jeffrey Huang** - Fullstack Software Developer
-- **James Tu** - Backend Software Developer
+```bash
+npm install
+cp frontend/.env.example frontend/.env
+cp backend/.env.example backend/.env
+```
 
-<p align="center">
-  <img src='https://github.com/bigredhacks/Registration-Site/assets/45516888/9e72cdf0-5cf5-4b8e-9196-f0154ee52e37' width='120'>
-</p>
-<p align="center">
-Made with ❤️ by the BigRed//Hacks Open-Source Software Team
-</p>
+Fill the Supabase values in both `.env` files. The local `.env` files are ignored by git.
+
+## Development
+
+```bash
+npm run dev:frontend
+npm run dev:backend
+```
+
+The Vite dev server proxies `/api` to the backend on port `3000`.
+
+## Verification
+
+```bash
+npm run build
+npm run lint
+```

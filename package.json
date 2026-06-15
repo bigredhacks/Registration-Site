@@ -1,12 +1,19 @@
 {
-  "name": "registration-site",
-  "version": "1.0.0",
-  "description": "## About Registration System for BigRed//Hacks",
-  "main": "index.js",
+  "name": "brh-registration-site",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Standalone BigRed//Hacks registration portal",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "emulate:frontend": "cd frontend && npm run dev",
-    "emulate:backend": "cd backend && npm run dev",
-    "install": "cd backend && npm i && cd ../../frontend && npm i"
-  },
-  "license": "ISC"
+    "dev:frontend": "npm run dev -w frontend",
+    "dev:backend": "npm run dev -w backend",
+    "build:frontend": "npm run build -w frontend",
+    "build:backend": "npm run build -w backend",
+    "dev": "npm run dev:frontend & npm run dev:backend",
+    "build": "npm run build:frontend && npm run build:backend",
+    "lint": "npm run lint -w frontend"
+  }
 }

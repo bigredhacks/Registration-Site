@@ -1,0 +1,134 @@
+@import url("https://fonts.googleapis.com/css2?family=Jersey+10&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /** Colors **/
+  --color-purple1: #b7bcec; /* light purple: #B7BCEC */
+  --color-purple2: #403b66; /* medium purple #403B66 */
+  --color-purple3: #1d1a33; /* dark purple: #1D1A33 */
+  --color-purple4: #9e51ce; /* pink purple: #9E51CE */
+  --color-purple5: #3c2d6c; /* mobile menu: #3C2D6C */
+  --color-purple6: #e3c7ff; /* Footer: #E3C7FF */
+  --color-purple7: #f2dbff; /* date and ScrollBarTrack: #F2DBFF */
+  --color-purple8: #30094c; /* Tracks: #30094C */
+  --color-purple9: #3F1279; /* dashboard text color */
+
+  --color-white1: #efefef; /* lighter white: #EFEFEF */
+  --color-white2: #d5d5d5; /* darker white: #D5D5D5 */
+
+  --color-yellow1: #fffada; /* lighter yellow: #FFFADA */
+  --color-yellow2: #ffea96; /* darker yellow: #FFEA96 */
+
+  --color-grey1: #8d8d8d; /* lighter grey: #8D8D8D */
+
+  --color-red1: #E06A67; /* login color */
+  --color-red2: #C94040; /* login color */
+  --color-red3: #7A1010; /* hover state */
+  --color-red4: #FE1736; /* required field asterisks */
+  --color-red5: #B31B1B; /* primary UI red — Cornell Carnelian */
+  --color-red6: #8B1515; /* headings / titles */
+  --color-red7: #FDECEA; /* light pink background */
+
+  --color-white3: #FFF8F0;
+
+  --color-brown1: #775E43; /* login color */
+  --color-brown2: #C0AB95; /* login color */
+  --color-brown3: #907960; /* login color */
+
+  /** Fonts **/
+  --font-jersey10: "Jersey 10", "sans-serif";
+  --font-poppins: "Poppins", "sans-serif";
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #ffffff; /* white prevents dark flash on registration page overscroll */
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  --logo-w: clamp(72px, 18vw, 160px);
+}
+
+:root::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overscroll-behavior: none;
+}
+
+button {
+  cursor: pointer;
+}
+
+@keyframes infinite-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-3deg) translateY(0); }
+  25%       { transform: rotate(3deg)  translateY(-4px); }
+  50%       { transform: rotate(-2deg) translateY(0); }
+  75%       { transform: rotate(2deg)  translateY(-2px); }
+}
+
+.hover-wiggle:hover {
+  animation: wiggle 0.5s ease-in-out;
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.25s ease-out forwards;
+}
+
+.scroller-mask {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 10%,
+    black 90%,
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 10%,
+    black 90%,
+    transparent
+  );
+}

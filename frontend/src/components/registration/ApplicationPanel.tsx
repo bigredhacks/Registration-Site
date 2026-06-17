@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import DynamicForm from "./DynamicForm";
-import { hackathonRegistrationFormConfig } from "@/lib/formConfig";
+import { hackathonRegistrationFormConfig, type FormConfig, type FormField } from "@/lib/formConfig";
+import { buildSchemaFromFields } from "@/lib/buildSchema";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
 
@@ -10,40 +11,65 @@ interface ApplicationPanelProps {
   onSubmitted: () => void;
 }
 
-const STORAGE_KEY = "brh_profile";
-
-interface SavedProfile {
-  firstName?: string;
-  lastName?: string;
-  email?: string;
-  phoneNumber?: string;
-  age?: string;
-  university?: string;
-  major?: string;
-  gender?: string;
-  shirtSize?: string;
-  dietaryRestrictions?: string[];
+interface ServerProfile {
+  first_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  age_range?: string | null;
+  school?: string | null;
+  country?: string | null;
+  major?: string | null;
+  gender?: string | null;
+  shirt_size?: string | null;
+  dietary_restrictions?: string[] | null;
+  level_of_study?: string | null;
+  linkedin?: string | null;
 }
 
-function buildProfileValues(): Record<string, unknown> | null {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}") as SavedProfile;
-    if (!saved.firstName && !saved.lastName && !saved.email) return null;
-    return {
-      first_name: saved.firstName || "",
-      last_name: saved.lastName || "",
-      email: saved.email || "",
-      phone_number: saved.phoneNumber || "",
-      age: saved.age || "",
-      school: saved.university || "",
-      major: saved.major || "",
-      gender: saved.gender || "",
-      shirt_size: saved.shirtSize || "",
-      dietary_restrictions: saved.dietaryRestrictions || [],
-    };
-  } catch {
-    return null;
-  }
+function profileToFormValues(profile: ServerProfile): Record<string, unknown> | null {
+  if (!profile.first_name && !profile.last_name && !profile.email) return null;
+  return {
+    first_name: profile.first_name || "",
+    last_name: profile.last_name || "",
+    email: profile.email || "",
+    phone_number: profile.phone_number || "",
+    age: profile.age_range || "",
+    school: profile.school || "",
+    country: profile.country || "",
+    major: profile.major || "",
+    level_of_study: profile.level_of_study || "",
+    gender: profile.gender || "",
+    shirt_size: profile.shirt_size || "",
+    dietary_restrictions: profile.dietary_restrictions || [],
+    linkedin: profile.linkedin || "",
+  };
+}
+
+async function uploadResume(file: File): Promise<void> {
+  const urlRes = await apiFetch("/api/registrations/me/resume-upload-url", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename: file.name }),
+  });
+  if (!urlRes.ok) throw new Error("Could not get upload URL");
+  const { signedUrl, path, token } = await urlRes.json();
+
+  // Supabase returns either a signedUrl (full URL) or a token; prefer the URL.
+  const target = signedUrl || `${path}?token=${token}`;
+  const putRes = await fetch(target, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "application/pdf" },
+    body: file,
+  });
+  if (!putRes.ok) throw new Error("Storage upload failed");
+
+  const persistRes = await apiFetch("/api/registrations/me/resume", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ resume_path: path }),
+  });
+  if (!persistRes.ok) throw new Error("Could not save resume reference");
 }
 
 export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: ApplicationPanelProps) {
@@ -52,8 +78,34 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [prefillBannerDismissed, setPrefillBannerDismissed] = useState(false);
   const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [config, setConfig] = useState<FormConfig>(hackathonRegistrationFormConfig);
+  const [profileValues, setProfileValues] = useState<Record<string, unknown> | null>(null);
 
-  const profileValues = buildProfileValues();
+  useEffect(() => {
+    apiFetch("/api/form-configs/registration")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const remote = await res.json();
+        const fields = remote.fields as FormField[];
+        setConfig({
+          title: remote.title,
+          description: remote.description ?? undefined,
+          schema: buildSchemaFromFields(fields),
+          fields,
+        });
+      })
+      .catch(() => { /* fall back to bundled config */ });
+
+    apiFetch("/api/profile")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const profile = (await res.json()) as ServerProfile;
+        setProfileValues(profileToFormValues(profile));
+      })
+      .catch(() => { /* leave null — banner won't show */ });
+  }, []);
+
   const showPrefillBanner = profileValues !== null && !prefillBannerDismissed && Object.keys(initialValues).length === 0;
 
   const handlePrefillAccept = () => {
@@ -74,9 +126,24 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
         body: JSON.stringify(data),
       });
       if (!res.ok) {
+        if (res.status === 409) {
+          showToast("You've already submitted an application.", "info");
+          setIsSubmitted(true);
+          onSubmitted();
+          return;
+        }
         const err = await res.json();
-        throw new Error(err.message || "Failed to submit");
+        throw new Error(err.errors?.[0]?.message || err.error || err.message || "Failed to submit");
       }
+
+      if (resumeFile) {
+        try {
+          await uploadResume(resumeFile);
+        } catch {
+          showToast("Application submitted, but resume upload failed. You can upload it later.", "info");
+        }
+      }
+
       setIsSubmitted(true);
       onSubmitted();
     } catch (error) {
@@ -160,13 +227,31 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
               </button>
             </div>
           ) : (
-            <DynamicForm
-              config={hackathonRegistrationFormConfig}
-              onSubmit={handleSubmit}
-              isLoading={isLoading}
-              initialValues={initialValues}
-              hideHeader
-            />
+            <>
+              <div className="mb-5 bg-red7 border border-red5/20 rounded-xl px-5 py-4">
+                <label className="font-poppins text-sm font-semibold text-gray-800 block mb-2">
+                  Resume (optional)
+                </label>
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+                  className="text-sm font-poppins text-gray-700"
+                />
+                {resumeFile && (
+                  <p className="mt-1 text-xs font-poppins text-gray-500">
+                    Selected: {resumeFile.name}
+                  </p>
+                )}
+              </div>
+              <DynamicForm
+                config={config}
+                onSubmit={handleSubmit}
+                isLoading={isLoading}
+                initialValues={initialValues}
+                hideHeader
+              />
+            </>
           )}
         </div>
       </div>

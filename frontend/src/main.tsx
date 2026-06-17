@@ -10,6 +10,7 @@ import Signup from "./pages/authorization/Signup";
 import Dashboard from "./pages/registration/dashboard";
 import Profile from "./pages/registration/profile";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
+import AdminPage from "./pages/admin/AdminPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 createRoot(document.getElementById("root")!).render(
@@ -26,6 +27,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/apply" element={<Navigate to="/register" replace />} />
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

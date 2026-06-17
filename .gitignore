@@ -31,3 +31,4 @@ CLAUDE.md
 .claude/
 
 venv
+supabase/.temp/

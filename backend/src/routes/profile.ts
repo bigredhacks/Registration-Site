@@ -1,15 +1,16 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../config/supabase';
 import { requireAuth } from '../middleware/auth';
+import { validate } from '../middleware/validate';
+import { UpdateProfileBody, UpdateProfileSchema } from '../types/profile';
 
 const router = Router();
 
-// All routes in this file require authentication
 router.use(requireAuth);
 
 /**
  * GET /api/profile
- * Returns the authenticated user's profile.
+ * Returns the authenticated user's profile, creating an empty row on first access.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -17,10 +18,25 @@ router.get('/', async (req: Request, res: Response) => {
       .from('profiles')
       .select('*')
       .eq('id', req.user!.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
       res.status(500).json({ error: error.message });
+      return;
+    }
+
+    if (!data) {
+      const { data: created, error: createError } = await supabase
+        .from('profiles')
+        .insert({ id: req.user!.id })
+        .select()
+        .single();
+
+      if (createError) {
+        res.status(500).json({ error: createError.message });
+        return;
+      }
+      res.json(created);
       return;
     }
 
@@ -32,37 +48,31 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * PUT /api/profile
- * Updates the authenticated user's profile.
+ * Upserts the authenticated user's profile with any subset of allowed fields.
  */
-router.put('/', async (req: Request, res: Response) => {
-  try {
-    const { full_name, avatar_url } = req.body;
+router.put(
+  '/',
+  validate({ body: UpdateProfileSchema }),
+  async (req: Request<{}, {}, UpdateProfileBody>, res: Response) => {
+    try {
+      const updates = { id: req.user!.id, ...req.body };
 
-    const updates: Record<string, string> = {};
-    if (full_name !== undefined) updates.full_name = full_name;
-    if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert(updates, { onConflict: 'id' })
+        .select()
+        .single();
 
-    if (Object.keys(updates).length === 0) {
-      res.status(400).json({ error: 'At least one field is required' });
-      return;
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
     }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', req.user!.id)
-      .select()
-      .single();
-
-    if (error) {
-      res.status(500).json({ error: error.message });
-      return;
-    }
-
-    res.json(data);
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
   }
-});
+);
 
 export default router;

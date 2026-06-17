@@ -4,24 +4,89 @@ import {
   CreateParticipantBody,
   CreateParticipantSchema,
   ParticipantParamsSchema,
+  UpdateParticipantBody,
+  UpdateParticipantSchema,
 } from '../types/participant';
 import { validate } from '../middleware/validate';
+import { isAdmin } from '../middleware/requireAdmin';
 
 const router = Router();
 
 /**
+ * GET /api/participants/me
+ * Returns the caller's team-matching submission for the given pool (default 'default').
+ */
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const poolId = (req.query.pool_id as string) || 'default';
+
+    const { data, error } = await supabase
+      .from('participants')
+      .select('*')
+      .eq('user_id', req.user!.id)
+      .eq('pool_id', poolId)
+      .maybeSingle();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    if (!data) {
+      res.status(404).json({ error: 'No submission found' });
+      return;
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * PUT /api/participants/me
+ * Updates the caller's team-matching submission in-place.
+ */
+router.put(
+  '/me',
+  validate({ body: UpdateParticipantSchema }),
+  async (req: Request<{}, {}, UpdateParticipantBody>, res: Response) => {
+    try {
+      const poolId = (req.query.pool_id as string) || 'default';
+
+      const { data, error } = await supabase
+        .from('participants')
+        .update(req.body)
+        .eq('user_id', req.user!.id)
+        .eq('pool_id', poolId)
+        .select()
+        .single();
+
+      if (error) {
+        res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+        return;
+      }
+
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
  * POST /api/participants
- *
- * Creates a new participant for team matching.
+ * Upsert: creates or updates the caller's submission for (user_id, pool_id).
  */
 router.post(
   '/',
   validate({ body: CreateParticipantSchema }),
   async (req: Request<{}, {}, CreateParticipantBody>, res: Response) => {
     try {
+      const payload = { ...req.body, user_id: req.user!.id };
+
       const { data, error } = await supabase
         .from('participants')
-        .insert(req.body)
+        .upsert(payload, { onConflict: 'user_id,pool_id' })
         .select()
         .single();
 
@@ -39,11 +104,15 @@ router.post(
 
 /**
  * GET /api/participants
- *
- * Lists participants, optionally filtered by pool_id query param.
+ * Admin-only: list participants in a pool.
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
+    if (!(await isAdmin(req.user!.id))) {
+      res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+
     const poolId = (req.query.pool_id as string) || 'default';
 
     const { data, error } = await supabase
@@ -65,8 +134,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/participants/:id
- *
- * Deletes a participant by UUID.
+ * Owner or admin only.
  */
 router.delete(
   '/:id',
@@ -74,6 +142,27 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+
+      const { data: existing, error: fetchError } = await supabase
+        .from('participants')
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        res.status(500).json({ error: fetchError.message });
+        return;
+      }
+      if (!existing) {
+        res.status(404).json({ error: 'Participant not found' });
+        return;
+      }
+
+      const isOwner = existing.user_id === req.user!.id;
+      if (!isOwner && !(await isAdmin(req.user!.id))) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
 
       const { error } = await supabase
         .from('participants')

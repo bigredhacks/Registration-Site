@@ -8,27 +8,160 @@ import {
   RegistrationParamsSchema,
 } from '../types/registration';
 import { validate } from '../middleware/validate';
+import { isAdmin } from '../middleware/requireAdmin';
+import { sendRegistrationConfirmation } from '../utils/email';
 
 const router = Router();
 
 /**
+ * POST /api/registrations/me/resume-upload-url
+ * Issues a signed upload URL so the browser can PUT the resume directly to Storage.
+ * Body: { filename: string }  (basename only; the user_id is enforced server-side)
+ */
+router.post('/me/resume-upload-url', async (req: Request, res: Response) => {
+  try {
+    const filename = String(req.body?.filename || 'resume.pdf').replace(/[^A-Za-z0-9._-]/g, '_');
+    const objectPath = `${req.user!.id}/${filename}`;
+
+    const { data, error } = await supabase
+      .storage
+      .from('resumes')
+      .createSignedUploadUrl(objectPath);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json({ ...data, path: objectPath });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/registrations/me/resume
+ * Persists the storage path of the uploaded resume on the caller's registration.
+ * Body: { resume_path: string }
+ */
+router.post('/me/resume', async (req: Request, res: Response) => {
+  try {
+    const resumePath = String(req.body?.resume_path || '');
+    if (!resumePath.startsWith(`${req.user!.id}/`)) {
+      res.status(400).json({ error: 'resume_path must be inside the caller\'s folder' });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('registrations')
+      .update({ resume_path: resumePath })
+      .eq('user_id', req.user!.id)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+      return;
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/registrations/me/resume-download-url
+ * Returns a short-lived signed URL the caller can use to download their resume.
+ */
+router.get('/me/resume-download-url', async (req: Request, res: Response) => {
+  try {
+    const { data: registration, error: regError } = await supabase
+      .from('registrations')
+      .select('resume_path')
+      .eq('user_id', req.user!.id)
+      .maybeSingle();
+
+    if (regError) {
+      res.status(500).json({ error: regError.message });
+      return;
+    }
+    if (!registration?.resume_path) {
+      res.status(404).json({ error: 'No resume uploaded' });
+      return;
+    }
+
+    const { data, error } = await supabase
+      .storage
+      .from('resumes')
+      .createSignedUrl(registration.resume_path, 60 * 5);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * GET /api/registrations/me
+ * Returns the authenticated user's registration, or 404.
+ * Defined before /:id so the literal route wins.
+ */
+router.get('/me', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('registrations')
+      .select('*')
+      .eq('user_id', req.user!.id)
+      .maybeSingle();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    if (!data) {
+      res.status(404).json({ error: 'No registration found' });
+      return;
+    }
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * POST /api/registrations
- *
- * Creates a new registration.
- *
- * @body Full hackathon application payload
- * @returns 201 - The newly created registration object
- * @returns 400 - Validation error
- * @returns 500 - Database error
+ * Creates a registration owned by the authenticated user.
+ * Returns 409 if the user already has one.
  */
 router.post(
   '/',
   validate({ body: CreateRegistrationSchema }),
   async (req: Request<{}, {}, CreateRegistrationBody>, res: Response) => {
     try {
+      const { data: existing } = await supabase
+        .from('registrations')
+        .select('id')
+        .eq('user_id', req.user!.id)
+        .maybeSingle();
+
+      if (existing) {
+        res.status(409).json({ error: 'Registration already exists for this user' });
+        return;
+      }
+
+      const payload = { ...req.body, user_id: req.user!.id };
+
       const { data, error } = await supabase
         .from('registrations')
-        .insert(req.body)
+        .insert(payload)
         .select()
         .single();
 
@@ -36,6 +169,12 @@ router.post(
         res.status(500).json({ error: error.message });
         return;
       }
+
+      // Fire-and-forget; never fail submission on email transport error.
+      sendRegistrationConfirmation({
+        to: data.email,
+        firstName: data.first_name,
+      }).catch((e) => console.error('[email] confirmation failed:', e));
 
       res.status(201).json(data);
     } catch (err) {
@@ -46,14 +185,15 @@ router.post(
 
 /**
  * GET /api/registrations
- *
- * Lists all registrations, ordered by creation date (newest first).
- *
- * @returns 200 - Array of registration objects
- * @returns 500 - Database error
+ * Admin-only: list all registrations, newest first.
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
+    if (!(await isAdmin(req.user!.id))) {
+      res.status(403).json({ error: 'Admin access required' });
+      return;
+    }
+
     const { data, error } = await supabase
       .from('registrations')
       .select('*')
@@ -72,14 +212,7 @@ router.get('/', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/registrations/:id
- *
- * Retrieves a single registration by its ID.
- *
- * @param {int} id - Registration ID
- * @returns 200 - The registration object
- * @returns 400 - Invalid ID format
- * @returns 404 - Registration not found
- * @returns 500 - Database error
+ * Owner or admin only.
  */
 router.get(
   '/:id',
@@ -92,10 +225,20 @@ router.get(
         .from('registrations')
         .select('*')
         .eq('id', id)
-        .single();
+        .maybeSingle();
 
       if (error) {
-        res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      if (!data) {
+        res.status(404).json({ error: 'Registration not found' });
+        return;
+      }
+
+      const isOwner = data.user_id === req.user!.id;
+      if (!isOwner && !(await isAdmin(req.user!.id))) {
+        res.status(403).json({ error: 'Forbidden' });
         return;
       }
 
@@ -108,15 +251,7 @@ router.get(
 
 /**
  * PUT /api/registrations/:id
- *
- * Updates an existing registration. At least one field must be provided.
- *
- * @param {string} id - Registration ID
- * @body Partial hackathon application payload
- * @returns 200 - The updated registration object
- * @returns 400 - Validation error (invalid ID, no fields, or empty strings)
- * @returns 404 - Registration not found
- * @returns 500 - Database error
+ * Owner or admin only.
  */
 router.put(
   '/:id',
@@ -124,6 +259,28 @@ router.put(
   async (req: Request<{ id: string }, {}, UpdateRegistrationBody>, res: Response) => {
     try {
       const { id } = req.params;
+
+      const { data: existing, error: fetchError } = await supabase
+        .from('registrations')
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        res.status(500).json({ error: fetchError.message });
+        return;
+      }
+      if (!existing) {
+        res.status(404).json({ error: 'Registration not found' });
+        return;
+      }
+
+      const isOwner = existing.user_id === req.user!.id;
+      if (!isOwner && !(await isAdmin(req.user!.id))) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
+
       const { data, error } = await supabase
         .from('registrations')
         .update(req.body)
@@ -132,7 +289,7 @@ router.put(
         .single();
 
       if (error) {
-        res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
         return;
       }
 
@@ -145,13 +302,7 @@ router.put(
 
 /**
  * DELETE /api/registrations/:id
- *
- * Deletes a registration by its ID.
- *
- * @param {int} id - Registration ID
- * @returns 204 - Successfully deleted (no content)
- * @returns 400 - Invalid ID format
- * @returns 500 - Database error
+ * Owner or admin only.
  */
 router.delete(
   '/:id',
@@ -159,6 +310,27 @@ router.delete(
   async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+
+      const { data: existing, error: fetchError } = await supabase
+        .from('registrations')
+        .select('user_id')
+        .eq('id', id)
+        .maybeSingle();
+
+      if (fetchError) {
+        res.status(500).json({ error: fetchError.message });
+        return;
+      }
+      if (!existing) {
+        res.status(404).json({ error: 'Registration not found' });
+        return;
+      }
+
+      const isOwner = existing.user_id === req.user!.id;
+      if (!isOwner && !(await isAdmin(req.user!.id))) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+      }
 
       const { error } = await supabase
         .from('registrations')

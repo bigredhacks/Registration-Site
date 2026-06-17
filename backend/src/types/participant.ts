@@ -23,6 +23,11 @@ export const CreateParticipantSchema = z.object({
   pool_id: z.string().default('default'),
 });
 
+export const UpdateParticipantSchema = CreateParticipantSchema.partial().refine(
+  (d) => Object.keys(d).length > 0,
+  { message: 'At least one field is required' },
+);
+
 export const ParticipantParamsSchema = z.object({
   id: z.string().uuid('id must be a valid UUID'),
 });
@@ -50,3 +55,4 @@ export interface Participant {
 }
 
 export type CreateParticipantBody = z.infer<typeof CreateParticipantSchema>;
+export type UpdateParticipantBody = z.infer<typeof UpdateParticipantSchema>;

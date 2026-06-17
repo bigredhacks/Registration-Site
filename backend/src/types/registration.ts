@@ -57,6 +57,10 @@ export const RegistrationParamsSchema = z.object({
   id: z.coerce.number().int().positive('id must be a positive integer'),
 });
 
+export const ResumePathSchema = z.object({
+  resume_path: z.string().min(1).optional(),
+});
+
 export interface Registration extends CreateRegistrationBody {
   id: string;
   created_at: string;

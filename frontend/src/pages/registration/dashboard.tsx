@@ -4,10 +4,11 @@ import RegistrationLayout from "../../components/layouts/RegistrationLayout";
 import { useToast } from "../../components/Toast/ToastContext";
 import ApplicationPanel from "../../components/registration/ApplicationPanel";
 import { supabase } from "../../config/supabase";
+import { apiFetch } from "../../lib/api";
 import arcade from "@/assets/arcade_device2.png";
 import siteBanner from "@/assets/site_banner.png";
 
-const EVENT_DATE = new Date("2026-10-16T09:00:00");
+const EVENT_DATE = new Date("2026-10-02T09:00:00");
 
 function useCountdown(target: Date) {
   const calc = () => {
@@ -35,30 +36,29 @@ function useCountdown(target: Date) {
   return countdown;
 }
 
-function profileCompletion(): { pct: number; missing: string[] } {
-  try {
-    const saved = JSON.parse(localStorage.getItem("brh_profile") || "{}");
-    const fields: Record<string, string> = {
-      firstName: "First Name",
-      lastName: "Last Name",
-      email: "Email",
-      phoneNumber: "Phone Number",
-      age: "Age",
-      graduationYear: "Graduation Year",
-      university: "University",
-      major: "Major",
-      gender: "Gender",
-      dietaryRestrictions: "Dietary Restrictions",
-      shirtSize: "Shirt Size",
-    };
-    const isEmpty = (v: unknown) =>
-      v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
-    const missing = Object.entries(fields).filter(([k]) => isEmpty(saved[k])).map(([, v]) => v);
-    const pct = Math.round(((Object.keys(fields).length - missing.length) / Object.keys(fields).length) * 100);
-    return { pct, missing };
-  } catch {
-    return { pct: 0, missing: ["Profile not set up"] };
-  }
+const PROFILE_FIELDS: { key: string; label: string }[] = [
+  { key: "first_name", label: "First Name" },
+  { key: "last_name", label: "Last Name" },
+  { key: "phone_number", label: "Phone Number" },
+  { key: "age_range", label: "Age" },
+  { key: "graduation_year", label: "Graduation Year" },
+  { key: "school", label: "University" },
+  { key: "country", label: "Country" },
+  { key: "level_of_study", label: "Level of Study" },
+  { key: "major", label: "Major" },
+  { key: "gender", label: "Gender" },
+  { key: "dietary_restrictions", label: "Dietary Restrictions" },
+  { key: "shirt_size", label: "Shirt Size" },
+  { key: "linkedin", label: "LinkedIn" },
+];
+
+function computeCompletion(profile: Record<string, unknown> | null): { pct: number; missing: string[] } {
+  if (!profile) return { pct: 0, missing: ["Profile not set up"] };
+  const isEmpty = (v: unknown) =>
+    v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+  const missing = PROFILE_FIELDS.filter((f) => isEmpty(profile[f.key])).map((f) => f.label);
+  const pct = Math.round(((PROFILE_FIELDS.length - missing.length) / PROFILE_FIELDS.length) * 100);
+  return { pct, missing };
 }
 
 function CountdownUnit({ value, label }: { value: number; label: string }) {
@@ -77,10 +77,11 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const countdown = useCountdown(EVENT_DATE);
-  const { pct, missing } = profileCompletion();
 
   const [panelOpen, setPanelOpen] = useState(location.pathname === "/register");
   const [hasApplied, setHasApplied] = useState(false);
+  const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
+  const { pct, missing } = computeCompletion(profile);
 
   // Email verification state
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null); // null = loading
@@ -93,6 +94,18 @@ const Dashboard = () => {
       setUserEmail(user?.email ?? null);
       setEmailVerified(!!user?.email_confirmed_at);
     });
+
+    apiFetch("/api/registrations/me")
+      .then((res) => {
+        if (res.ok) setHasApplied(true);
+      })
+      .catch(() => { /* unauthenticated or network — leave as not started */ });
+
+    apiFetch("/api/profile")
+      .then(async (res) => {
+        if (res.ok) setProfile(await res.json());
+      })
+      .catch(() => { /* leave as null */ });
   }, []);
 
   useEffect(() => {
@@ -153,7 +166,7 @@ const Dashboard = () => {
 
           {/* Countdown */}
           <div className="bg-red7 border border-red7 rounded-xl p-6 flex flex-col gap-3 shadow-sm">
-            <p className="text-[11px] font-poppins font-semibold text-red6 uppercase tracking-widest">Big Red Hacks 2026</p>
+            <p className="text-[11px] font-poppins font-semibold text-red6 uppercase tracking-widest">BigRed//Hacks FA26</p>
             <p className="font-poppins text-gray-700 text-sm leading-relaxed">
               The largest student-run hackathon @ Cornell University, Ithaca NY.
             </p>

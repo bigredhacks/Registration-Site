@@ -5,8 +5,10 @@ import { supabase } from "../../config/supabase";
 import SearchableCombobox from "../../components/SearchableCombobox";
 import {
   AGE_RANGES,
+  COUNTRIES_CSV_URL,
   DIETARY_OPTIONS,
   GENDER_OPTIONS,
+  LEVEL_OF_STUDY_OPTIONS,
   MAJOR_SUGGESTIONS,
   profileSchema,
   SCHOOLS_CSV_URL,
@@ -22,10 +24,13 @@ interface FormData {
   age: string;
   graduationYear: string;
   university: string;
+  country: string;
+  levelOfStudy: string;
   major: string;
   gender: string;
   dietaryRestrictions: string[];
   shirtSize: string;
+  linkedin: string;
 }
 
 const STORAGE_KEY = "brh_profile";
@@ -72,28 +77,70 @@ const Profile = () => {
 
   const [form, setForm] = useState<FormData>({
     firstName: "", lastName: "", email: "", phoneNumber: "",
-    age: "", graduationYear: "", university: "", major: "",
-    gender: "", dietaryRestrictions: [], shirtSize: "",
+    age: "", graduationYear: "", university: "", country: "",
+    levelOfStudy: "", major: "",
+    gender: "", dietaryRestrictions: [], shirtSize: "", linkedin: "",
   });
 
   const [emailVerified, setEmailVerified] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
-  // Load from localStorage + Supabase auth email on mount
+  // Load from server first; fall back to localStorage cache if the request fails.
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        setForm((prev) => ({ ...prev, ...parsed }));
-      } catch { /* ignore */ }
-    }
+    let cancelled = false;
+
+    const loadFromCache = () => {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (!cancelled) setForm((prev) => ({ ...prev, ...parsed }));
+        } catch { /* ignore */ }
+      }
+    };
+
+    apiFetch("/api/profile")
+      .then(async (res) => {
+        if (!res.ok) {
+          loadFromCache();
+          return;
+        }
+        const profile = await res.json();
+        if (cancelled) return;
+        setForm((prev) => ({
+          ...prev,
+          firstName: profile.first_name ?? prev.firstName,
+          lastName: profile.last_name ?? prev.lastName,
+          phoneNumber: profile.phone_number ?? prev.phoneNumber,
+          age: profile.age_range ?? prev.age,
+          graduationYear:
+            profile.graduation_year != null ? String(profile.graduation_year) : prev.graduationYear,
+          university: profile.school ?? prev.university,
+          country: profile.country ?? prev.country,
+          levelOfStudy: profile.level_of_study ?? prev.levelOfStudy,
+          major: profile.major ?? prev.major,
+          gender: profile.gender ?? prev.gender,
+          dietaryRestrictions: Array.isArray(profile.dietary_restrictions)
+            ? profile.dietary_restrictions
+            : prev.dietaryRestrictions,
+          shirtSize: profile.shirt_size ?? prev.shirtSize,
+          linkedin: profile.linkedin ?? prev.linkedin,
+        }));
+      })
+      .catch(() => loadFromCache());
+
     supabase.auth.getUser().then(({ data }) => {
+      if (cancelled) return;
       if (data.user?.email) {
         setForm((prev) => ({ ...prev, email: prev.email || data.user!.email! }));
       }
+      setEmailVerified(!!data.user?.email_confirmed_at);
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const clearFieldError = (field: keyof FormData) => {
@@ -144,15 +191,45 @@ const Profile = () => {
     setErrors({});
     setSaving(true);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-      await apiFetch("/api/profile", {
+      const raw: Record<string, unknown> = {
+        first_name: form.firstName,
+        last_name: form.lastName,
+        full_name: `${form.firstName} ${form.lastName}`.trim(),
+        phone_number: form.phoneNumber,
+        school: form.university,
+        country: form.country,
+        level_of_study: form.levelOfStudy,
+        major: form.major,
+        age_range: form.age,
+        gender: form.gender,
+        dietary_restrictions: form.dietaryRestrictions,
+        shirt_size: form.shirtSize,
+        linkedin: form.linkedin,
+      };
+      if (form.graduationYear) raw.graduation_year = Number(form.graduationYear);
+
+      // Drop empty strings / empty arrays so the server-side Zod enums don't reject them.
+      const payload: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(raw)) {
+        if (v === "" || v === null || v === undefined) continue;
+        if (Array.isArray(v) && v.length === 0) continue;
+        payload[k] = v;
+      }
+
+      const res = await apiFetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ full_name: `${form.firstName} ${form.lastName}`.trim() }),
+        body: JSON.stringify(payload),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || body.errors?.[0]?.message || `HTTP ${res.status}`);
+      }
       showToast("Profile saved!", "success");
-    } catch {
-      showToast("Failed to save profile. Please try again.", "error");
+    } catch (e) {
+      console.error("[profile save]", e);
+      const msg = e instanceof Error ? e.message : "Failed to save profile.";
+      showToast(`Failed to save: ${msg}`, "error");
     } finally {
       setSaving(false);
     }
@@ -193,21 +270,33 @@ const Profile = () => {
             </Field>
 
             <Field label="Email" required error={errors.email}>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <input
                   type="email" placeholder="bigredhacks@gmail.com"
                   value={form.email}
-                  onChange={(e) => handleChange("email", e.target.value)}
-                  className={`${inputCls} flex-1`}
+                  readOnly
+                  className={`${inputCls} flex-1 bg-gray-50 cursor-not-allowed`}
                 />
-                <button
-                  onClick={() => setEmailVerified(true)}
-                  className={`px-3 py-2 rounded-lg text-white text-sm font-poppins font-semibold whitespace-nowrap transition-colors ${
-                    emailVerified ? "bg-green-500" : "bg-red5 hover:bg-red3"
-                  }`}
-                >
-                  {emailVerified ? "✓ Verified" : "Verify"}
-                </button>
+                {emailVerified ? (
+                  <span className="px-3 py-2 rounded-lg bg-green-100 border border-green-300 text-green-700 text-xs font-poppins font-semibold whitespace-nowrap">
+                    ✓ Verified
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!form.email) return;
+                      const { error } = await supabase.auth.resend({ type: "signup", email: form.email });
+                      showToast(
+                        error ? `Could not send: ${error.message}` : "Verification email sent!",
+                        error ? "error" : "info"
+                      );
+                    }}
+                    className="px-3 py-2 rounded-lg bg-red5 hover:bg-red3 text-white text-xs font-poppins font-semibold whitespace-nowrap transition-colors"
+                  >
+                    Resend
+                  </button>
+                )}
               </div>
             </Field>
 
@@ -263,6 +352,40 @@ const Profile = () => {
                 staticOptions={[...MAJOR_SUGGESTIONS]}
                 placeholder="e.g. Computer Science"
                 allowCustomValue
+              />
+            </Field>
+
+            <Field label="Level of Study" error={errors.levelOfStudy}>
+              <div className="relative">
+                <select
+                  value={form.levelOfStudy}
+                  onChange={(e) => handleChange("levelOfStudy", e.target.value)}
+                  className={`${selectCls} ${!form.levelOfStudy ? "text-gray-400" : "text-gray-800"}`}
+                >
+                  <option value="" disabled>Select level</option>
+                  {LEVEL_OF_STUDY_OPTIONS.map((l) => <option key={l} value={l}>{l}</option>)}
+                </select>
+                <Chevron />
+              </div>
+            </Field>
+
+            <Field label="Country" error={errors.country}>
+              <SearchableCombobox
+                value={form.country}
+                onChange={(v) => handleChange("country", v)}
+                csvUrl={COUNTRIES_CSV_URL}
+                csvType="countries"
+                placeholder="Search countries…"
+                allowCustomValue
+              />
+            </Field>
+
+            <Field label="LinkedIn" error={errors.linkedin}>
+              <input
+                type="url" placeholder="https://www.linkedin.com/in/your-profile"
+                value={form.linkedin}
+                onChange={(e) => handleChange("linkedin", e.target.value)}
+                className={inputCls}
               />
             </Field>
 

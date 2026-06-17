@@ -6,6 +6,7 @@ type SideButtonProps = {
     children: React.ReactNode;
     icon?: string;
     activeIcon?: string;
+    iconElement?: React.ReactNode;
     className?: string;
 };
 
@@ -14,6 +15,7 @@ const SideButton: React.FC<SideButtonProps> = memo(({
   children,
   icon,
   activeIcon,
+  iconElement,
   className,
 }) => {
     const location = useLocation();
@@ -28,14 +30,16 @@ const SideButton: React.FC<SideButtonProps> = memo(({
       } ${className || ''}`}
 
     >
-      {icon && (
+      {iconElement ? (
+        <span className="w-7 flex items-center justify-center">{iconElement}</span>
+      ) : icon ? (
         <img
           src={isActive && activeIcon ? activeIcon : icon}
           alt=""
           className="w-7 transition-opacity duration-200"
           loading="eager"
         />
-      )}
+      ) : null}
       <span className="font-poppins transition-colors duration-200">{children}</span>
     </Link>
   );

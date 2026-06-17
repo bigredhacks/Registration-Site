@@ -2,9 +2,11 @@ import { useNavigate } from "react-router-dom";
 import SideButton from "./SideButton";
 import { ICONS } from "../../constants/icons";
 import { supabase } from "../../config/supabase";
+import { useAdmin } from "@/lib/useAdmin";
 
 const SideButtonSet = () => {
   const navigate = useNavigate();
+  const { isAdmin } = useAdmin();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -41,6 +43,18 @@ const SideButtonSet = () => {
       >
         Team
       </SideButton>
+      {isAdmin && (
+        <SideButton
+          to="/admin"
+          iconElement={
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2L4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3z" />
+            </svg>
+          }
+        >
+          Admin
+        </SideButton>
+      )}
       <button
         onClick={handleLogout}
         className="flex items-center gap-3 px-4 h-12 font-medium rounded-lg transition-colors duration-200 text-white hover:bg-red4 w-full"

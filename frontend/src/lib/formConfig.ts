@@ -275,7 +275,7 @@ export const teamMatchingSchema = z.object({
 });
 
 export const teamMatchingFormConfig: FormConfig = {
-  title: "BigRed//Hacks Fall 2025 Team Matching",
+  title: "BigRed//Hacks Fall 2026 Team Matching",
   description: "Help us match you with the perfect team!",
   schema: teamMatchingSchema,
   fields: [
@@ -344,9 +344,7 @@ export const teamMatchingFormConfig: FormConfig = {
   ],
 };
 
-// Schema used by the standalone Profile page. Field names use camelCase to
-// match profile's FormData shape (which is what gets persisted to
-// localStorage as "brh_profile").
+// Schema used by the standalone Profile page.
 export const profileSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required"),
   lastName: z.string().trim().min(1, "Last name is required"),
@@ -365,10 +363,13 @@ export const profileSchema = z.object({
       return n >= 2020 && n <= 2035;
     }, "Year must be between 2020 and 2035"),
   university: z.string().trim().min(1, "School is required"),
+  country: z.string().trim().optional().or(z.literal("")),
+  levelOfStudy: z.enum(LEVEL_OF_STUDY_OPTIONS).optional().or(z.literal("")),
   major: z.string().trim().optional().or(z.literal("")),
   gender: z.enum(GENDER_OPTIONS).optional().or(z.literal("")),
   dietaryRestrictions: z.array(z.enum(DIETARY_OPTIONS)).optional(),
   shirtSize: z.enum(SHIRT_SIZES).optional().or(z.literal("")),
+  linkedin: z.url("Enter a valid LinkedIn URL").optional().or(z.literal("")),
 });
 
 export const hackathonRegistrationApplicationSchema = z.object({
@@ -400,7 +401,7 @@ export const hackathonRegistrationApplicationSchema = z.object({
 });
 
 export const hackathonRegistrationFormConfig: FormConfig = {
-  title: "BigRed//Hacks Fall 2025 Registration",
+  title: "BigRed//Hacks Fall 2026 Registration",
   description: "Complete your registration for the hackathon",
   schema: hackathonRegistrationApplicationSchema,
   fields: [

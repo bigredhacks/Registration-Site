@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  HasTeamView,
   NoTeamView,
   MatchingFormView,
   MatchingPendingView,
@@ -7,22 +8,99 @@ import {
 import RegistrationLayout from "@/components/layouts/RegistrationLayout";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
+import { supabase } from "@/config/supabase";
 
 type TeamState =
+  | "loading"
   | "no-team"
   | "matching-form"
-  | "matching-pending";
+  | "matching-pending"
+  | "has-team";
+
+interface UserTeam {
+  id: string;
+  name: string;
+  invite_code: string;
+  created_by: string;
+  members: { user_id: string; full_name: string; joined_at: string }[];
+}
 
 export default function TeamPage() {
-  const [view, setView] = useState<TeamState>("no-team");
+  const [view, setView] = useState<TeamState>("loading");
+  const [team, setTeam] = useState<UserTeam | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const { showToast } = useToast();
 
-  const handleJoinTeam = () => {
-    showToast("Team join is not connected yet.", "info");
+  const refreshTeam = async () => {
+    const res = await apiFetch("/api/teams/me");
+    if (res.ok) {
+      const data: UserTeam = await res.json();
+      setTeam(data);
+      setView("has-team");
+      return;
+    }
+    setTeam(null);
+
+    // No team — check if they've already submitted matching prefs.
+    const prefsRes = await apiFetch("/api/participants/me");
+    if (prefsRes.ok) {
+      setView("matching-pending");
+    } else {
+      setView("no-team");
+    }
   };
 
-  const handleCreateTeam = () => {
-    showToast("Team creation is not connected yet.", "info");
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
+    refreshTeam().catch(() => setView("no-team"));
+  }, []);
+
+  const handleJoinTeam = async (code: string) => {
+    const trimmed = code.trim().toUpperCase();
+    if (trimmed.length !== 6) {
+      showToast("Team codes are 6 characters.", "error");
+      return;
+    }
+    const res = await apiFetch("/api/teams/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invite_code: trimmed }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Could not join team.", "error");
+      return;
+    }
+    showToast("Joined team!", "success");
+    await refreshTeam();
+  };
+
+  const handleCreateTeam = async () => {
+    const name = window.prompt("Team name?")?.trim();
+    if (!name) return;
+    const res = await apiFetch("/api/teams/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showToast(body.error || "Could not create team.", "error");
+      return;
+    }
+    showToast("Team created!", "success");
+    await refreshTeam();
+  };
+
+  const handleLeaveTeam = async () => {
+    if (!window.confirm("Leave this team?")) return;
+    const res = await apiFetch("/api/teams/leave", { method: "POST" });
+    if (!res.ok) {
+      showToast("Could not leave team.", "error");
+      return;
+    }
+    showToast("Left team.", "info");
+    await refreshTeam();
   };
 
   const handleFillMatchForm = () => {
@@ -83,6 +161,8 @@ export default function TeamPage() {
 
   const renderView = () => {
     switch (view) {
+      case "loading":
+        return <p className="text-base text-[#cb4643]">Loading…</p>;
       case "no-team":
         return (
           <NoTeamView
@@ -103,6 +183,18 @@ export default function TeamPage() {
           <MatchingPendingView
             onEditPreferences={handleEditPreferences}
             onBack={() => setView("no-team")}
+          />
+        );
+      case "has-team":
+        if (!team) return null;
+        return (
+          <HasTeamView
+            teamNumber={1}
+            teamCode={team.invite_code}
+            members={team.members
+              .filter((m) => m.user_id !== currentUserId)
+              .map((m) => ({ full_name: m.full_name, email: "" }))}
+            onLeaveTeam={handleLeaveTeam}
           />
         );
     }

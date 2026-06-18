@@ -49,7 +49,12 @@ export function buildSchemaFromFields(fields: FormField[]): z.ZodType {
         break;
 
       default:
-        s = z.unknown();
+        // FormField.type is statically exhaustive, but the data arrives over
+        // the network and may not match the TypeScript union — fail loudly
+        // rather than silently accept anything.
+        throw new Error(
+          `buildSchemaFromFields: unsupported field type "${(field as { type: string }).type}"`,
+        );
     }
 
     shape[field.id] = s;

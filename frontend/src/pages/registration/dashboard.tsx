@@ -8,7 +8,9 @@ import { apiFetch } from "../../lib/api";
 import arcade from "@/assets/arcade_device2.png";
 import siteBanner from "@/assets/site_banner.png";
 
-const EVENT_DATE = new Date("2026-10-02T09:00:00");
+// 9:00 AM Eastern (UTC-4 during EDT) on Oct 2, 2026 — every viewer counts down
+// to the same instant regardless of their local timezone.
+const EVENT_DATE = new Date("2026-10-02T09:00:00-04:00");
 
 function useCountdown(target: Date) {
   const calc = () => {

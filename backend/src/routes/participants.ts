@@ -8,7 +8,7 @@ import {
   UpdateParticipantSchema,
 } from '../types/participant';
 import { validate } from '../middleware/validate';
-import { isAdmin } from '../middleware/requireAdmin';
+import { isAdmin, resolveOwnerOrAdmin } from '../middleware/requireAdmin';
 
 const router = Router();
 
@@ -141,33 +141,13 @@ router.delete(
   validate({ params: ParticipantParamsSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-
-      const { data: existing, error: fetchError } = await supabase
-        .from('participants')
-        .select('user_id')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (fetchError) {
-        res.status(500).json({ error: fetchError.message });
-        return;
-      }
-      if (!existing) {
-        res.status(404).json({ error: 'Participant not found' });
-        return;
-      }
-
-      const isOwner = existing.user_id === req.user!.id;
-      if (!isOwner && !(await isAdmin(req.user!.id))) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
-      }
+      const owned = await resolveOwnerOrAdmin('participants', req.params.id, req, res, 'user_id');
+      if (!owned) return;
 
       const { error } = await supabase
         .from('participants')
         .delete()
-        .eq('id', id);
+        .eq('id', req.params.id);
 
       if (error) {
         res.status(500).json({ error: error.message });

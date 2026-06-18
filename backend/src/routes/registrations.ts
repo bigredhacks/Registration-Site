@@ -8,7 +8,7 @@ import {
   RegistrationParamsSchema,
 } from '../types/registration';
 import { validate } from '../middleware/validate';
-import { isAdmin } from '../middleware/requireAdmin';
+import { isAdmin, resolveOwnerOrAdmin } from '../middleware/requireAdmin';
 import { sendRegistrationConfirmation } from '../utils/email';
 
 const router = Router();
@@ -157,7 +157,9 @@ router.post(
         return;
       }
 
-      const payload = { ...req.body, user_id: req.user!.id };
+      // email is bound to the authenticated account, not the request body, so
+      // a user can't direct the confirmation email elsewhere.
+      const payload = { ...req.body, user_id: req.user!.id, email: req.user!.email };
 
       const { data, error } = await supabase
         .from('registrations')
@@ -219,30 +221,9 @@ router.get(
   validate({ params: RegistrationParamsSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-
-      const { data, error } = await supabase
-        .from('registrations')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (error) {
-        res.status(500).json({ error: error.message });
-        return;
-      }
-      if (!data) {
-        res.status(404).json({ error: 'Registration not found' });
-        return;
-      }
-
-      const isOwner = data.user_id === req.user!.id;
-      if (!isOwner && !(await isAdmin(req.user!.id))) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
-      }
-
-      res.json(data);
+      const row = await resolveOwnerOrAdmin('registrations', req.params.id, req, res);
+      if (!row) return;
+      res.json(row);
     } catch (err) {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -258,33 +239,13 @@ router.put(
   validate({ params: RegistrationParamsSchema, body: UpdateRegistrationSchema }),
   async (req: Request<{ id: string }, {}, UpdateRegistrationBody>, res: Response) => {
     try {
-      const { id } = req.params;
-
-      const { data: existing, error: fetchError } = await supabase
-        .from('registrations')
-        .select('user_id')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (fetchError) {
-        res.status(500).json({ error: fetchError.message });
-        return;
-      }
-      if (!existing) {
-        res.status(404).json({ error: 'Registration not found' });
-        return;
-      }
-
-      const isOwner = existing.user_id === req.user!.id;
-      if (!isOwner && !(await isAdmin(req.user!.id))) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
-      }
+      const owned = await resolveOwnerOrAdmin('registrations', req.params.id, req, res, 'user_id');
+      if (!owned) return;
 
       const { data, error } = await supabase
         .from('registrations')
         .update(req.body)
-        .eq('id', id)
+        .eq('id', req.params.id)
         .select()
         .single();
 
@@ -309,33 +270,13 @@ router.delete(
   validate({ params: RegistrationParamsSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { id } = req.params;
-
-      const { data: existing, error: fetchError } = await supabase
-        .from('registrations')
-        .select('user_id')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (fetchError) {
-        res.status(500).json({ error: fetchError.message });
-        return;
-      }
-      if (!existing) {
-        res.status(404).json({ error: 'Registration not found' });
-        return;
-      }
-
-      const isOwner = existing.user_id === req.user!.id;
-      if (!isOwner && !(await isAdmin(req.user!.id))) {
-        res.status(403).json({ error: 'Forbidden' });
-        return;
-      }
+      const owned = await resolveOwnerOrAdmin('registrations', req.params.id, req, res, 'user_id');
+      if (!owned) return;
 
       const { error } = await supabase
         .from('registrations')
         .delete()
-        .eq('id', id);
+        .eq('id', req.params.id);
 
       if (error) {
         res.status(500).json({ error: error.message });

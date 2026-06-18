@@ -23,8 +23,8 @@ router.use(requireAdmin);
  */
 router.get('/registrations', async (req: Request, res: Response) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
-    const offset = parseInt(req.query.offset as string) || 0;
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 200);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const status = req.query.status as string | undefined;
 
     let query = supabase

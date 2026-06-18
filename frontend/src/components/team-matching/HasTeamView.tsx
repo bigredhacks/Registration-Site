@@ -10,7 +10,7 @@ interface TeamMember {
 }
 
 interface HasTeamViewProps {
-  teamNumber: number;
+  teamName: string;
   teamCode: string;
   members: TeamMember[];
   onLeaveTeam: () => void;
@@ -18,7 +18,7 @@ interface HasTeamViewProps {
 
 const greyBears = [bearGrey1, bearGrey2, bearGrey3];
 
-export default function HasTeamView({ teamNumber, teamCode, members, onLeaveTeam }: HasTeamViewProps) {
+export default function HasTeamView({ teamName, teamCode, members, onLeaveTeam }: HasTeamViewProps) {
   // Fill remaining spots with grey bears (team of 4, minus "you")
   const maxTeammates = 3;
 
@@ -33,7 +33,7 @@ export default function HasTeamView({ teamNumber, teamCode, members, onLeaveTeam
       <div className="bg-[#fbebe9] flex flex-col items-center px-5 py-10 rounded-lg w-full">
         {/* Team header */}
         <div className="flex items-center justify-between w-full mb-6">
-          <p className="text-xl font-normal text-black">Team {teamNumber}</p>
+          <p className="text-xl font-normal text-black">{teamName}</p>
           <div className="flex items-center gap-3">
             <span className="text-base text-black">Team Code:</span>
             <span className="border border-[#cb4643] rounded-lg px-4 py-2 text-base font-medium text-black">

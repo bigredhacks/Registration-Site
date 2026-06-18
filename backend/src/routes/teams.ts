@@ -11,9 +11,12 @@ import {
 } from '../types/userTeam';
 import { TeamMatcher } from '../utils/teamMatcher';
 import { validate } from '../middleware/validate';
-import { isAdmin } from '../middleware/requireAdmin';
+import { requireAdmin } from '../middleware/requireAdmin';
 
 const router = Router();
+const adminRouter = Router();
+
+const MAX_TEAM_SIZE = 4;
 
 // ─── User-managed team routes ──────────────────────────────────────────────
 
@@ -191,6 +194,20 @@ router.post(
         return;
       }
 
+      const { count, error: countError } = await supabase
+        .from('user_team_members')
+        .select('*', { count: 'exact', head: true })
+        .eq('team_id', team.id);
+
+      if (countError) {
+        res.status(500).json({ error: countError.message });
+        return;
+      }
+      if ((count ?? 0) >= MAX_TEAM_SIZE) {
+        res.status(409).json({ error: `Team is full (max ${MAX_TEAM_SIZE} members).` });
+        return;
+      }
+
       const { error } = await supabase
         .from('user_team_members')
         .insert({ team_id: team.id, user_id: req.user!.id });
@@ -260,18 +277,18 @@ router.post('/leave', async (req: Request, res: Response) => {
 });
 
 // ─── Admin-only team-matcher routes ────────────────────────────────────────
+// Mounted on a sub-router with requireAdmin so the guard is declared once
+// rather than repeated in every handler.
+
+router.use(adminRouter);
+adminRouter.use(requireAdmin);
 
 /**
  * GET /api/teams
  * Admin-only: runs the team matcher for a pool (does not save).
  */
-router.get('/', async (req: Request, res: Response) => {
+adminRouter.get('/', async (req: Request, res: Response) => {
   try {
-    if (!(await isAdmin(req.user!.id))) {
-      res.status(403).json({ error: 'Admin access required' });
-      return;
-    }
-
     const poolId = (req.query.pool_id as string) || 'default';
     const teamSize = parseInt(req.query.team_size as string) || 4;
 
@@ -312,16 +329,11 @@ router.get('/', async (req: Request, res: Response) => {
  * POST /api/teams/save
  * Admin-only: persists generated teams (replaces any existing teams in the pool).
  */
-router.post(
+adminRouter.post(
   '/save',
   validate({ body: SaveTeamsSchema }),
   async (req: Request<{}, {}, SaveTeamsBody>, res: Response) => {
     try {
-      if (!(await isAdmin(req.user!.id))) {
-        res.status(403).json({ error: 'Admin access required' });
-        return;
-      }
-
       const { pool_id, teams } = req.body;
 
       const { error: deleteError } = await supabase
@@ -334,23 +346,29 @@ router.post(
         return;
       }
 
-      for (const team of teams) {
-        const { data: teamData, error: teamError } = await supabase
-          .from('teams')
-          .insert({ team_number: team.team_number, pool_id })
-          .select()
-          .single();
+      // Two bulk inserts beat one-team-at-a-time: O(2) round-trips instead of
+      // O(2N), so saving 25 teams of 4 stops being 50 sequential DB calls.
+      const { data: insertedTeams, error: teamsError } = await supabase
+        .from('teams')
+        .insert(teams.map((t) => ({ team_number: t.team_number, pool_id })))
+        .select('id, team_number');
 
-        if (teamError) {
-          res.status(500).json({ error: teamError.message });
-          return;
-        }
+      if (teamsError) {
+        res.status(500).json({ error: teamsError.message });
+        return;
+      }
 
-        const memberRows = team.members.map((m) => ({
-          team_id: teamData.id,
+      const teamIdByNumber = new Map(
+        (insertedTeams ?? []).map((t) => [t.team_number, t.id]),
+      );
+      const memberRows = teams.flatMap((t) =>
+        t.members.map((m) => ({
+          team_id: teamIdByNumber.get(t.team_number),
           participant_id: m.participant_id,
-        }));
+        })),
+      );
 
+      if (memberRows.length > 0) {
         const { error: membersError } = await supabase
           .from('team_members')
           .insert(memberRows);
@@ -372,13 +390,8 @@ router.post(
  * GET /api/teams/saved
  * Admin-only: retrieves saved matcher teams with members for a pool.
  */
-router.get('/saved', async (req: Request, res: Response) => {
+adminRouter.get('/saved', async (req: Request, res: Response) => {
   try {
-    if (!(await isAdmin(req.user!.id))) {
-      res.status(403).json({ error: 'Admin access required' });
-      return;
-    }
-
     const poolId = (req.query.pool_id as string) || 'default';
 
     const { data, error } = await supabase

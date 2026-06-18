@@ -53,11 +53,10 @@ async function uploadResume(file: File): Promise<void> {
     body: JSON.stringify({ filename: file.name }),
   });
   if (!urlRes.ok) throw new Error("Could not get upload URL");
-  const { signedUrl, path, token } = await urlRes.json();
+  const { signedUrl, path } = await urlRes.json();
 
-  // Supabase returns either a signedUrl (full URL) or a token; prefer the URL.
-  const target = signedUrl || `${path}?token=${token}`;
-  const putRes = await fetch(target, {
+  if (!signedUrl) throw new Error("Storage upload URL missing");
+  const putRes = await fetch(signedUrl, {
     method: "PUT",
     headers: { "Content-Type": file.type || "application/pdf" },
     body: file,

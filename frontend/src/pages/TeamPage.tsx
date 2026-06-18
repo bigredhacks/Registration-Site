@@ -51,8 +51,15 @@ export default function TeamPage() {
   };
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setCurrentUserId(data.user?.id ?? null));
-    refreshTeam().catch(() => setView("no-team"));
+    // Resolve the current user before refreshing the team so the teammate
+    // filter (which excludes the current user) doesn't briefly show the user
+    // as their own teammate on slow networks.
+    supabase.auth
+      .getUser()
+      .then(({ data }) => setCurrentUserId(data.user?.id ?? null))
+      .finally(() => {
+        refreshTeam().catch(() => setView("no-team"));
+      });
   }, []);
 
   const handleJoinTeam = async (code: string) => {
@@ -189,7 +196,7 @@ export default function TeamPage() {
         if (!team) return null;
         return (
           <HasTeamView
-            teamNumber={1}
+            teamName={team.name}
             teamCode={team.invite_code}
             members={team.members
               .filter((m) => m.user_id !== currentUserId)

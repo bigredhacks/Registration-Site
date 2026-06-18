@@ -33,8 +33,6 @@ interface FormData {
   linkedin: string;
 }
 
-const STORAGE_KEY = "brh_profile";
-
 const inputCls =
   "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins";
 const selectCls =
@@ -86,26 +84,12 @@ const Profile = () => {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<keyof FormData, string>>>({});
 
-  // Load from server first; fall back to localStorage cache if the request fails.
   useEffect(() => {
     let cancelled = false;
 
-    const loadFromCache = () => {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (!cancelled) setForm((prev) => ({ ...prev, ...parsed }));
-        } catch { /* ignore */ }
-      }
-    };
-
     apiFetch("/api/profile")
       .then(async (res) => {
-        if (!res.ok) {
-          loadFromCache();
-          return;
-        }
+        if (!res.ok) return;
         const profile = await res.json();
         if (cancelled) return;
         setForm((prev) => ({
@@ -128,7 +112,7 @@ const Profile = () => {
           linkedin: profile.linkedin ?? prev.linkedin,
         }));
       })
-      .catch(() => loadFromCache());
+      .catch(() => { /* leave defaults — server is the source of truth */ });
 
     supabase.auth.getUser().then(({ data }) => {
       if (cancelled) return;

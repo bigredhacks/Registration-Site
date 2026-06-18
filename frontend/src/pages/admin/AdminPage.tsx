@@ -17,7 +17,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 export default function AdminPage() {
-  const { loading, isAdmin } = useAdmin();
+  const { loading, isAdmin, error } = useAdmin();
   const [tab, setTab] = useState<Tab>("users");
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
@@ -25,6 +25,24 @@ export default function AdminPage() {
     return (
       <RegistrationLayout>
         <p className="font-poppins text-red6">Loading…</p>
+      </RegistrationLayout>
+    );
+  }
+
+  if (error) {
+    // Don't redirect on transient failures — that would silently kick real
+    // admins out of the panel on a 5xx or network blip.
+    return (
+      <RegistrationLayout>
+        <div className="flex flex-col gap-3 px-2 py-2">
+          <p className="font-poppins text-red6">Couldn't verify admin access.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="self-start px-4 py-2 bg-red5 hover:bg-red3 text-white text-sm font-poppins font-semibold rounded-lg transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </RegistrationLayout>
     );
   }

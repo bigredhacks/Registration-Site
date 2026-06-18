@@ -30,7 +30,6 @@ export const CreateRegistrationSchema = z.object({
     .string()
     .trim()
     .regex(/^\(\d{3}\) \d{3}-\d{4}$/, 'phone_number must use format (XXX) XXX-XXXX'),
-  email: z.string().email('email must be a valid email address'),
   linkedin: z.string().url('linkedin must be a valid URL').optional().or(z.literal('')),
   school: z.string().trim().min(1, 'school is required'),
   country: z.string().trim().min(1, 'country is required'),
@@ -63,6 +62,7 @@ export const ResumePathSchema = z.object({
 
 export interface Registration extends CreateRegistrationBody {
   id: string;
+  email: string;
   created_at: string;
 }
 

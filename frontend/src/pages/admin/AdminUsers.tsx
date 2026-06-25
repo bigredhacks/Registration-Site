@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
+import {
+  buildAdminRegistrationsCsvPath,
+  buildAdminRegistrationsPath,
+} from "./adminRegistrationsQuery";
 
 interface RegistrationSummary {
   id: number;
@@ -21,6 +25,11 @@ interface RegistrationSummary {
 interface RegistrationDetail extends RegistrationSummary {
   answers?: Record<string, unknown>;
   form_version?: number | null;
+}
+
+interface FormSummary {
+  key: string;
+  title: string;
 }
 
 const STATUS_OPTIONS = ["pending", "submitted", "approved", "rejected", "waitlisted"] as const;
@@ -55,6 +64,8 @@ export default function AdminUsers() {
   const [count, setCount] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [formFilter, setFormFilter] = useState("");
+  const [forms, setForms] = useState<FormSummary[]>([]);
   const [page, setPage] = useState(0);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<RegistrationDetail | null>(null);
@@ -62,14 +73,13 @@ export default function AdminUsers() {
 
   const refresh = async () => {
     setLoading(true);
-    const params = new URLSearchParams({
-      limit: String(PAGE_SIZE),
-      offset: String(page * PAGE_SIZE),
-    });
-    if (statusFilter) params.set("status", statusFilter);
-    if (search.trim()) params.set("q", search.trim());
-
-    const res = await apiFetch(`/api/admin/registrations?${params.toString()}`);
+    const res = await apiFetch(buildAdminRegistrationsPath({
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      status: statusFilter,
+      search,
+      formKey: formFilter,
+    }));
     if (!res.ok) {
       showToast("Failed to load registrations.", "error");
       setLoading(false);
@@ -85,11 +95,24 @@ export default function AdminUsers() {
   useEffect(() => {
     refresh().catch(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, page]);
+  }, [statusFilter, formFilter, page]);
+
+  useEffect(() => {
+    apiFetch("/api/admin/form-configs")
+      .then(async (res) => {
+        if (!res.ok) return;
+        const body = await res.json();
+        setForms((body ?? []).map((form: { key: string; title: string }) => ({
+          key: form.key,
+          title: form.title,
+        })));
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter]);
+  }, [statusFilter, formFilter]);
 
   const filteredRows = useMemo(() => rows, [rows]);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
@@ -116,7 +139,11 @@ export default function AdminUsers() {
   };
 
   const handleExport = async () => {
-    const res = await apiFetch("/api/admin/registrations/export.csv");
+    const res = await apiFetch(buildAdminRegistrationsCsvPath({
+      status: statusFilter,
+      search,
+      formKey: formFilter,
+    }));
     if (!res.ok) {
       showToast("Export failed.", "error");
       return;
@@ -194,6 +221,18 @@ export default function AdminUsers() {
             </option>
           ))}
         </select>
+        <select
+          value={formFilter}
+          onChange={(e) => setFormFilter(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
+        >
+          <option value="">All forms</option>
+          {forms.map((form) => (
+            <option key={form.key} value={form.key}>
+              {form.title}
+            </option>
+          ))}
+        </select>
         <button
           onClick={handleExport}
           className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3"
@@ -212,20 +251,21 @@ export default function AdminUsers() {
                     {column.label}
                   </th>
                 ))}
+                <th className="px-4 py-3 text-left font-semibold">Form</th>
                 <th className="px-4 py-3 text-left font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length + 1} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-500">
                     No registrations.
                   </td>
                 </tr>
@@ -245,6 +285,9 @@ export default function AdminUsers() {
                       </td>
                     );
                   })}
+                  <td className="px-4 py-2 text-gray-800">
+                    {row.form_key ?? "registration"}
+                  </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <select
@@ -296,6 +339,9 @@ export default function AdminUsers() {
                     <p className="text-sm font-poppins text-gray-500">{detail.email}</p>
                     <p className="mt-1 text-xs font-poppins text-gray-400">
                       Submitted {new Date(detail.created_at).toLocaleString()}
+                    </p>
+                    <p className="mt-1 text-xs font-poppins text-gray-400">
+                      Form {detail.form_key ?? "registration"} · v{detail.form_version ?? 1}
                     </p>
                   </div>
                   <span className="rounded-full bg-red7 px-3 py-1 text-xs font-poppins font-semibold text-red6">

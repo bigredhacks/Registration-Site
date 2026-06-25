@@ -73,10 +73,25 @@ router.get('/registrations', async (req: Request, res: Response) => {
  */
 router.get('/registrations/export.csv', async (_req: Request, res: Response) => {
   try {
-    const { data, error } = await supabase
+    const status = _req.query.status as string | undefined;
+    const search = (_req.query.q as string | undefined)?.trim();
+    const formKey = (_req.query.form_key as string | undefined)?.trim();
+
+    let query = supabase
       .from('registrations')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (status) query = query.eq('status', status);
+    if (formKey) query = query.eq('form_key', formKey);
+    if (search) {
+      const escaped = search.replace(/,/g, ' ');
+      query = query.or(
+        `first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,school.ilike.%${escaped}%,major.ilike.%${escaped}%`,
+      );
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       res.status(500).json({ error: error.message });

@@ -25,10 +25,54 @@ interface UserTeam {
   members: { user_id: string; full_name: string; joined_at: string }[];
 }
 
+interface ParticipantSubmission {
+  email: string;
+  full_name: string;
+  frontend_experience: string;
+  backend_experience: string;
+  design_experience: string;
+  hardware_experience: string;
+  frontend_preference: number;
+  backend_preference: number;
+  design_preference: number;
+  hardware_preference: number;
+  any_role_preference: number;
+  frontend_skills: string[];
+  backend_skills: string[];
+  design_skills: string[];
+  hacker_type: "FirstTimeHacker" | "VeteranHacker";
+}
+
+function participantToFormValues(participant: ParticipantSubmission): Record<string, unknown> {
+  return {
+    email: participant.email,
+    full_name: participant.full_name,
+    technical_skills: {
+      Frontend: participant.frontend_experience,
+      Backend: participant.backend_experience,
+      Design: participant.design_experience,
+      Hardware: participant.hardware_experience,
+    },
+    preferred_role: {
+      Frontend: String(participant.frontend_preference),
+      Backend: String(participant.backend_preference),
+      Design: String(participant.design_preference),
+      Hardware: String(participant.hardware_preference),
+      Any: String(participant.any_role_preference),
+    },
+    frontend_skills: participant.frontend_skills.join(", "),
+    backend_skills: participant.backend_skills.join(", "),
+    design_skills: participant.design_skills.join(", "),
+    first_time_hacker: participant.hacker_type === "FirstTimeHacker" ? "Yes" : "No",
+  };
+}
+
 export default function TeamPage() {
   const [view, setView] = useState<TeamState>("loading");
   const [team, setTeam] = useState<UserTeam | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [matchingInitialValues, setMatchingInitialValues] = useState<Record<string, unknown>>({});
+  const [hasMatchingSubmission, setHasMatchingSubmission] = useState(false);
   const { showToast } = useToast();
 
   const refreshTeam = async () => {
@@ -44,8 +88,13 @@ export default function TeamPage() {
     // No team — check if they've already submitted matching prefs.
     const prefsRes = await apiFetch("/api/participants/me");
     if (prefsRes.ok) {
+      const participant = (await prefsRes.json()) as ParticipantSubmission;
+      setMatchingInitialValues(participantToFormValues(participant));
+      setHasMatchingSubmission(true);
       setView("matching-pending");
     } else {
+      setMatchingInitialValues({});
+      setHasMatchingSubmission(false);
       setView("no-team");
     }
   };
@@ -147,8 +196,8 @@ export default function TeamPage() {
       pool_id: "default",
     };
 
-    const response = await apiFetch("/api/participants", {
-      method: "POST",
+    const response = await apiFetch(hasMatchingSubmission ? "/api/participants/me" : "/api/participants", {
+      method: hasMatchingSubmission ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
@@ -159,6 +208,8 @@ export default function TeamPage() {
     }
 
     showToast("Team matching preferences saved.", "success");
+    setMatchingInitialValues(data);
+    setHasMatchingSubmission(true);
     setView("matching-pending");
   };
 
@@ -183,6 +234,7 @@ export default function TeamPage() {
           <MatchingFormView
             onBack={() => setView("no-team")}
             onSubmit={handleMatchFormSubmit}
+            initialValues={matchingInitialValues}
           />
         );
       case "matching-pending":

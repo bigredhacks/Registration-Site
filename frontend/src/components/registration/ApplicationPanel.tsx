@@ -11,6 +11,15 @@ interface ApplicationPanelProps {
   onSubmitted: () => void;
 }
 
+interface RegistrationResponse {
+  id: number | string;
+  answers?: Record<string, unknown>;
+  status?: string | null;
+  resume_path?: string | null;
+}
+
+const FORM_KEY = "registration";
+
 interface ServerProfile {
   first_name?: string | null;
   last_name?: string | null;
@@ -46,8 +55,14 @@ function profileToFormValues(profile: ServerProfile): Record<string, unknown> | 
   };
 }
 
-async function uploadResume(file: File): Promise<void> {
-  const urlRes = await apiFetch("/api/registrations/me/resume-upload-url", {
+function registrationToFormValues(registration: RegistrationResponse): Record<string, unknown> {
+  return registration.answers && typeof registration.answers === "object"
+    ? registration.answers
+    : {};
+}
+
+async function uploadResume(file: File): Promise<string> {
+  const urlRes = await apiFetch(`/api/registrations/me/resume-upload-url?form_key=${FORM_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ filename: file.name }),
@@ -63,49 +78,108 @@ async function uploadResume(file: File): Promise<void> {
   });
   if (!putRes.ok) throw new Error("Storage upload failed");
 
-  const persistRes = await apiFetch("/api/registrations/me/resume", {
+  const persistRes = await apiFetch(`/api/registrations/me/resume?form_key=${FORM_KEY}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ resume_path: path }),
   });
   if (!persistRes.ok) throw new Error("Could not save resume reference");
+  return path;
 }
 
 export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: ApplicationPanelProps) {
   const { showToast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [prefillBannerDismissed, setPrefillBannerDismissed] = useState(false);
   const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
   const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [existingResumePath, setExistingResumePath] = useState<string | null>(null);
+  const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
+  const [submissionMode, setSubmissionMode] = useState<"created" | "updated">("created");
   const [config, setConfig] = useState<FormConfig>(hackathonRegistrationFormConfig);
   const [profileValues, setProfileValues] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
-    apiFetch("/api/form-configs/registration")
-      .then(async (res) => {
-        if (!res.ok) return;
-        const remote = await res.json();
-        const fields = remote.fields as FormField[];
-        setConfig({
-          title: remote.title,
-          description: remote.description ?? undefined,
-          schema: buildSchemaFromFields(fields),
-          fields,
-        });
-      })
-      .catch(() => { /* fall back to bundled config */ });
+    if (!isOpen) return;
 
-    apiFetch("/api/profile")
-      .then(async (res) => {
-        if (!res.ok) return;
-        const profile = (await res.json()) as ServerProfile;
-        setProfileValues(profileToFormValues(profile));
-      })
-      .catch(() => { /* leave null — banner won't show */ });
-  }, []);
+    let cancelled = false;
 
-  const showPrefillBanner = profileValues !== null && !prefillBannerDismissed && Object.keys(initialValues).length === 0;
+    const loadPanelState = async () => {
+      setIsBootstrapping(true);
+      setIsSubmitted(false);
+      setResumeFile(null);
+
+      try {
+        const [configRes, profileRes, registrationRes] = await Promise.all([
+          apiFetch(`/api/form-configs/${FORM_KEY}`),
+          apiFetch("/api/profile"),
+          apiFetch(`/api/registrations/me?form_key=${FORM_KEY}`),
+        ]);
+
+        if (!cancelled && configRes.ok) {
+          const remote = await configRes.json();
+          const fields = remote.fields as FormField[];
+          setConfig({
+            title: remote.title,
+            description: remote.description ?? undefined,
+            schema: buildSchemaFromFields(fields),
+            fields,
+          });
+        }
+
+        if (!cancelled && profileRes.ok) {
+          const profile = (await profileRes.json()) as ServerProfile;
+          setProfileValues(profileToFormValues(profile));
+        }
+
+        if (!cancelled && registrationRes.ok) {
+          const registration = (await registrationRes.json()) as RegistrationResponse;
+          setHasExistingSubmission(true);
+          setSubmissionMode("updated");
+          setInitialValues(registrationToFormValues(registration));
+          setExistingResumePath(registration.resume_path ?? null);
+          setPrefillBannerDismissed(true);
+          return;
+        }
+
+        if (!cancelled) {
+          setHasExistingSubmission(false);
+          setSubmissionMode("created");
+          setInitialValues({});
+          setExistingResumePath(null);
+          setPrefillBannerDismissed(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setHasExistingSubmission(false);
+          setSubmissionMode("created");
+          setExistingResumePath(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsBootstrapping(false);
+        }
+      }
+    };
+
+    loadPanelState().catch(() => {
+      if (!cancelled) {
+        setIsBootstrapping(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
+  const showPrefillBanner =
+    !hasExistingSubmission &&
+    profileValues !== null &&
+    !prefillBannerDismissed &&
+    Object.keys(initialValues).length === 0;
 
   const handlePrefillAccept = () => {
     setInitialValues(profileValues!);
@@ -119,30 +193,40 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   const handleSubmit = async (data: Record<string, unknown>) => {
     setIsLoading(true);
     try {
-      const res = await apiFetch("/api/registrations", {
-        method: "POST",
+      const method = hasExistingSubmission ? "PUT" : "POST";
+      const endpoint = hasExistingSubmission
+        ? `/api/registrations/me?form_key=${FORM_KEY}`
+        : `/api/registrations?form_key=${FORM_KEY}`;
+      const res = await apiFetch(endpoint, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
         if (res.status === 409) {
           showToast("You've already submitted an application.", "info");
-          setIsSubmitted(true);
-          onSubmitted();
+          setHasExistingSubmission(true);
           return;
         }
         const err = await res.json();
         throw new Error(err.errors?.[0]?.message || err.error || err.message || "Failed to submit");
       }
 
+      const savedRegistration = (await res.json()) as RegistrationResponse;
+      let nextResumePath = savedRegistration.resume_path ?? existingResumePath;
+
       if (resumeFile) {
         try {
-          await uploadResume(resumeFile);
+          nextResumePath = await uploadResume(resumeFile);
         } catch {
           showToast("Application submitted, but resume upload failed. You can upload it later.", "info");
         }
       }
 
+      setSubmissionMode(hasExistingSubmission ? "updated" : "created");
+      setHasExistingSubmission(true);
+      setExistingResumePath(nextResumePath);
+      setInitialValues(registrationToFormValues(savedRegistration));
       setIsSubmitted(true);
       onSubmitted();
     } catch (error) {
@@ -151,6 +235,22 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleResumeDownload = async () => {
+    const res = await apiFetch(`/api/registrations/me/resume-download-url?form_key=${FORM_KEY}`);
+    if (!res.ok) {
+      showToast("Could not get the uploaded resume.", "error");
+      return;
+    }
+
+    const body = await res.json();
+    if (!body.signedUrl) {
+      showToast("Uploaded resume is unavailable right now.", "error");
+      return;
+    }
+
+    window.open(body.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -211,12 +311,20 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
 
         {/* Form content */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-8 py-6">
-          {isSubmitted ? (
+          {isBootstrapping ? (
+            <div className="flex h-full items-center justify-center">
+              <p className="font-poppins text-sm text-gray-500">Loading application…</p>
+            </div>
+          ) : isSubmitted ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <p className="text-6xl font-jersey10 text-red5">Done!</p>
-              <h3 className="text-xl font-poppins font-bold text-red6">Application Submitted</h3>
+              <h3 className="text-xl font-poppins font-bold text-red6">
+                {submissionMode === "updated" ? "Application Updated" : "Application Submitted"}
+              </h3>
               <p className="font-poppins text-sm text-gray-500 max-w-xs leading-relaxed">
-                Thanks for applying to Big Red Hacks 2026. We'll review your application and reach out soon.
+                {submissionMode === "updated"
+                  ? "Your application changes have been saved."
+                  : "Thanks for applying to Big Red Hacks 2026. We'll review your application and reach out soon."}
               </p>
               <button
                 onClick={onClose}
@@ -228,18 +336,36 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           ) : (
             <>
               <div className="mb-5 bg-red7 border border-red5/20 rounded-xl px-5 py-4">
-                <label className="font-poppins text-sm font-semibold text-gray-800 block mb-2">
-                  Resume (optional)
-                </label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
-                  className="text-sm font-poppins text-gray-700"
-                />
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <label className="font-poppins text-sm font-semibold text-gray-800 block mb-2">
+                      Resume (optional)
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setResumeFile(e.target.files?.[0] ?? null)}
+                      className="text-sm font-poppins text-gray-700"
+                    />
+                  </div>
+                  {existingResumePath && (
+                    <button
+                      type="button"
+                      onClick={handleResumeDownload}
+                      className="shrink-0 rounded-lg border border-red5 px-3 py-2 text-xs font-poppins font-semibold text-red5 transition-colors hover:bg-white"
+                    >
+                      View Uploaded Resume
+                    </button>
+                  )}
+                </div>
                 {resumeFile && (
                   <p className="mt-1 text-xs font-poppins text-gray-500">
                     Selected: {resumeFile.name}
+                  </p>
+                )}
+                {!resumeFile && existingResumePath && (
+                  <p className="mt-1 text-xs font-poppins text-gray-500">
+                    A resume is already on file. Upload a new file to replace it.
                   </p>
                 )}
               </div>

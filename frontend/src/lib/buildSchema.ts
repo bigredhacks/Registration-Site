@@ -1,6 +1,26 @@
 import { z } from "zod";
 import type { FormField } from "./formConfig";
 
+function buildRequiredGridSchema(field: Extract<FormField, { type: "multipleChoiceGrid" | "preferenceGrid" }>) {
+  const rowShape = Object.fromEntries(
+    field.rows.map((row) => [
+      row,
+      z
+        .unknown()
+        .refine(
+          (value) => typeof value === "string" && value.trim().length > 0,
+          `${field.label}: ${row} is required`,
+        )
+        .refine(
+          (value) => typeof value === "string" && field.columns.includes(value),
+          `${field.label}: ${row} must be one of the configured options`,
+        ),
+    ]),
+  );
+
+  return z.object(rowShape);
+}
+
 /**
  * Build a Zod schema from a list of FormField definitions.
  * Used to validate dynamic, admin-edited form configs at runtime.
@@ -45,7 +65,9 @@ export function buildSchemaFromFields(fields: FormField[]): z.ZodType {
 
       case "multipleChoiceGrid":
       case "preferenceGrid":
-        s = z.record(z.string(), z.unknown()).optional();
+        s = field.required
+          ? buildRequiredGridSchema(field)
+          : z.record(z.string(), z.unknown()).optional();
         break;
 
       default:

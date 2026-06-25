@@ -20,7 +20,6 @@ const TYPE_OPTIONS: { value: FormFieldType; label: string }[] = [
   { value: "radio", label: "Radio" },
   { value: "checkbox", label: "Single Checkbox" },
   { value: "checkboxGroup", label: "Multi-select" },
-  { value: "file", label: "File Upload" },
   { value: "multipleChoiceGrid", label: "Multiple Choice Grid" },
   { value: "preferenceGrid", label: "Preference Grid" },
 ];

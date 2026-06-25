@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormConfig, FormField } from "@/lib/formConfig";
 import TextInput from "./form-fields/TextInput";
 import Dropdown from "./form-fields/Dropdown";
@@ -20,6 +20,11 @@ interface DynamicFormProps {
 export default function DynamicForm({ config, onSubmit, isLoading = false, initialValues = {}, hideHeader = false }: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    setFormData(initialValues);
+    setErrors({});
+  }, [initialValues]);
 
   const handleFieldChange = (fieldId: string, value: unknown) => {
     setFormData((prev) => ({

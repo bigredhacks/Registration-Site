@@ -3,8 +3,18 @@ import { z } from 'zod';
 import { supabase } from '../config/supabase';
 import { isAdmin, requireAdmin } from '../middleware/requireAdmin';
 import { validate } from '../middleware/validate';
+import { RegistrationStatusSchema } from '../types/registration';
 
 const router = Router();
+
+function escapeCsvValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  if (Array.isArray(value)) return `"${value.join('; ').replace(/"/g, '""')}"`;
+  const stringValue = String(value);
+  return /[",\n]/.test(stringValue)
+    ? `"${stringValue.replace(/"/g, '""')}"`
+    : stringValue;
+}
 
 /**
  * GET /api/admin/me
@@ -26,6 +36,8 @@ router.get('/registrations', async (req: Request, res: Response) => {
     const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 200);
     const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
     const status = req.query.status as string | undefined;
+    const search = (req.query.q as string | undefined)?.trim();
+    const formKey = (req.query.form_key as string | undefined)?.trim();
 
     let query = supabase
       .from('registrations')
@@ -34,6 +46,13 @@ router.get('/registrations', async (req: Request, res: Response) => {
       .range(offset, offset + limit - 1);
 
     if (status) query = query.eq('status', status);
+    if (formKey) query = query.eq('form_key', formKey);
+    if (search) {
+      const escaped = search.replace(/,/g, ' ');
+      query = query.or(
+        `first_name.ilike.%${escaped}%,last_name.ilike.%${escaped}%,email.ilike.%${escaped}%,school.ilike.%${escaped}%,major.ilike.%${escaped}%`,
+      );
+    }
 
     const { data, error, count } = await query;
 
@@ -72,17 +91,34 @@ router.get('/registrations/export.csv', async (_req: Request, res: Response) => 
       return;
     }
 
-    const columns = Object.keys(rows[0]);
-    const escape = (v: unknown): string => {
-      if (v === null || v === undefined) return '';
-      if (Array.isArray(v)) return `"${v.join('; ').replace(/"/g, '""')}"`;
-      const s = String(v);
-      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-    };
+    const answerKeys = [...new Set(
+      rows.flatMap((row) => {
+        const answers = (row as Record<string, unknown>).answers;
+        return answers && typeof answers === 'object' && !Array.isArray(answers)
+          ? Object.keys(answers as Record<string, unknown>)
+          : [];
+      }),
+    )].sort();
 
+    const baseColumns = Object.keys(rows[0]).filter((column) => column !== 'answers');
+    const columns = [...baseColumns, ...answerKeys.map((key) => `answer:${key}`)];
     const lines = [
       columns.join(','),
-      ...rows.map((row) => columns.map((c) => escape((row as Record<string, unknown>)[c])).join(',')),
+      ...rows.map((row) => {
+        const record = row as Record<string, unknown>;
+        const answers =
+          record.answers && typeof record.answers === 'object' && !Array.isArray(record.answers)
+            ? (record.answers as Record<string, unknown>)
+            : {};
+
+        return columns.map((column) => {
+          if (column.startsWith('answer:')) {
+            return escapeCsvValue(answers[column.slice('answer:'.length)]);
+          }
+
+          return escapeCsvValue(record[column]);
+        }).join(',');
+      }),
     ];
 
     res.setHeader('Content-Type', 'text/csv');
@@ -94,7 +130,7 @@ router.get('/registrations/export.csv', async (_req: Request, res: Response) => 
 });
 
 const DecisionSchema = z.object({
-  status: z.enum(['submitted', 'approved', 'rejected', 'waitlisted']),
+  status: RegistrationStatusSchema,
 });
 const RegistrationIdSchema = z.object({
   id: z.coerce.number().int().positive(),
@@ -129,6 +165,70 @@ router.post(
       res.status(500).json({ error: 'Internal server error' });
     }
   }
+);
+
+router.get(
+  '/registrations/:id/resume-download-url',
+  validate({ params: RegistrationIdSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('resume_path')
+        .eq('id', req.params.id)
+        .maybeSingle();
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      if (!data?.resume_path) {
+        res.status(404).json({ error: 'No resume uploaded' });
+        return;
+      }
+
+      const { data: signed, error: signedError } = await supabase
+        .storage
+        .from('resumes')
+        .createSignedUrl(data.resume_path, 60 * 5);
+
+      if (signedError) {
+        res.status(500).json({ error: signedError.message });
+        return;
+      }
+
+      res.json(signed);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.get(
+  '/registrations/:id',
+  validate({ params: RegistrationIdSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const { data, error } = await supabase
+        .from('registrations')
+        .select('*')
+        .eq('id', req.params.id)
+        .maybeSingle();
+
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
+      }
+      if (!data) {
+        res.status(404).json({ error: 'Registration not found' });
+        return;
+      }
+
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  },
 );
 
 // ─── Form configs ──────────────────────────────────────────────────────────

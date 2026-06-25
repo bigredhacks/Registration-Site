@@ -5,9 +5,14 @@ import { teamMatchingFormConfig } from "@/lib/formConfig";
 interface MatchingFormViewProps {
   onBack: () => void;
   onSubmit: (data: Record<string, unknown>) => void;
+  initialValues?: Record<string, unknown>;
 }
 
-export default function MatchingFormView({ onBack, onSubmit }: MatchingFormViewProps) {
+export default function MatchingFormView({
+  onBack,
+  onSubmit,
+  initialValues = {},
+}: MatchingFormViewProps) {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async (data: Record<string, unknown>) => {
@@ -42,6 +47,7 @@ export default function MatchingFormView({ onBack, onSubmit }: MatchingFormViewP
             config={{ ...teamMatchingFormConfig, title: "", description: "" }}
             onSubmit={handleSubmit}
             isLoading={isLoading}
+            initialValues={initialValues}
           />
         </div>
       </div>

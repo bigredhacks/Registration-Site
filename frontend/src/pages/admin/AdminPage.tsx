@@ -6,14 +6,15 @@ import AdminUsers from "./AdminUsers";
 import AdminStats from "./AdminStats";
 import AdminFormEditor from "./AdminFormEditor";
 import AdminFormList from "./AdminFormList";
+import AdminTeamMatching from "./AdminTeamMatching";
 
-type Tab = "editor" | "stats" | "users" | "settings";
+type Tab = "editor" | "stats" | "users" | "teams";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "editor", label: "Application Editor" },
   { id: "stats", label: "Stats" },
   { id: "users", label: "Users" },
-  { id: "settings", label: "Settings" },
+  { id: "teams", label: "Team Matching" },
 ];
 
 export default function AdminPage() {
@@ -85,18 +86,9 @@ export default function AdminPage() {
               ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} />
               : <AdminFormList onSelect={setEditingKey} />
           )}
-          {tab === "settings" && <ComingSoon label="Settings" />}
+          {tab === "teams" && <AdminTeamMatching />}
         </div>
       </div>
     </RegistrationLayout>
-  );
-}
-
-function ComingSoon({ label }: { label: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center h-full py-20 gap-2">
-      <p className="text-2xl font-poppins font-semibold text-red6">{label}</p>
-      <p className="text-sm font-poppins text-gray-500">Coming soon.</p>
-    </div>
   );
 }

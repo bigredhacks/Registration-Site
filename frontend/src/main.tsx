@@ -11,6 +11,7 @@ import Dashboard from "./pages/registration/dashboard";
 import Profile from "./pages/registration/profile";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import AdminPage from "./pages/admin/AdminPage";
+import DynamicFormPage from "./pages/DynamicFormPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 
 createRoot(document.getElementById("root")!).render(
@@ -28,6 +29,7 @@ createRoot(document.getElementById("root")!).render(
         <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
         <Route path="/team" element={<ProtectedRoute><TeamPage /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+        <Route path="/forms/:key" element={<ProtectedRoute><DynamicFormPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

@@ -18,6 +18,58 @@ const adminRouter = Router();
 
 const MAX_TEAM_SIZE = 4;
 
+interface PublishedParticipant {
+  id: string;
+  user_id: string;
+  full_name: string | null;
+}
+
+async function deleteEmptyUserTeams(teamIds: string[]) {
+  if (teamIds.length === 0) return;
+
+  for (const teamId of [...new Set(teamIds)]) {
+    const { count, error } = await supabase
+      .from('user_team_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('team_id', teamId);
+
+    if (error) {
+      throw error;
+    }
+
+    if ((count ?? 0) === 0) {
+      const { error: deleteError } = await supabase
+        .from('user_teams')
+        .delete()
+        .eq('id', teamId);
+
+      if (deleteError) {
+        throw deleteError;
+      }
+    }
+  }
+}
+
+function normalizePublishedParticipant(value: unknown): PublishedParticipant | null {
+  if (Array.isArray(value)) {
+    return normalizePublishedParticipant(value[0]);
+  }
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const participant = value as Record<string, unknown>;
+  if (typeof participant.user_id !== 'string' || participant.user_id.length === 0) {
+    return null;
+  }
+
+  return {
+    id: String(participant.id ?? ''),
+    user_id: participant.user_id,
+    full_name: typeof participant.full_name === 'string' ? participant.full_name : null,
+  };
+}
+
 // ─── User-managed team routes ──────────────────────────────────────────────
 
 /**
@@ -402,7 +454,7 @@ adminRouter.get('/saved', async (req: Request, res: Response) => {
           id,
           participant_id,
           participant:participants (
-            id, email, full_name, hacker_type,
+            id, user_id, email, full_name, hacker_type,
             frontend_experience, backend_experience, design_experience, hardware_experience,
             frontend_preference, backend_preference, design_preference, hardware_preference,
             any_role_preference,
@@ -421,6 +473,147 @@ adminRouter.get('/saved', async (req: Request, res: Response) => {
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * POST /api/teams/publish
+ * Admin-only: publishes saved matcher teams into the real user team model.
+ */
+adminRouter.post('/publish', async (req: Request, res: Response) => {
+  try {
+    const poolId = String(req.body?.pool_id || req.query.pool_id || 'default');
+
+    const { data: savedTeams, error: savedTeamsError } = await supabase
+      .from('teams')
+      .select(`
+        id,
+        team_number,
+        members:team_members (
+          participant:participants (
+            id,
+            user_id,
+            full_name
+          )
+        )
+      `)
+      .eq('pool_id', poolId)
+      .order('team_number', { ascending: true });
+
+    if (savedTeamsError) {
+      res.status(500).json({ error: savedTeamsError.message });
+      return;
+    }
+    if (!savedTeams || savedTeams.length === 0) {
+      res.status(404).json({ error: 'No saved matcher teams found for this pool' });
+      return;
+    }
+
+    const usersToPublish = savedTeams.flatMap((team) =>
+      (team.members ?? [])
+        .map((member) => normalizePublishedParticipant(member.participant))
+        .filter((participant): participant is PublishedParticipant => participant !== null)
+        .map((participant) => participant.user_id),
+    );
+
+    if (usersToPublish.length === 0) {
+      res.status(400).json({ error: 'Saved teams do not contain publishable user accounts' });
+      return;
+    }
+
+    const { data: existingMemberships, error: existingMembershipsError } = await supabase
+      .from('user_team_members')
+      .select('team_id, user_id')
+      .in('user_id', usersToPublish);
+
+    if (existingMembershipsError) {
+      res.status(500).json({ error: existingMembershipsError.message });
+      return;
+    }
+
+    if ((existingMemberships ?? []).length > 0) {
+      const impactedTeamIds = (existingMemberships ?? []).map((membership) => membership.team_id);
+      const { error: deleteMembershipsError } = await supabase
+        .from('user_team_members')
+        .delete()
+        .in('user_id', usersToPublish);
+
+      if (deleteMembershipsError) {
+        res.status(500).json({ error: deleteMembershipsError.message });
+        return;
+      }
+
+      await deleteEmptyUserTeams(impactedTeamIds);
+    }
+
+    let publishedCount = 0;
+
+    for (const savedTeam of savedTeams) {
+      const members = (savedTeam.members ?? [])
+        .map((member) => normalizePublishedParticipant(member.participant))
+        .filter((participant): participant is PublishedParticipant => participant !== null);
+
+      if (members.length === 0) {
+        continue;
+      }
+
+      let createdTeam: { id: string } | null = null;
+      let lastError: string | null = null;
+
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const inviteCode = generateInviteCode();
+        const { data: teamRow, error: createTeamError } = await supabase
+          .from('user_teams')
+          .insert({
+            name: `${poolId} Match Team ${savedTeam.team_number}`,
+            invite_code: inviteCode,
+            created_by: req.user!.id,
+          })
+          .select('id')
+          .single();
+
+        if (!createTeamError && teamRow) {
+          createdTeam = teamRow;
+          break;
+        }
+
+        lastError = createTeamError?.message ?? 'Failed to create published team';
+        if (!createTeamError?.message?.includes('duplicate')) {
+          break;
+        }
+      }
+
+      if (!createdTeam) {
+        res.status(500).json({ error: lastError ?? 'Failed to create published team' });
+        return;
+      }
+
+      const { error: insertMembersError } = await supabase
+        .from('user_team_members')
+        .insert(
+          members.map((member) => ({
+            team_id: createdTeam!.id,
+            user_id: member.user_id,
+          })),
+        );
+
+      if (insertMembersError) {
+        await supabase.from('user_teams').delete().eq('id', createdTeam.id);
+        res.status(500).json({ error: insertMembersError.message });
+        return;
+      }
+
+      publishedCount += 1;
+    }
+
+    res.status(201).json({
+      message: 'Matcher teams published to user teams',
+      published_teams: publishedCount,
+      affected_users: usersToPublish.length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    res.status(500).json({ error: message });
   }
 });
 

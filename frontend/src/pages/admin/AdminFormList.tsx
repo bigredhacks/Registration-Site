@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
 import { FORM_PRESETS, type FormPreset } from "@/lib/formPresets";
+import Modal from "@/components/Modal";
 
 export interface FormSummary {
   key: string;
@@ -23,6 +24,9 @@ export default function AdminFormList({ onSelect }: Props) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const [selectedPreset, setSelectedPreset] = useState<FormPreset | null>(null);
+  const [newFormKey, setNewFormKey] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<FormSummary | null>(null);
 
   const refresh = async () => {
     setLoading(true);
@@ -41,11 +45,9 @@ export default function AdminFormList({ onSelect }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCreate = async (preset: FormPreset) => {
-    const key = window.prompt(
-      "URL slug for this form (lowercase letters, numbers, hyphens):",
-      preset.defaultKey
-    )?.trim();
+  const handleCreate = async () => {
+    if (!selectedPreset) return;
+    const key = newFormKey.trim();
     if (!key) return;
     if (!/^[a-z0-9-]+$/.test(key)) {
       showToast("Invalid key. Use lowercase letters, numbers, hyphens.", "error");
@@ -57,32 +59,34 @@ export default function AdminFormList({ onSelect }: Props) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         key,
-        title: preset.defaultTitle,
-        description: preset.defaultDescription,
-        fields: preset.fields,
+        title: selectedPreset.defaultTitle,
+        description: selectedPreset.defaultDescription,
+        fields: selectedPreset.fields,
         is_active: false,
       }),
     });
     setCreating(false);
-    setShowPresetPicker(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       showToast(`Create failed: ${body.error || `HTTP ${res.status}`}`, "error");
       return;
     }
-    showToast(`Form "${key}" created from ${preset.name}.`, "success");
+    showToast(`Form "${key}" created from ${selectedPreset.name}.`, "success");
+    setShowPresetPicker(false);
+    setSelectedPreset(null);
+    setNewFormKey("");
     await refresh();
     onSelect(key);
   };
 
   const handleDelete = async (key: string) => {
-    if (!window.confirm(`Delete form "${key}"? This cannot be undone.`)) return;
     const res = await apiFetch(`/api/admin/form-configs/${key}`, { method: "DELETE" });
     if (!res.ok) {
       showToast("Delete failed.", "error");
       return;
     }
     showToast("Deleted.", "info");
+    setDeleteTarget(null);
     await refresh();
   };
 
@@ -170,7 +174,7 @@ export default function AdminFormList({ onSelect }: Props) {
                     Edit
                   </button>
                   <button
-                    onClick={() => handleDelete(f.key)}
+                    onClick={() => setDeleteTarget(f)}
                     className="px-3 py-1 bg-white border border-red5 text-red5 hover:bg-red5 hover:text-white text-xs font-poppins font-semibold rounded transition-colors"
                   >
                     Delete
@@ -183,38 +187,125 @@ export default function AdminFormList({ onSelect }: Props) {
       </div>
 
       {/* Preset picker modal */}
-      {showPresetPicker && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-6" onClick={() => setShowPresetPicker(false)}>
-          <div
-            className="bg-white rounded-xl p-6 w-full max-w-2xl shadow-xl"
-            onClick={(e) => e.stopPropagation()}
+      <Modal
+        open={showPresetPicker}
+        onClose={() => {
+          if (creating) return;
+          setShowPresetPicker(false);
+          setSelectedPreset(null);
+          setNewFormKey("");
+        }}
+        title="Create a form"
+        description="Start from a preset, then choose the URL slug users will visit."
+        maxWidthClassName="max-w-2xl"
+        footer={selectedPreset ? (
+          <>
+            <button
+              onClick={() => {
+                setSelectedPreset(null);
+                setNewFormKey("");
+              }}
+              className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
+            >
+              Back
+            </button>
+            <button
+              onClick={() => {
+                setShowPresetPicker(false);
+                setSelectedPreset(null);
+                setNewFormKey("");
+              }}
+              className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => void handleCreate()}
+              disabled={creating}
+              className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-50"
+            >
+              {creating ? "Creating…" : "Create Form"}
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setShowPresetPicker(false)}
+            className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
           >
-            <h2 className="text-xl font-poppins font-bold text-red6 mb-4">Choose a preset</h2>
-            <div className="flex flex-col gap-3">
-              {FORM_PRESETS.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleCreate(p)}
-                  disabled={creating}
-                  className="text-left bg-red7 hover:bg-red6/30 border border-red6/30 rounded-lg p-4 transition-colors disabled:opacity-50"
-                >
-                  <p className="font-poppins font-semibold text-red6 mb-1">{p.name}</p>
-                  <p className="text-xs font-poppins text-gray-700">{p.description}</p>
-                  <p className="text-xs font-poppins text-gray-400 mt-1">{p.fields.length} fields</p>
-                </button>
-              ))}
-            </div>
-            <div className="flex justify-end mt-4">
+            Cancel
+          </button>
+        )}
+      >
+        {!selectedPreset && (
+          <div className="flex flex-col gap-3">
+            {FORM_PRESETS.map((preset) => (
               <button
-                onClick={() => setShowPresetPicker(false)}
-                className="px-4 py-2 text-sm font-poppins text-gray-600 hover:text-gray-800"
+                key={preset.id}
+                onClick={() => {
+                  setSelectedPreset(preset);
+                  setNewFormKey(preset.defaultKey);
+                }}
+                className="text-left rounded-lg border border-red6/30 bg-red7 p-4 transition-colors hover:bg-red6/30"
               >
-                Cancel
+                <p className="font-poppins font-semibold text-red6">{preset.name}</p>
+                <p className="mt-1 text-xs font-poppins text-gray-700">{preset.description}</p>
+                <p className="mt-1 text-xs font-poppins text-gray-400">{preset.fields.length} fields</p>
               </button>
+            ))}
+          </div>
+        )}
+
+        {selectedPreset && (
+          <div className="flex flex-col gap-4">
+            <div className="rounded-lg border border-red6/20 bg-red7/30 px-4 py-3">
+              <p className="font-poppins font-semibold text-red6">{selectedPreset.name}</p>
+              <p className="mt-1 text-sm font-poppins text-gray-700">{selectedPreset.description}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-poppins font-semibold text-gray-700">
+                Form key
+              </label>
+              <input
+                value={newFormKey}
+                onChange={(event) => setNewFormKey(event.target.value)}
+                placeholder="registration"
+                className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:border-red5 focus:outline-none"
+              />
+              <p className="mt-2 text-xs font-poppins text-gray-500">
+                Use lowercase letters, numbers, and hyphens. Users will visit{" "}
+                <span className="font-mono text-gray-700">/forms/{newFormKey || "your-key"}</span>.
+              </p>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
+
+      <Modal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete this form?"
+        description={
+          deleteTarget
+            ? `Delete "${deleteTarget.title}" (${deleteTarget.key})? This cannot be undone.`
+            : undefined
+        }
+        footer={(
+          <>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => deleteTarget && void handleDelete(deleteTarget.key)}
+              className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3"
+            >
+              Delete Form
+            </button>
+          </>
+        )}
+      />
     </div>
   );
 }

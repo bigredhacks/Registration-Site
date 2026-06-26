@@ -9,6 +9,7 @@ import RegistrationLayout from "@/components/layouts/RegistrationLayout";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
 import { supabase } from "@/config/supabase";
+import Modal from "@/components/Modal";
 
 type TeamState =
   | "loading"
@@ -73,6 +74,12 @@ export default function TeamPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [matchingInitialValues, setMatchingInitialValues] = useState<Record<string, unknown>>({});
   const [hasMatchingSubmission, setHasMatchingSubmission] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [newTeamName, setNewTeamName] = useState("");
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [creatingTeam, setCreatingTeam] = useState(false);
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [leavingTeam, setLeavingTeam] = useState(false);
   const { showToast } = useToast();
 
   const refreshTeam = async () => {
@@ -128,34 +135,44 @@ export default function TeamPage() {
       return;
     }
     showToast("Joined team!", "success");
+    setJoinCode("");
     await refreshTeam();
   };
 
   const handleCreateTeam = async () => {
-    const name = window.prompt("Team name?")?.trim();
-    if (!name) return;
+    const name = newTeamName.trim();
+    if (!name) {
+      showToast("Enter a team name.", "error");
+      return;
+    }
+    setCreatingTeam(true);
     const res = await apiFetch("/api/teams/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name }),
     });
+    setCreatingTeam(false);
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       showToast(body.error || "Could not create team.", "error");
       return;
     }
     showToast("Team created!", "success");
+    setShowCreateTeamModal(false);
+    setNewTeamName("");
     await refreshTeam();
   };
 
   const handleLeaveTeam = async () => {
-    if (!window.confirm("Leave this team?")) return;
+    setLeavingTeam(true);
     const res = await apiFetch("/api/teams/leave", { method: "POST" });
+    setLeavingTeam(false);
     if (!res.ok) {
       showToast("Could not leave team.", "error");
       return;
     }
     showToast("Left team.", "info");
+    setShowLeaveConfirm(false);
     await refreshTeam();
   };
 
@@ -224,8 +241,10 @@ export default function TeamPage() {
       case "no-team":
         return (
           <NoTeamView
+            joinCode={joinCode}
+            onJoinCodeChange={setJoinCode}
             onJoinTeam={handleJoinTeam}
-            onCreateTeam={handleCreateTeam}
+            onCreateTeam={() => setShowCreateTeamModal(true)}
             onFillMatchForm={handleFillMatchForm}
           />
         );
@@ -253,17 +272,93 @@ export default function TeamPage() {
             members={team.members
               .filter((m) => m.user_id !== currentUserId)
               .map((m) => ({ full_name: m.full_name, email: "" }))}
-            onLeaveTeam={handleLeaveTeam}
+            onLeaveTeam={() => setShowLeaveConfirm(true)}
           />
         );
     }
   };
 
   return (
-    <RegistrationLayout className="bg-[#fffdfa]">
-      <div className="flex flex-col gap-5 items-center p-10">
-        {renderView()}
-      </div>
-    </RegistrationLayout>
+    <>
+      <RegistrationLayout className="bg-[#fffdfa]">
+        <div className="flex flex-col gap-5 items-center p-10">
+          {renderView()}
+        </div>
+      </RegistrationLayout>
+
+      <Modal
+        open={showCreateTeamModal}
+        onClose={() => {
+          if (creatingTeam) return;
+          setShowCreateTeamModal(false);
+          setNewTeamName("");
+        }}
+        title="Create a team"
+        description="Choose the team name your teammates will see when they join."
+        footer={(
+          <>
+            <button
+              onClick={() => {
+                setShowCreateTeamModal(false);
+                setNewTeamName("");
+              }}
+              className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleCreateTeam}
+              disabled={creatingTeam}
+              className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-50"
+            >
+              {creatingTeam ? "Creating…" : "Create Team"}
+            </button>
+          </>
+        )}
+      >
+        <label className="block text-sm font-poppins font-semibold text-gray-700">
+          Team name
+        </label>
+        <input
+          value={newTeamName}
+          onChange={(event) => setNewTeamName(event.target.value)}
+          placeholder="Hack On Heroes"
+          className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:border-red5 focus:outline-none"
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void handleCreateTeam();
+            }
+          }}
+        />
+      </Modal>
+
+      <Modal
+        open={showLeaveConfirm}
+        onClose={() => {
+          if (leavingTeam) return;
+          setShowLeaveConfirm(false);
+        }}
+        title="Leave this team?"
+        description="You’ll be removed from the current team immediately. If the team becomes empty, it will be deleted."
+        footer={(
+          <>
+            <button
+              onClick={() => setShowLeaveConfirm(false)}
+              className="rounded-lg px-4 py-2 text-sm font-poppins text-gray-600 transition-colors hover:text-gray-800"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleLeaveTeam}
+              disabled={leavingTeam}
+              className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-50"
+            >
+              {leavingTeam ? "Leaving…" : "Leave Team"}
+            </button>
+          </>
+        )}
+      />
+    </>
   );
 }

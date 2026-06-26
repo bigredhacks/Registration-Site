@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
 import DynamicForm from "./DynamicForm";
-import { hackathonRegistrationFormConfig, type FormConfig, type FormField } from "@/lib/formConfig";
+import type { FormConfig, FormField } from "@/lib/formConfig";
 import { buildSchemaFromFields } from "@/lib/buildSchema";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
+import { extractSubmissionFeedback } from "@/lib/registrationUi";
 
 interface ApplicationPanelProps {
   isOpen: boolean;
   onClose: () => void;
-  onSubmitted: () => void;
+  onSubmitted: (registration: RegistrationResponse) => void;
 }
 
-interface RegistrationResponse {
+export interface RegistrationResponse {
   id: number | string;
   answers?: Record<string, unknown>;
   status?: string | null;
   resume_path?: string | null;
+  form_key?: string | null;
 }
 
 const FORM_KEY = "registration";
@@ -61,6 +63,11 @@ function registrationToFormValues(registration: RegistrationResponse): Record<st
     : {};
 }
 
+function formatStatusLabel(status?: string | null): string {
+  if (!status) return "Draft";
+  return `${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+}
+
 async function uploadResume(file: File): Promise<string> {
   const urlRes = await apiFetch(`/api/registrations/me/resume-upload-url?form_key=${FORM_KEY}`, {
     method: "POST",
@@ -98,8 +105,11 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   const [existingResumePath, setExistingResumePath] = useState<string | null>(null);
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
   const [submissionMode, setSubmissionMode] = useState<"created" | "updated">("created");
-  const [config, setConfig] = useState<FormConfig>(hackathonRegistrationFormConfig);
+  const [config, setConfig] = useState<FormConfig | null>(null);
+  const [configUnavailable, setConfigUnavailable] = useState(false);
   const [profileValues, setProfileValues] = useState<Record<string, unknown> | null>(null);
+  const [submissionErrors, setSubmissionErrors] = useState<Record<string, string>>({});
+  const [currentStatus, setCurrentStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -110,6 +120,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
       setIsBootstrapping(true);
       setIsSubmitted(false);
       setResumeFile(null);
+      setSubmissionErrors({});
 
       try {
         const [configRes, profileRes, registrationRes] = await Promise.all([
@@ -127,6 +138,10 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
             schema: buildSchemaFromFields(fields),
             fields,
           });
+          setConfigUnavailable(false);
+        } else if (!cancelled) {
+          setConfig(null);
+          setConfigUnavailable(true);
         }
 
         if (!cancelled && profileRes.ok) {
@@ -140,6 +155,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           setSubmissionMode("updated");
           setInitialValues(registrationToFormValues(registration));
           setExistingResumePath(registration.resume_path ?? null);
+          setCurrentStatus(registration.status ?? null);
           setPrefillBannerDismissed(true);
           return;
         }
@@ -149,6 +165,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           setSubmissionMode("created");
           setInitialValues({});
           setExistingResumePath(null);
+          setCurrentStatus(null);
           setPrefillBannerDismissed(false);
         }
       } catch {
@@ -156,6 +173,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           setHasExistingSubmission(false);
           setSubmissionMode("created");
           setExistingResumePath(null);
+          setCurrentStatus(null);
         }
       } finally {
         if (!cancelled) {
@@ -192,6 +210,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
 
   const handleSubmit = async (data: Record<string, unknown>) => {
     setIsLoading(true);
+    setSubmissionErrors({});
     try {
       const method = hasExistingSubmission ? "PUT" : "POST";
       const endpoint = hasExistingSubmission
@@ -208,8 +227,12 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           setHasExistingSubmission(true);
           return;
         }
-        const err = await res.json();
-        throw new Error(err.errors?.[0]?.message || err.error || err.message || "Failed to submit");
+        const feedback = extractSubmissionFeedback(
+          await res.json().catch(() => null),
+          "Failed to submit application. Please try again.",
+        );
+        setSubmissionErrors(feedback.fieldErrors);
+        throw new Error(feedback.message);
       }
 
       const savedRegistration = (await res.json()) as RegistrationResponse;
@@ -227,11 +250,15 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
       setHasExistingSubmission(true);
       setExistingResumePath(nextResumePath);
       setInitialValues(registrationToFormValues(savedRegistration));
+      setCurrentStatus(savedRegistration.status ?? null);
       setIsSubmitted(true);
-      onSubmitted();
+      onSubmitted({
+        ...savedRegistration,
+        resume_path: nextResumePath,
+      });
     } catch (error) {
       console.error(error);
-      showToast("Failed to submit application. Please try again.", "error");
+      showToast(error instanceof Error ? error.message : "Failed to submit application. Please try again.", "error");
     } finally {
       setIsLoading(false);
     }
@@ -276,7 +303,14 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
             <h2 className="text-4xl font-jersey10 text-gray-900">
               BigRed<span className="text-red5">//</span>Hacks
             </h2>
-            <p className="font-poppins text-sm text-gray-500 mt-0.5">Fall 2026 Application</p>
+            <div className="mt-0.5 flex items-center gap-2">
+              <p className="font-poppins text-sm text-gray-500">Fall 2026 Application</p>
+              {hasExistingSubmission && (
+                <span className="rounded-full bg-red7 px-2.5 py-1 text-[11px] font-poppins font-semibold uppercase tracking-widest text-red6">
+                  {formatStatusLabel(currentStatus)}
+                </span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -314,6 +348,19 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           {isBootstrapping ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-poppins text-sm text-gray-500">Loading application…</p>
+            </div>
+          ) : configUnavailable || !config ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
+              <p className="text-4xl font-jersey10 text-red5">Unavailable</p>
+              <p className="max-w-sm font-poppins text-sm text-gray-500">
+                The main application form is not active right now. Check back later or contact the organizers if you expected to apply.
+              </p>
+              <button
+                onClick={onClose}
+                className="rounded-lg bg-red5 px-6 py-2.5 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3"
+              >
+                Back to Dashboard
+              </button>
             </div>
           ) : isSubmitted ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
@@ -375,6 +422,8 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
                 isLoading={isLoading}
                 initialValues={initialValues}
                 hideHeader
+                submissionErrors={submissionErrors}
+                submitLabel={hasExistingSubmission ? "Update Application" : "Submit Application"}
               />
             </>
           )}

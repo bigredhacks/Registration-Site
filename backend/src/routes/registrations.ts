@@ -240,6 +240,29 @@ router.get('/me/resume-download-url', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/registrations/me/all
+ * Returns the authenticated user's registrations across all form keys.
+ */
+router.get('/me/all', async (req: Request, res: Response) => {
+  try {
+    const { data, error } = await supabase
+      .from('registrations')
+      .select('id, form_key, form_version, status, created_at, updated_at, resume_path')
+      .eq('user_id', req.user!.id)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+
+    res.json(data ?? []);
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
  * GET /api/registrations/me
  * Returns the authenticated user's registration, or 404.
  * Defined before /:id so the literal route wins.

@@ -15,9 +15,19 @@ interface DynamicFormProps {
   isLoading?: boolean;
   initialValues?: Record<string, unknown>;
   hideHeader?: boolean;
+  submissionErrors?: Record<string, string>;
+  submitLabel?: string;
 }
 
-export default function DynamicForm({ config, onSubmit, isLoading = false, initialValues = {}, hideHeader = false }: DynamicFormProps) {
+export default function DynamicForm({
+  config,
+  onSubmit,
+  isLoading = false,
+  initialValues = {},
+  hideHeader = false,
+  submissionErrors = {},
+  submitLabel = "Submit Application",
+}: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -25,6 +35,11 @@ export default function DynamicForm({ config, onSubmit, isLoading = false, initi
     setFormData(initialValues);
     setErrors({});
   }, [initialValues]);
+
+  useEffect(() => {
+    if (Object.keys(submissionErrors).length === 0) return;
+    setErrors((prev) => ({ ...prev, ...submissionErrors }));
+  }, [submissionErrors]);
 
   const handleFieldChange = (fieldId: string, value: unknown) => {
     setFormData((prev) => ({
@@ -201,7 +216,7 @@ export default function DynamicForm({ config, onSubmit, isLoading = false, initi
             disabled={isLoading}
             className="w-full rounded-lg bg-red5 px-4 py-3 text-sm font-poppins font-semibold text-white shadow-sm hover:bg-red3 focus:outline-none focus:ring-2 focus:ring-red5 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-gray-400 transition-colors"
           >
-            {isLoading ? "Submitting…" : "Submit Application"}
+            {isLoading ? "Submitting…" : submitLabel}
           </button>
         </div>
       </form>

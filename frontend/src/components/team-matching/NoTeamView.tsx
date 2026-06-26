@@ -2,12 +2,20 @@ import arcade from "@/assets/team/arcade.png";
 // arcade is a raster PNG — kept as .png
 
 interface NoTeamViewProps {
+  joinCode: string;
+  onJoinCodeChange: (value: string) => void;
   onJoinTeam: (code: string) => void;
   onCreateTeam: () => void;
   onFillMatchForm: () => void;
 }
 
-export default function NoTeamView({ onJoinTeam, onCreateTeam, onFillMatchForm }: NoTeamViewProps) {
+export default function NoTeamView({
+  joinCode,
+  onJoinCodeChange,
+  onJoinTeam,
+  onCreateTeam,
+  onFillMatchForm,
+}: NoTeamViewProps) {
   return (
     <>
       {/* Header */}
@@ -26,6 +34,8 @@ export default function NoTeamView({ onJoinTeam, onCreateTeam, onFillMatchForm }
               <input
                 type="text"
                 placeholder="_ _ _ _ _ _"
+                value={joinCode}
+                onChange={(event) => onJoinCodeChange(event.target.value.toUpperCase())}
                 className="bg-white border border-[#c0ab95] rounded-lg h-[42px] px-3 py-2 w-[295px] text-sm text-black placeholder:text-[#d6d3cf] focus:outline-none"
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
@@ -35,10 +45,7 @@ export default function NoTeamView({ onJoinTeam, onCreateTeam, onFillMatchForm }
               />
             </div>
             <button
-              onClick={() => {
-                const input = document.querySelector<HTMLInputElement>('input[placeholder="_ _ _ _ _ _"]');
-                if (input) onJoinTeam(input.value);
-              }}
+              onClick={() => onJoinTeam(joinCode)}
               className="bg-[#e46966] text-[#faf4ed] font-medium text-base px-5 py-2.5 rounded-lg"
             >
               Find Team

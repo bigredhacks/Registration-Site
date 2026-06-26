@@ -6,6 +6,7 @@ import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
 import { buildSchemaFromFields } from "@/lib/buildSchema";
 import type { FormConfig, FormField } from "@/lib/formConfig";
+import { extractSubmissionFeedback } from "@/lib/registrationUi";
 
 interface RegistrationResponse {
   answers?: Record<string, unknown>;
@@ -19,6 +20,7 @@ export default function DynamicFormPage() {
   const [config, setConfig] = useState<FormConfig | null>(null);
   const [initialValues, setInitialValues] = useState<Record<string, unknown>>({});
   const [hasExistingSubmission, setHasExistingSubmission] = useState(false);
+  const [submissionErrors, setSubmissionErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -56,10 +58,12 @@ export default function DynamicFormPage() {
         if (!cancelled) {
           setInitialValues(registration.answers ?? {});
           setHasExistingSubmission(true);
+          setSubmissionErrors({});
         }
       } else if (!cancelled) {
         setInitialValues({});
         setHasExistingSubmission(false);
+        setSubmissionErrors({});
       }
 
       if (!cancelled) {
@@ -81,6 +85,7 @@ export default function DynamicFormPage() {
 
   const handleSubmit = async (data: Record<string, unknown>) => {
     setSubmitting(true);
+    setSubmissionErrors({});
     const res = await apiFetch(
       hasExistingSubmission
         ? `/api/registrations/me?form_key=${encodeURIComponent(key)}`
@@ -95,7 +100,9 @@ export default function DynamicFormPage() {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      showToast(body.error || body.errors?.[0]?.message || "Could not save this form.", "error");
+      const feedback = extractSubmissionFeedback(body, "Could not save this form.");
+      setSubmissionErrors(feedback.fieldErrors);
+      showToast(feedback.message, "error");
       return;
     }
 
@@ -118,6 +125,8 @@ export default function DynamicFormPage() {
             onSubmit={handleSubmit}
             isLoading={submitting}
             initialValues={initialValues}
+            submissionErrors={submissionErrors}
+            submitLabel={hasExistingSubmission ? "Update Form" : "Save Form"}
           />
         )}
       </div>

@@ -48,8 +48,11 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
+  /* Light-only app: force native controls (selects, inputs) to render light so
+     OS dark mode can't re-theme them, and default text to a readable dark gray
+     (gray-800) so any element that doesn't set its own color stays visible. */
+  color-scheme: light;
+  color: #1f2937;
   background-color: #ffffff; /* white prevents dark flash on registration page overscroll */
 
   font-synthesis: none;

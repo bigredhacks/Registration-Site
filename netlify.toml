@@ -1,8 +1,22 @@
+# Build from the repo root so npm workspaces install both the frontend and the
+# backend (the backend powers the /api Netlify Function).
 [build]
-  base = "frontend"
-  command = "npm run build"
-  publish = "dist"
+  command = "npm run build:frontend"
+  publish = "frontend/dist"
+  functions = "netlify/functions"
 
+[functions]
+  node_bundler = "esbuild"
+
+# Forward API calls to the Express app running as a Netlify Function. The
+# original /api/... path is preserved, matching the routes in backend/src/app.ts.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback — must come after the /api rule.
 [[redirects]]
   from = "/*"
   to = "/index.html"

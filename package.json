@@ -15,5 +15,11 @@
     "dev": "npm run dev:frontend & npm run dev:backend",
     "build": "npm run build:frontend && npm run build:backend",
     "lint": "npm run lint -w frontend"
+  },
+  "dependencies": {
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "@netlify/functions": "^2.8.2"
   }
 }

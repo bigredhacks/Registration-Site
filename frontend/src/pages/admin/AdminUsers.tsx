@@ -200,7 +200,7 @@ export default function AdminUsers() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email, school…"
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
+            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
           />
           <button
             type="submit"
@@ -212,7 +212,7 @@ export default function AdminUsers() {
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
         >
           <option value="">All statuses</option>
           {STATUS_OPTIONS.map((status) => (
@@ -224,7 +224,7 @@ export default function AdminUsers() {
         <select
           value={formFilter}
           onChange={(e) => setFormFilter(e.target.value)}
-          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
         >
           <option value="">All forms</option>
           {forms.map((form) => (
@@ -298,7 +298,7 @@ export default function AdminUsers() {
                           e.stopPropagation();
                           handleStatusChange(row.id, e.target.value);
                         }}
-                        className="rounded border border-gray-200 bg-white px-2 py-1 text-xs focus:border-red5 focus:outline-none"
+                        className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-800 focus:border-red5 focus:outline-none"
                       >
                         {STATUS_OPTIONS.map((status) => (
                           <option key={status} value={status}>

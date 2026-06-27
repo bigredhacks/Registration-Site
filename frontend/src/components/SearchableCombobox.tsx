@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { loadCsvOptions, type CsvType } from "@/lib/loadCsvOptions";
 import { resolveComboboxCommit } from "@/lib/combobox";
 
@@ -27,9 +28,11 @@ export default function SearchableCombobox({
   const [inputText, setInputText] = useState(value);
   const [query, setQuery] = useState("");
   const [csvOptions, setCsvOptions] = useState<string[]>([]);
+  const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const focused = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!csvUrl) return;
@@ -41,24 +44,46 @@ export default function SearchableCombobox({
     [csvOptions, staticOptions]
   );
 
-  // Close on outside pointer-down. Using a document listener (instead of a
-  // full-viewport backdrop) so wheel events reach the surrounding scroll
-  // container instead of falling through to the page body.
+  // Position the dropdown in a fixed-position portal so it isn't clipped by an
+  // ancestor scroll container (e.g. the application form panel). Reposition on
+  // scroll/resize while it's open.
+  const updateMenuRect = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setMenuRect({ top: r.bottom + 4, left: r.left, width: r.width });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    updateMenuRect();
+    window.addEventListener("scroll", updateMenuRect, true);
+    window.addEventListener("resize", updateMenuRect);
+    return () => {
+      window.removeEventListener("scroll", updateMenuRect, true);
+      window.removeEventListener("resize", updateMenuRect);
+    };
+  }, [open, updateMenuRect]);
+
+  // Close on outside pointer-down. Clicks inside the input wrapper or the
+  // (portaled) dropdown count as inside.
   useEffect(() => {
     if (!open) return;
     const handlePointerDown = (e: MouseEvent) => {
-      if (!containerRef.current?.contains(e.target as Node)) {
-        setOpen(false);
-        // Commit a typed value that resolves to a real option (or any value
-        // when custom input is allowed); otherwise revert the text. This keeps
-        // a typed-but-not-clicked entry from being silently dropped.
-        const committed = resolveComboboxCommit(inputText, allOptions, allowCustomValue);
-        if (committed !== null) {
-          onChange(committed);
-          setInputText(committed);
-        } else {
-          setInputText(value);
-        }
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target) || dropdownRef.current?.contains(target)) {
+        return;
+      }
+      setOpen(false);
+      // Commit a typed value that resolves to a real option (or any value
+      // when custom input is allowed); otherwise revert the text. This keeps
+      // a typed-but-not-clicked entry from being silently dropped.
+      const committed = resolveComboboxCommit(inputText, allOptions, allowCustomValue);
+      if (committed !== null) {
+        onChange(committed);
+        setInputText(committed);
+      } else {
+        setInputText(value);
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
@@ -109,22 +134,34 @@ export default function SearchableCombobox({
         autoComplete="off"
         className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
       />
-      {open && filtered.length > 0 && (
-        <div className="absolute z-10 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full">
-          {filtered.map((opt) => (
-            <button
-              key={opt}
-              type="button"
-              onMouseDown={(e) => { e.preventDefault(); select(opt); }}
-              className={`w-full px-3 py-2 text-left text-sm font-poppins text-gray-800 hover:bg-red7 transition-colors ${
-                opt === value ? "bg-red7 font-medium text-red6" : ""
-              }`}
-            >
-              {opt}
-            </button>
-          ))}
-        </div>
-      )}
+      {open && filtered.length > 0 && menuRect &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            style={{
+              position: "fixed",
+              top: menuRect.top,
+              left: menuRect.left,
+              width: menuRect.width,
+              zIndex: 1000,
+            }}
+            className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full"
+          >
+            {filtered.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); select(opt); }}
+                className={`w-full px-3 py-2 text-left text-sm font-poppins text-gray-800 hover:bg-red7 transition-colors ${
+                  opt === value ? "bg-red7 font-medium text-red6" : ""
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

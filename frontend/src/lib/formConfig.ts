@@ -229,6 +229,25 @@ export const LEVEL_OF_STUDY_OPTIONS = [
 ] as const;
 
 // ---------------------------------------------------------------------------
+// Sanitizers for values loaded from the server. Option sets evolve over time
+// (and test/legacy rows exist), so a stored value may no longer be a valid
+// enum member. These drop/blank unknown values on load so the form stays
+// editable and saveable instead of failing validation against a value the UI
+// can't even display.
+// ---------------------------------------------------------------------------
+
+/** Keep only array values that are part of the allowed option set. */
+export function keepKnownOptions(values: unknown, allowed: readonly string[]): string[] {
+  if (!Array.isArray(values)) return [];
+  return values.filter((v): v is string => typeof v === "string" && allowed.includes(v));
+}
+
+/** Return the value if it's a known option, otherwise "" (renders as unselected). */
+export function coerceKnownOption(value: unknown, allowed: readonly string[]): string {
+  return typeof value === "string" && allowed.includes(value) ? value : "";
+}
+
+// ---------------------------------------------------------------------------
 // Form configurations
 // ---------------------------------------------------------------------------
 
@@ -467,6 +486,7 @@ export const hackathonRegistrationFormConfig: FormConfig = {
       type: "dropdown",
       required: true,
       searchable: true,
+      allowCustomValue: true,
       options: [],
       optionsSource: {
         type: "csv",

@@ -242,7 +242,7 @@ export default function AdminUsers() {
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4">
-        <div className="overflow-hidden rounded-lg border border-red6/20 bg-white">
+        <div className="overflow-x-auto rounded-lg border border-red6/20 bg-white">
           <table className="w-full text-sm font-poppins">
             <thead className="bg-red7 text-red6">
               <tr>
@@ -273,7 +273,8 @@ export default function AdminUsers() {
               {!loading && filteredRows.map((row) => (
                 <tr
                   key={row.id}
-                  className={`border-t border-red6/10 hover:bg-red7/40 ${
+                  onClick={() => loadDetail(row.id)}
+                  className={`cursor-pointer border-t border-red6/10 hover:bg-red7/40 ${
                     selectedId === row.id ? "bg-red7/60" : ""
                   }`}
                 >
@@ -292,7 +293,11 @@ export default function AdminUsers() {
                     <div className="flex items-center gap-2">
                       <select
                         value={row.status}
-                        onChange={(e) => handleStatusChange(row.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          handleStatusChange(row.id, e.target.value);
+                        }}
                         className="rounded border border-gray-200 bg-white px-2 py-1 text-xs focus:border-red5 focus:outline-none"
                       >
                         {STATUS_OPTIONS.map((status) => (
@@ -302,7 +307,10 @@ export default function AdminUsers() {
                         ))}
                       </select>
                       <button
-                        onClick={() => loadDetail(row.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          loadDetail(row.id);
+                        }}
                         className="rounded border border-red5 px-2 py-1 text-xs font-semibold text-red5 transition-colors hover:bg-red5 hover:text-white"
                       >
                         Review

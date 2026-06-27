@@ -5,9 +5,11 @@ import { supabase } from "../../config/supabase";
 import SearchableCombobox from "../../components/SearchableCombobox";
 import {
   AGE_RANGES,
+  coerceKnownOption,
   COUNTRIES_CSV_URL,
   DIETARY_OPTIONS,
   GENDER_OPTIONS,
+  keepKnownOptions,
   LEVEL_OF_STUDY_OPTIONS,
   MAJOR_SUGGESTIONS,
   profileSchema,
@@ -97,18 +99,21 @@ const Profile = () => {
           firstName: profile.first_name ?? prev.firstName,
           lastName: profile.last_name ?? prev.lastName,
           phoneNumber: profile.phone_number ?? prev.phoneNumber,
-          age: profile.age_range ?? prev.age,
+          // Enum-constrained fields: drop/blank values that are no longer valid
+          // options (e.g. legacy or test data) so they don't invisibly fail
+          // validation against choices the UI can't display.
+          age: coerceKnownOption(profile.age_range, AGE_RANGES) || prev.age,
           graduationYear:
             profile.graduation_year != null ? String(profile.graduation_year) : prev.graduationYear,
           university: profile.school ?? prev.university,
           country: profile.country ?? prev.country,
-          levelOfStudy: profile.level_of_study ?? prev.levelOfStudy,
+          levelOfStudy: coerceKnownOption(profile.level_of_study, LEVEL_OF_STUDY_OPTIONS),
           major: profile.major ?? prev.major,
-          gender: profile.gender ?? prev.gender,
+          gender: coerceKnownOption(profile.gender, GENDER_OPTIONS),
           dietaryRestrictions: Array.isArray(profile.dietary_restrictions)
-            ? profile.dietary_restrictions
+            ? keepKnownOptions(profile.dietary_restrictions, DIETARY_OPTIONS)
             : prev.dietaryRestrictions,
-          shirtSize: profile.shirt_size ?? prev.shirtSize,
+          shirtSize: coerceKnownOption(profile.shirt_size, SHIRT_SIZES),
           linkedin: profile.linkedin ?? prev.linkedin,
         }));
       })
@@ -329,7 +334,7 @@ const Profile = () => {
               />
             </Field>
 
-            <Field label="Major / Field of Study">
+            <Field label="Major / Field of Study" error={errors.major}>
               <SearchableCombobox
                 value={form.major}
                 onChange={(v) => handleChange("major", v)}
@@ -376,7 +381,7 @@ const Profile = () => {
             {/* Preferences */}
             <SectionHeader title="Preferences" />
 
-            <Field label="Gender">
+            <Field label="Gender" error={errors.gender}>
               <div className="relative">
                 <select
                   value={form.gender}
@@ -391,7 +396,7 @@ const Profile = () => {
             </Field>
 
             <div className="col-span-2">
-              <Field label="Dietary Restrictions / Allergies">
+              <Field label="Dietary Restrictions / Allergies" error={errors.dietaryRestrictions}>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-1">
                   {DIETARY_OPTIONS.map((option) => {
                     const checked = form.dietaryRestrictions.includes(option);
@@ -428,7 +433,7 @@ const Profile = () => {
             </div>
 
             <div className="col-span-full">
-              <Field label="Shirt Size (US sizing)">
+              <Field label="Shirt Size (US sizing)" error={errors.shirtSize}>
                 <div className="flex items-center gap-6 mt-1">
                   {SHIRT_SIZES.map((size) => {
                     const selected = form.shirtSize === size;

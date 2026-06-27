@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { loadCsvOptions, type CsvType } from "@/lib/loadCsvOptions";
+import { resolveComboboxCommit } from "@/lib/combobox";
 
 interface SearchableComboboxProps {
   value: string;
@@ -35,6 +36,11 @@ export default function SearchableCombobox({
     loadCsvOptions(csvUrl, csvType).then(setCsvOptions).catch(() => {});
   }, [csvUrl, csvType]);
 
+  const allOptions = useMemo(
+    () => [...new Set([...csvOptions, ...staticOptions])],
+    [csvOptions, staticOptions]
+  );
+
   // Close on outside pointer-down. Using a document listener (instead of a
   // full-viewport backdrop) so wheel events reach the surrounding scroll
   // container instead of falling through to the page body.
@@ -43,18 +49,21 @@ export default function SearchableCombobox({
     const handlePointerDown = (e: MouseEvent) => {
       if (!containerRef.current?.contains(e.target as Node)) {
         setOpen(false);
-        if (allowCustomValue && inputText.trim()) onChange(inputText.trim());
-        else setInputText(value);
+        // Commit a typed value that resolves to a real option (or any value
+        // when custom input is allowed); otherwise revert the text. This keeps
+        // a typed-but-not-clicked entry from being silently dropped.
+        const committed = resolveComboboxCommit(inputText, allOptions, allowCustomValue);
+        if (committed !== null) {
+          onChange(committed);
+          setInputText(committed);
+        } else {
+          setInputText(value);
+        }
       }
     };
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [open, allowCustomValue, inputText, value, onChange]);
-
-  const allOptions = useMemo(
-    () => [...new Set([...csvOptions, ...staticOptions])],
-    [csvOptions, staticOptions]
-  );
+  }, [open, allowCustomValue, inputText, value, onChange, allOptions]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allOptions.slice(0, 100);

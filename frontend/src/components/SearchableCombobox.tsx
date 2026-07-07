@@ -122,6 +122,15 @@ export default function SearchableCombobox({
 
   const displayValue = focused.current || open ? inputText : value;
 
+  // Offer an explicit "Use '<typed>'" row when custom values are allowed and the
+  // text isn't an existing option, so users (e.g. with a school not in the list)
+  // can see their entry will be accepted instead of relying on a silent commit.
+  const trimmedInput = inputText.trim();
+  const showAddCustom =
+    allowCustomValue &&
+    trimmedInput.length > 0 &&
+    !allOptions.some((o) => o.toLowerCase() === trimmedInput.toLowerCase());
+
   return (
     <div ref={containerRef} className={`relative ${className}`}>
       <input
@@ -134,7 +143,7 @@ export default function SearchableCombobox({
         autoComplete="off"
         className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
       />
-      {open && filtered.length > 0 && menuRect &&
+      {open && (filtered.length > 0 || showAddCustom) && menuRect &&
         createPortal(
           <div
             ref={dropdownRef}
@@ -159,6 +168,16 @@ export default function SearchableCombobox({
                 {opt}
               </button>
             ))}
+            {showAddCustom && (
+              <button
+                key="__add_custom__"
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); select(trimmedInput); }}
+                className="w-full border-t border-gray-100 px-3 py-2 text-left text-sm font-poppins text-red6 hover:bg-red7 transition-colors"
+              >
+                Use "{trimmedInput}"
+              </button>
+            )}
           </div>,
           document.body
         )}

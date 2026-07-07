@@ -10,7 +10,8 @@ export type FormFieldType =
   | "checkboxGroup"
   | "file"
   | "multipleChoiceGrid"
-  | "preferenceGrid";
+  | "preferenceGrid"
+  | "note";
 
 export interface BaseFormField {
   id: string;
@@ -79,6 +80,12 @@ export interface PreferenceGridFormField extends BaseFormField {
   columns: string[];
 }
 
+// Display-only informational note. Renders bold text (from label) plus optional
+// description; contributes no value and is skipped by the validation schema.
+export interface NoteFormField extends BaseFormField {
+  type: "note";
+}
+
 export type FormField =
   | TextFormField
   | EmailFormField
@@ -88,7 +95,8 @@ export type FormField =
   | CheckboxGroupFormField
   | FileFormField
   | MultipleChoiceGridFormField
-  | PreferenceGridFormField;
+  | PreferenceGridFormField
+  | NoteFormField;
 
 export interface FormConfig {
   title: string;

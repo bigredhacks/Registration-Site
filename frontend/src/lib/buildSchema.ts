@@ -29,6 +29,9 @@ export function buildSchemaFromFields(fields: FormField[]): z.ZodType {
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const field of fields) {
+    // Display-only fields contribute no value and aren't validated.
+    if (field.type === "note") continue;
+
     let s: z.ZodTypeAny;
 
     switch (field.type) {

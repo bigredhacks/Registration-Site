@@ -9,7 +9,8 @@ export type DynamicFormFieldType =
   | 'checkboxGroup'
   | 'file'
   | 'multipleChoiceGrid'
-  | 'preferenceGrid';
+  | 'preferenceGrid'
+  | 'note';
 
 interface BaseDynamicFormField {
   id: string;
@@ -23,6 +24,7 @@ export type DynamicFormField =
   | (BaseDynamicFormField & { type: 'checkbox' })
   | (BaseDynamicFormField & { type: 'checkboxGroup' })
   | (BaseDynamicFormField & { type: 'file' })
+  | (BaseDynamicFormField & { type: 'note' })
   | (BaseDynamicFormField & {
       type: 'multipleChoiceGrid' | 'preferenceGrid';
       rows: string[];
@@ -54,6 +56,11 @@ export function buildAnswersSchema(fields: DynamicFormField[]) {
   const shape: Record<string, z.ZodTypeAny> = {};
 
   for (const field of fields) {
+    // Display-only fields carry no answer and aren't validated.
+    if (field.type === 'note') {
+      continue;
+    }
+
     switch (field.type) {
       case 'text':
       case 'dropdown':

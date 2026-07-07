@@ -251,7 +251,7 @@ router.get(
 const FormFieldSchema = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
-  type: z.enum(['text', 'email', 'dropdown', 'radio', 'checkbox', 'checkboxGroup', 'file', 'multipleChoiceGrid', 'preferenceGrid']),
+  type: z.enum(['text', 'email', 'dropdown', 'radio', 'checkbox', 'checkboxGroup', 'file', 'multipleChoiceGrid', 'preferenceGrid', 'note']),
   required: z.boolean(),
   description: z.string().optional(),
   placeholder: z.string().optional(),

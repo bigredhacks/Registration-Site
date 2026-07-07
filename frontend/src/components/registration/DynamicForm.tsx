@@ -8,6 +8,7 @@ import CheckboxGroup from "./form-fields/CheckboxGroup";
 import FileUpload from "./form-fields/FileUpload";
 import MultipleChoiceGrid from "./form-fields/MultipleChoiceGrid";
 import PreferenceGrid from "./form-fields/PreferenceGrid";
+import Note from "./form-fields/Note";
 
 interface DynamicFormProps {
   config: FormConfig;
@@ -183,6 +184,9 @@ export default function DynamicForm({
             onChange={(value) => handleFieldChange(field.id, value)}
           />
         );
+
+      case "note":
+        return <Note field={field} />;
 
       default:
         return null;

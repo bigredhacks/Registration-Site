@@ -247,7 +247,7 @@ router.get('/me/all', async (req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('registrations')
-      .select('id, form_key, form_version, status, created_at, updated_at, resume_path')
+      .select('id, form_key, form_version, status, created_at, resume_path')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
 

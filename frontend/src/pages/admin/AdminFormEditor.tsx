@@ -22,6 +22,7 @@ const TYPE_OPTIONS: { value: FormFieldType; label: string }[] = [
   { value: "checkboxGroup", label: "Multi-select" },
   { value: "multipleChoiceGrid", label: "Multiple Choice Grid" },
   { value: "preferenceGrid", label: "Preference Grid" },
+  { value: "note", label: "Note (display only)" },
 ];
 
 const TYPES_WITH_OPTIONS: FormFieldType[] = ["dropdown", "radio", "checkboxGroup"];

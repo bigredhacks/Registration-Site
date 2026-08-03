@@ -38,6 +38,7 @@ router.get('/registrations', async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const search = (req.query.q as string | undefined)?.trim();
     const formKey = (req.query.form_key as string | undefined)?.trim();
+    const checkedIn = req.query.checked_in as string | undefined;
 
     let query = supabase
       .from('registrations')
@@ -47,6 +48,7 @@ router.get('/registrations', async (req: Request, res: Response) => {
 
     if (status) query = query.eq('status', status);
     if (formKey) query = query.eq('form_key', formKey);
+    if (checkedIn === 'true' || checkedIn === 'false') query = query.eq('checked_in', checkedIn === 'true');
     if (search) {
       const escaped = search.replace(/,/g, ' ');
       query = query.or(
@@ -76,6 +78,7 @@ router.get('/registrations/export.csv', async (_req: Request, res: Response) => 
     const status = _req.query.status as string | undefined;
     const search = (_req.query.q as string | undefined)?.trim();
     const formKey = (_req.query.form_key as string | undefined)?.trim();
+    const checkedIn = _req.query.checked_in as string | undefined;
 
     let query = supabase
       .from('registrations')
@@ -84,6 +87,7 @@ router.get('/registrations/export.csv', async (_req: Request, res: Response) => 
 
     if (status) query = query.eq('status', status);
     if (formKey) query = query.eq('form_key', formKey);
+    if (checkedIn === 'true' || checkedIn === 'false') query = query.eq('checked_in', checkedIn === 'true');
     if (search) {
       const escaped = search.replace(/,/g, ' ');
       query = query.or(
@@ -147,6 +151,9 @@ router.get('/registrations/export.csv', async (_req: Request, res: Response) => 
 const DecisionSchema = z.object({
   status: RegistrationStatusSchema,
 });
+const CheckInSchema = z.object({
+  checked_in: z.boolean(),
+});
 const RegistrationIdSchema = z.object({
   id: z.coerce.number().int().positive(),
 });
@@ -166,6 +173,37 @@ router.post(
       const { data, error } = await supabase
         .from('registrations')
         .update({ status })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        res.status(error.code === 'PGRST116' ? 404 : 500).json({ error: error.message });
+        return;
+      }
+
+      res.json(data);
+    } catch (err) {
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
+
+/**
+ * POST /api/admin/registrations/:id/check-in
+ * Marks the registration as checked in (or undoes it), independent of status.
+ */
+router.post(
+  '/registrations/:id/check-in',
+  validate({ params: RegistrationIdSchema, body: CheckInSchema }),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { checked_in } = req.body as { checked_in: boolean };
+
+      const { data, error } = await supabase
+        .from('registrations')
+        .update({ checked_in, checked_in_at: checked_in ? new Date().toISOString() : null })
         .eq('id', id)
         .select()
         .single();

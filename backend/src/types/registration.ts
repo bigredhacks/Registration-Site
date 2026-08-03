@@ -6,7 +6,6 @@ export const RegistrationParamsSchema = z.object({
 
 export const RegistrationStatusSchema = z.enum([
   'pending',
-  'submitted',
   'approved',
   'rejected',
   'waitlisted',

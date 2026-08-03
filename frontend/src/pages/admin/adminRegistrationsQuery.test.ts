@@ -6,7 +6,7 @@ import {
   buildAdminRegistrationsPath,
 } from "./adminRegistrationsQuery.ts";
 
-test("buildAdminRegistrationsPath includes paging, status, search, and form filters", () => {
+test("buildAdminRegistrationsPath includes paging, status, search, form, and check-in filters", () => {
   assert.equal(
     buildAdminRegistrationsPath({
       limit: 50,
@@ -14,8 +14,17 @@ test("buildAdminRegistrationsPath includes paging, status, search, and form filt
       status: "pending",
       search: "cornell",
       formKey: "registration",
+      checkedIn: "true",
     }),
-    "/api/admin/registrations?limit=50&offset=100&status=pending&q=cornell&form_key=registration",
+    "/api/admin/registrations?limit=50&offset=100&status=pending&q=cornell&form_key=registration&checked_in=true",
+  );
+});
+
+test("buildAdminRegistrationsPath omits check-in filter unless true/false", () => {
+  assert.equal(buildAdminRegistrationsPath({ checkedIn: "" }), "/api/admin/registrations");
+  assert.equal(
+    buildAdminRegistrationsPath({ checkedIn: "false" }),
+    "/api/admin/registrations?checked_in=false",
   );
 });
 

@@ -28,7 +28,6 @@ export interface SubmissionFeedback {
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
-  submitted: "Submitted",
   approved: "Approved",
   rejected: "Rejected",
   waitlisted: "Waitlisted",

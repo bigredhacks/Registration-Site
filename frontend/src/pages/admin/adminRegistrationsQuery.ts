@@ -4,6 +4,8 @@ interface AdminRegistrationsQueryOptions {
   status?: string;
   search?: string;
   formKey?: string;
+  /** "true" | "false" to filter by check-in state; omitted/empty = all. */
+  checkedIn?: string;
 }
 
 function buildQuery(options: AdminRegistrationsQueryOptions): string {
@@ -24,6 +26,9 @@ function buildQuery(options: AdminRegistrationsQueryOptions): string {
   if (options.formKey?.trim()) {
     params.set("form_key", options.formKey.trim());
   }
+  if (options.checkedIn === "true" || options.checkedIn === "false") {
+    params.set("checked_in", options.checkedIn);
+  }
 
   const query = params.toString();
   return query ? `?${query}` : "";
@@ -38,5 +43,6 @@ export function buildAdminRegistrationsCsvPath(options: AdminRegistrationsQueryO
     status: options.status,
     search: options.search,
     formKey: options.formKey,
+    checkedIn: options.checkedIn,
   })}`;
 }

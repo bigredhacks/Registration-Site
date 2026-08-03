@@ -20,6 +20,8 @@ interface RegistrationSummary {
   status: string;
   resume_path?: string | null;
   form_key?: string | null;
+  checked_in?: boolean | null;
+  checked_in_at?: string | null;
 }
 
 interface RegistrationDetail extends RegistrationSummary {
@@ -32,7 +34,12 @@ interface FormSummary {
   title: string;
 }
 
-const STATUS_OPTIONS = ["pending", "submitted", "approved", "rejected", "waitlisted"] as const;
+const STATUS_OPTIONS = ["pending", "approved", "rejected", "waitlisted"] as const;
+const CHECKED_IN_FILTERS = [
+  { value: "", label: "All check-in" },
+  { value: "true", label: "Checked in" },
+  { value: "false", label: "Not checked in" },
+] as const;
 const PAGE_SIZE = 50;
 
 const COLUMNS: { key: keyof RegistrationSummary; label: string }[] = [
@@ -64,6 +71,7 @@ export default function AdminUsers() {
   const [count, setCount] = useState(0);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [checkedInFilter, setCheckedInFilter] = useState<string>("");
   const [formFilter, setFormFilter] = useState("");
   const [forms, setForms] = useState<FormSummary[]>([]);
   const [page, setPage] = useState(0);
@@ -79,6 +87,7 @@ export default function AdminUsers() {
       status: statusFilter,
       search,
       formKey: formFilter,
+      checkedIn: checkedInFilter,
     }));
     if (!res.ok) {
       showToast("Failed to load registrations.", "error");
@@ -95,7 +104,7 @@ export default function AdminUsers() {
   useEffect(() => {
     refresh().catch(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, formFilter, page]);
+  }, [statusFilter, formFilter, checkedInFilter, page]);
 
   useEffect(() => {
     apiFetch("/api/admin/form-configs")
@@ -112,7 +121,7 @@ export default function AdminUsers() {
 
   useEffect(() => {
     setPage(0);
-  }, [statusFilter, formFilter]);
+  }, [statusFilter, formFilter, checkedInFilter]);
 
   const filteredRows = useMemo(() => rows, [rows]);
   const totalPages = Math.max(1, Math.ceil(count / PAGE_SIZE));
@@ -138,11 +147,28 @@ export default function AdminUsers() {
     setDetail((prev) => (prev && prev.id === id ? { ...prev, status } : prev));
   };
 
+  const handleCheckIn = async (id: number, checkedIn: boolean) => {
+    const res = await apiFetch(`/api/admin/registrations/${id}/check-in`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ checked_in: checkedIn }),
+    });
+    if (!res.ok) {
+      showToast("Could not update check-in.", "error");
+      return;
+    }
+    const updated = await res.json();
+    const patch = { checked_in: updated.checked_in, checked_in_at: updated.checked_in_at };
+    setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+    setDetail((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+  };
+
   const handleExport = async () => {
     const res = await apiFetch(buildAdminRegistrationsCsvPath({
       status: statusFilter,
       search,
       formKey: formFilter,
+      checkedIn: checkedInFilter,
     }));
     if (!res.ok) {
       showToast("Export failed.", "error");
@@ -222,6 +248,17 @@ export default function AdminUsers() {
           ))}
         </select>
         <select
+          value={checkedInFilter}
+          onChange={(e) => setCheckedInFilter(e.target.value)}
+          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
+        >
+          {CHECKED_IN_FILTERS.map((f) => (
+            <option key={f.value} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+        <select
           value={formFilter}
           onChange={(e) => setFormFilter(e.target.value)}
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
@@ -252,20 +289,21 @@ export default function AdminUsers() {
                   </th>
                 ))}
                 <th className="px-4 py-3 text-left font-semibold">Form</th>
+                <th className="px-4 py-3 text-left font-semibold">Checked in</th>
                 <th className="px-4 py-3 text-left font-semibold">Actions</th>
               </tr>
             </thead>
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={COLUMNS.length + 3} className="px-4 py-8 text-center text-gray-500">
                     Loading…
                   </td>
                 </tr>
               )}
               {!loading && filteredRows.length === 0 && (
                 <tr>
-                  <td colSpan={COLUMNS.length + 2} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={COLUMNS.length + 3} className="px-4 py-8 text-center text-gray-500">
                     No registrations.
                   </td>
                 </tr>
@@ -288,6 +326,19 @@ export default function AdminUsers() {
                   })}
                   <td className="px-4 py-2 text-gray-800">
                     {row.form_key ?? "registration"}
+                  </td>
+                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={!!row.checked_in}
+                        onChange={(e) => handleCheckIn(row.id, e.target.checked)}
+                        className="h-4 w-4 accent-red5"
+                      />
+                      <span className="text-xs text-gray-600">
+                        {row.checked_in ? "In" : "—"}
+                      </span>
+                    </label>
                   </td>
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
@@ -356,6 +407,11 @@ export default function AdminUsers() {
                     {detail.status}
                   </span>
                 </div>
+                <p className="mt-1 text-xs font-poppins text-gray-400">
+                  {detail.checked_in
+                    ? `Checked in · ${detail.checked_in_at ? new Date(detail.checked_in_at).toLocaleString() : "yes"}`
+                    : "Not checked in"}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     onClick={handleResumeDownload}
@@ -363,6 +419,16 @@ export default function AdminUsers() {
                     className="rounded-lg border border-red5 px-3 py-2 text-xs font-poppins font-semibold text-red5 transition-colors hover:bg-red5 hover:text-white disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300"
                   >
                     View Resume
+                  </button>
+                  <button
+                    onClick={() => handleCheckIn(detail.id, !detail.checked_in)}
+                    className={`rounded-lg px-3 py-2 text-xs font-poppins font-semibold transition-colors ${
+                      detail.checked_in
+                        ? "border border-gray-300 text-gray-600 hover:bg-gray-100"
+                        : "bg-red5 text-white hover:bg-red3"
+                    }`}
+                  >
+                    {detail.checked_in ? "Undo check-in" : "Check in"}
                   </button>
                 </div>
               </div>

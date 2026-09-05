@@ -9,7 +9,7 @@ interface TextInputProps {
 
 export default function TextInput({ field, value, onChange, error }: TextInputProps) {
   return (
-    <div className="flex flex-col gap-2.5 items-start bg-white px-6 py-6 rounded-lg w-full">
+    <div className="flex flex-col gap-2.5 items-start bg-white px-3 py-4 sm:px-6 sm:py-6 rounded-lg w-full">
       <div className="flex gap-1 items-center w-full">
         <label htmlFor={field.id} className="text-sm font-normal text-black leading-[1.5]">
           {field.label}
@@ -29,7 +29,7 @@ export default function TextInput({ field, value, onChange, error }: TextInputPr
         onChange={(e) => onChange(e.target.value)}
         placeholder={field.placeholder || ""}
         required={field.required}
-        className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
+        className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
       />
       {error && (
         <p className="text-xs text-red-600">{error}</p>

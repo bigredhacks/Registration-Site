@@ -57,13 +57,13 @@ const SideButtonSet = () => {
       )}
       <button
         onClick={handleLogout}
-        className="flex items-center gap-3 px-4 h-12 font-medium rounded-lg transition-colors duration-200 text-white hover:bg-red4 w-full"
+        className="flex items-center gap-2 px-2 h-12 text-sm lg:gap-3 lg:px-4 lg:text-base font-medium rounded-lg transition-colors duration-200 text-white hover:bg-red4 w-full"
       >
         {ICONS.logout && (
           <img
             src={ICONS.logout}
             alt=""
-            className="w-7 transition-opacity duration-200"
+            className="w-6 shrink-0 lg:w-7 transition-opacity duration-200"
             loading="eager"
           />
         )}

@@ -9,7 +9,7 @@ interface DropdownProps {
 }
 
 const selectCls =
-  "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red5 transition-colors appearance-none cursor-pointer pr-8 font-poppins";
+  "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-red5 transition-colors appearance-none cursor-pointer pr-8 font-poppins";
 
 const Chevron = () => (
   <svg
@@ -25,7 +25,7 @@ export default function Dropdown({ field, value, onChange, error }: DropdownProp
   const csvSource = field.optionsSource?.type === "csv" ? field.optionsSource : undefined;
 
   return (
-    <div className="flex flex-col gap-2.5 items-start bg-white px-6 py-6 rounded-lg w-full">
+    <div className="flex flex-col gap-2.5 items-start bg-white px-3 py-4 sm:px-6 sm:py-6 rounded-lg w-full">
       <div className="flex gap-1 items-center w-full">
         <label htmlFor={field.id} className="text-sm font-normal text-black leading-[1.5]">
           {field.label}

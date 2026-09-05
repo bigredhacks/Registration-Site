@@ -32,8 +32,8 @@ export default function HasTeamView({ teamName, teamCode, members, onLeaveTeam }
       {/* Team Card */}
       <div className="bg-[#fbebe9] flex flex-col items-center px-5 py-10 rounded-lg w-full">
         {/* Team header */}
-        <div className="flex items-center justify-between w-full mb-6">
-          <p className="text-xl font-normal text-black">{teamName}</p>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between w-full mb-6">
+          <p className="text-xl font-normal text-black [overflow-wrap:anywhere]">{teamName}</p>
           <div className="flex items-center gap-3">
             <span className="text-base text-black">Team Code:</span>
             <span className="border border-[#cb4643] rounded-lg px-4 py-2 text-base font-medium text-black">
@@ -43,10 +43,10 @@ export default function HasTeamView({ teamName, teamCode, members, onLeaveTeam }
         </div>
 
         {/* Members */}
-        <div className="flex gap-8 items-start justify-center w-full mb-6">
+        <div className="grid grid-cols-2 gap-4 xl:grid-cols-4 xl:gap-8 items-start justify-center w-full mb-6">
           {/* You */}
-          <div className="flex flex-col items-center gap-px w-[200px]">
-            <img src={bearYou} alt="You" className="w-[180px] h-[180px]" />
+          <div className="flex flex-col items-center gap-px min-w-0 w-full">
+            <img src={bearYou} alt="You" className="w-full max-w-[180px] aspect-square" />
             <p className="text-[20px] text-[#787170] text-center font-medium">You</p>
           </div>
 
@@ -55,9 +55,9 @@ export default function HasTeamView({ teamName, teamCode, members, onLeaveTeam }
             const member = members[i];
             if (member) {
               return (
-                <div key={i} className="flex flex-col items-center gap-px w-[200px]">
-                  <img src={bearTeammate} alt={member.full_name} className="w-[180px] h-[180px]" />
-                  <div className="text-[20px] text-[#787170] text-center font-medium leading-normal">
+                <div key={i} className="flex flex-col items-center gap-px min-w-0 w-full">
+                  <img src={bearTeammate} alt={member.full_name} className="w-full max-w-[180px] aspect-square" />
+                  <div className="text-base sm:text-[20px] text-[#787170] text-center font-medium leading-normal [overflow-wrap:anywhere]">
                     <p>{member.full_name}</p>
                     <p>{member.email}</p>
                   </div>
@@ -65,8 +65,8 @@ export default function HasTeamView({ teamName, teamCode, members, onLeaveTeam }
               );
             }
             return (
-              <div key={i} className="flex flex-col items-center gap-px w-[200px]">
-                <img src={greyBears[i]} alt="" className="w-[180px] h-[180px]" />
+              <div key={i} className="flex flex-col items-center gap-px min-w-0 w-full">
+                <img src={greyBears[i]} alt="" className="w-full max-w-[180px] aspect-square" />
               </div>
             );
           })}

@@ -89,7 +89,7 @@ export default function AdminStats() {
         </button>
       </div>
 
-      <section aria-label="Registration filters" className="rounded-xl border border-red6/20 bg-white p-5">
+      <section aria-label="Registration filters" className="rounded-xl border border-red6/20 bg-white p-3 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <h3 className="font-semibold text-red6">Filters <span className="ml-1 text-xs font-normal text-gray-500">{activeFilters ? `${activeFilters} active` : "All registrations"}</span></h3>
           <button type="button" disabled={!activeFilters} onClick={() => { setLoading(true); setFilters({}); }}
@@ -106,7 +106,7 @@ export default function AdminStats() {
               </select>
             </label>
           ))}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {([['from', 'From (UTC)'], ['to', 'Through (UTC)']] as const).map(([key, label]) => (
               <label key={key} className="flex min-w-0 flex-col gap-1.5 text-xs font-semibold text-gray-600">
                 {label}
@@ -126,7 +126,7 @@ export default function AdminStats() {
             <button type="button" onClick={() => { setLoading(true); setRefresh((value) => value + 1); }} className="mt-3 font-semibold underline">Try again</button>
           </div>
         ) : !ready ? <p role="status" className="py-8 text-sm text-gray-500">Loading statistics…</p> : (
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-3">
             <Summary label="Matching registrations" value={metrics.total.toLocaleString()} detail={`${percentage(metrics.total, metrics.overall_total)} of ${metrics.overall_total.toLocaleString()} total`} primary />
             <Summary label="Approved" value={(metrics.by_status.approved ?? 0).toLocaleString()} detail={`${percentage(metrics.by_status.approved ?? 0, metrics.total)} of matching registrations`} />
             <Summary label="Checked in" value={(metrics.by_checked_in.true ?? 0).toLocaleString()} detail={`${percentage(metrics.by_checked_in.true ?? 0, metrics.total)} of matching registrations`} />
@@ -135,7 +135,7 @@ export default function AdminStats() {
       </div>
 
       <section aria-label="Statistics breakdown" className="overflow-hidden rounded-xl border border-red6/20 bg-white">
-        <div className="flex flex-wrap items-end gap-4 border-b border-red6/10 p-5">
+        <div className="flex flex-wrap items-end gap-4 border-b border-red6/10 p-3 sm:p-5">
           <label className="flex min-w-40 flex-1 flex-col gap-1.5 text-xs font-semibold text-gray-600">
             Break down by
             <select value={dimension} onChange={(event) => { setDimension(event.target.value as Dimension); setSearch(""); }} className={control}>
@@ -158,16 +158,16 @@ export default function AdminStats() {
         ) : entries.length === 0 ? (
           <p className="p-8 text-center text-sm text-gray-500">No groups match “{search}”. Clear your search to see the breakdown.</p>
         ) : (
-          <div className="p-5">
+          <div className="p-3 sm:p-5">
             <p className="mb-4 text-xs text-gray-500">{entries.length} groups · Percentages use all {metrics.total.toLocaleString()} matching registrations.</p>
             <div className="max-h-[32rem] overflow-y-auto">
               <table className="w-full table-fixed text-left text-sm">
-                <thead className="text-xs text-gray-500"><tr><th scope="col" className="w-[55%] pb-3 font-medium">{selectedLabel}</th><th scope="col" className="pb-3 text-right font-medium">Count</th><th scope="col" className="pb-3 text-right font-medium">Share</th></tr></thead>
+                <thead className="text-xs text-gray-500"><tr><th scope="col" className="w-[45%] sm:w-[55%] pb-3 font-medium">{selectedLabel}</th><th scope="col" className="pb-3 text-right font-medium">Count</th><th scope="col" className="pb-3 text-right font-medium">Share</th></tr></thead>
                 <tbody>
                   {entries.map(([value, count]) => (
                     <tr key={value} className="border-t border-red6/10">
                       <th scope="row" className="py-3 pr-4 font-normal">
-                        <span className="block break-words">{labelFor(dimension, value)}</span>
+                        <span className="block [overflow-wrap:anywhere]">{labelFor(dimension, value)}</span>
                         <div aria-hidden="true" className="mt-2 h-1.5 overflow-hidden rounded-full bg-red7"><div className="h-full rounded-full bg-red5 motion-safe:transition-[width]" style={{ width: `${count / metrics.total * 100}%` }} /></div>
                       </th>
                       <td className="py-3 text-right font-semibold tabular-nums text-red6">{count.toLocaleString()}</td>

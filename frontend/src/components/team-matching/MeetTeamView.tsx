@@ -16,8 +16,8 @@ export default function MeetTeamView({ members, onViewTeam, onBack }: MeetTeamVi
   return (
     <>
       {/* Header with back arrow */}
-      <div className="flex gap-10 items-center w-full">
-        <button onClick={onBack} className="text-[#cb4643] text-xl">&lsaquo;</button>
+      <div className="flex gap-3 sm:gap-10 items-center w-full">
+        <button onClick={onBack} aria-label="Back to team options" className="text-[#cb4643] text-xl min-h-11 min-w-11">&lsaquo;</button>
         <h1 className="font-medium text-[28px] text-[#cb4643]">Meet Your Team!</h1>
       </div>
 
@@ -38,11 +38,11 @@ export default function MeetTeamView({ members, onViewTeam, onBack }: MeetTeamVi
         </div>
 
         {/* Teammate avatars */}
-        <div className="flex gap-[18px] items-center">
+        <div className="flex flex-wrap justify-center gap-[18px] items-start w-full">
           {members.map((member, i) => (
-            <div key={i} className="flex flex-col items-center gap-px w-[244px]">
+            <div key={i} className="flex flex-col items-center gap-px min-w-0 w-full sm:w-[244px]">
               <img src={bearTeammate} alt={member.full_name} className="w-[180px] h-[180px]" />
-              <div className="text-[20px] text-[#787170] text-center font-medium leading-normal">
+              <div className="text-[20px] text-[#787170] text-center font-medium leading-normal [overflow-wrap:anywhere]">
                 <p>{member.full_name}</p>
                 <p>{member.email}</p>
               </div>

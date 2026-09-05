@@ -8,9 +8,9 @@ interface RegistrationLayoutProps {
 
 const RegistrationLayout = memo(({ children, className = '' }: RegistrationLayoutProps) => {
   return (
-    <div className={`flex min-h-screen bg-white ${className}`}>
+    <div className={`flex min-h-dvh flex-col bg-white lg:flex-row ${className}`}>
       <Sidebar />
-      <main className="ml-56 flex-1 p-8 overflow-x-hidden">
+      <main className="min-w-0 flex-1 p-4 sm:p-6 lg:ml-56 lg:p-8">
         {children}
       </main>
     </div>

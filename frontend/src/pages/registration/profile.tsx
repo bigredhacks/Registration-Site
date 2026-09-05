@@ -36,9 +36,9 @@ interface FormData {
 }
 
 const inputCls =
-  "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins";
+  "min-w-0 w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins";
 const selectCls =
-  "w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-red5 transition-colors appearance-none cursor-pointer pr-8 font-poppins";
+  "min-w-0 w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm focus:outline-none focus:border-red5 transition-colors appearance-none cursor-pointer pr-8 font-poppins";
 
 const Chevron = () => (
   <svg
@@ -55,7 +55,7 @@ const Field = ({
 }: {
   label: string; required?: boolean; error?: string; children: React.ReactNode;
 }) => (
-  <div className="flex flex-col gap-1.5">
+  <div className="flex min-w-0 flex-col gap-1.5">
     <label className="text-sm text-gray-600 font-poppins font-medium">
       {label}
       {required && <span className="text-red5 ml-0.5">*</span>}
@@ -234,8 +234,8 @@ const Profile = () => {
           </p>
         </div>
 
-        <div className="bg-red7 rounded-2xl p-8 w-full">
-          <div className="grid grid-cols-3 gap-x-6 gap-y-5">
+        <div className="bg-red7 rounded-2xl p-4 sm:p-8 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-5">
 
             {/* Personal Info */}
             <SectionHeader title="Personal Info" />
@@ -259,7 +259,7 @@ const Profile = () => {
             </Field>
 
             <Field label="Email" required error={errors.email}>
-              <div className="flex gap-2 items-center">
+              <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                 <input
                   type="email" placeholder="bigredhacks@gmail.com"
                   value={form.email}
@@ -395,13 +395,13 @@ const Profile = () => {
               </div>
             </Field>
 
-            <div className="col-span-2">
+            <div className="md:col-span-2">
               <Field label="Dietary Restrictions / Allergies" error={errors.dietaryRestrictions}>
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-1">
                   {DIETARY_OPTIONS.map((option) => {
                     const checked = form.dietaryRestrictions.includes(option);
                     return (
-                      <div key={option} className="flex gap-1.5 items-center">
+                      <div key={option} className="flex min-h-11 sm:min-h-0 gap-1.5 items-center">
                         <button
                           type="button"
                           onClick={() => toggleDietary(option)}
@@ -419,7 +419,7 @@ const Profile = () => {
                         </button>
                         <label
                           onClick={() => toggleDietary(option)}
-                          className={`text-sm font-poppins cursor-pointer transition-colors ${
+                          className={`flex min-h-11 sm:min-h-0 items-center text-sm font-poppins cursor-pointer transition-colors ${
                             checked ? "text-red6 font-semibold" : "text-gray-600"
                           }`}
                         >
@@ -434,11 +434,11 @@ const Profile = () => {
 
             <div className="col-span-full">
               <Field label="Shirt Size (US sizing)" error={errors.shirtSize}>
-                <div className="flex items-center gap-6 mt-1">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-1">
                   {SHIRT_SIZES.map((size) => {
                     const selected = form.shirtSize === size;
                     return (
-                      <div key={size} className="flex gap-1.5 items-center">
+                      <div key={size} className="flex min-h-11 sm:min-h-0 gap-1.5 items-center">
                         <button
                           type="button"
                           onClick={() => handleChange("shirtSize", size)}
@@ -450,7 +450,7 @@ const Profile = () => {
                         </button>
                         <label
                           onClick={() => handleChange("shirtSize", size)}
-                          className={`text-sm font-poppins cursor-pointer transition-colors ${
+                          className={`flex min-h-11 sm:min-h-0 items-center text-sm font-poppins cursor-pointer transition-colors ${
                             selected ? "text-red6 font-semibold" : "text-gray-600"
                           }`}
                         >
@@ -469,7 +469,7 @@ const Profile = () => {
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-10 py-3 rounded-lg bg-red5 hover:bg-red3 text-white font-poppins font-semibold text-sm transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full sm:w-auto px-10 py-3 rounded-lg bg-red5 hover:bg-red3 text-white font-poppins font-semibold text-sm transition-all duration-200 active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {saving ? "Saving…" : "Save Changes"}
             </button>

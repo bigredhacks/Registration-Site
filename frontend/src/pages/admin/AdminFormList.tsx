@@ -105,7 +105,7 @@ export default function AdminFormList({ onSelect }: Props) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm font-poppins text-gray-600">
           Forms drive the registration page and other applications. Only one form per key can be active.
         </p>
@@ -119,8 +119,8 @@ export default function AdminFormList({ onSelect }: Props) {
       </div>
 
       {/* Forms table */}
-      <div className="bg-white border border-red6/20 rounded-lg overflow-hidden">
-        <table className="w-full text-sm font-poppins">
+      <div className="min-w-0 bg-white border border-red6/20 rounded-lg overflow-x-auto">
+        <table className="admin-record-table w-full text-sm font-poppins">
           <thead className="bg-red7 text-red6">
             <tr>
               <th className="text-left px-4 py-3 font-semibold">Title</th>
@@ -147,12 +147,14 @@ export default function AdminFormList({ onSelect }: Props) {
             )}
             {!loading && forms.map((f) => (
               <tr key={f.key} className="border-t border-red6/10 hover:bg-red7/40">
-                <td className="px-4 py-2 text-gray-900 font-medium">{f.title}</td>
-                <td className="px-4 py-2 font-mono text-xs text-gray-700">{f.key}</td>
-                <td className="px-4 py-2 text-gray-700 tabular-nums">{f.fields_count}</td>
-                <td className="px-4 py-2 text-gray-700 tabular-nums">v{f.version}</td>
-                <td className="px-4 py-2">
+                <td data-label="Title" className="px-4 py-2 text-gray-900 font-medium">{f.title}</td>
+                <td data-label="Key" className="px-4 py-2 font-mono text-xs text-gray-700">{f.key}</td>
+                <td data-label="Fields" className="px-4 py-2 text-gray-700 tabular-nums">{f.fields_count}</td>
+                <td data-label="Version" className="px-4 py-2 text-gray-700 tabular-nums">v{f.version}</td>
+                <td data-label="Active" className="px-4 py-2">
                   <button
+                    aria-label={`Set ${f.title} to ${f.is_active ? "draft" : "active"}`}
+                    aria-pressed={f.is_active}
                     onClick={() => handleToggleActive(f)}
                     className={`px-2 py-1 text-xs font-poppins font-semibold rounded ${
                       f.is_active
@@ -163,13 +165,14 @@ export default function AdminFormList({ onSelect }: Props) {
                     {f.is_active ? "Active" : "Draft"}
                   </button>
                 </td>
-                <td className="px-4 py-2 text-gray-500 text-xs">
+                <td data-label="Updated" className="px-4 py-2 text-gray-500 text-xs">
                   {new Date(f.updated_at).toLocaleDateString()}
                 </td>
-                <td className="px-4 py-2 text-right">
+                <td data-label="Actions" className="px-4 py-2 text-right">
+                  <div className="flex flex-wrap justify-end gap-2">
                   <button
                     onClick={() => onSelect(f.key)}
-                    className="px-3 py-1 bg-red5 hover:bg-red3 text-white text-xs font-poppins font-semibold rounded mr-2 transition-colors"
+                    className="px-3 py-1 bg-red5 hover:bg-red3 text-white text-xs font-poppins font-semibold rounded transition-colors"
                   >
                     Edit
                   </button>
@@ -179,6 +182,7 @@ export default function AdminFormList({ onSelect }: Props) {
                   >
                     Delete
                   </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -262,10 +266,11 @@ export default function AdminFormList({ onSelect }: Props) {
               <p className="mt-1 text-sm font-poppins text-gray-700">{selectedPreset.description}</p>
             </div>
             <div>
-              <label className="block text-sm font-poppins font-semibold text-gray-700">
+              <label htmlFor="new-form-key" className="block text-sm font-poppins font-semibold text-gray-700">
                 Form key
               </label>
               <input
+                id="new-form-key"
                 value={newFormKey}
                 onChange={(event) => setNewFormKey(event.target.value)}
                 placeholder="registration"
@@ -273,7 +278,7 @@ export default function AdminFormList({ onSelect }: Props) {
               />
               <p className="mt-2 text-xs font-poppins text-gray-500">
                 Use lowercase letters, numbers, and hyphens. Users will visit{" "}
-                <span className="font-mono text-gray-700">/forms/{newFormKey || "your-key"}</span>.
+                <span className="font-mono text-gray-700 [overflow-wrap:anywhere]">/forms/{newFormKey || "your-key"}</span>.
               </p>
             </div>
           </div>

@@ -12,7 +12,7 @@
     "dev:backend": "npm run dev -w backend",
     "build:frontend": "npm run build -w frontend",
     "build:backend": "npm run build -w backend",
-    "dev": "npm run dev:frontend & npm run dev:backend",
+    "dev": "concurrently --kill-others --names frontend,backend \"npm run dev -w frontend\" \"npm run dev -w backend -- --exitcrash\"",
     "build": "npm run build:frontend && npm run build:backend",
     "lint": "npm run lint -w frontend",
     "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\""
@@ -21,6 +21,7 @@
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
-    "@netlify/functions": "^2.8.2"
+    "@netlify/functions": "^2.8.2",
+    "concurrently": "^9.2.4"
   }
 }

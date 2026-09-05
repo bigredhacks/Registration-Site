@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
 import {
@@ -78,6 +78,23 @@ export default function AdminUsers() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [detail, setDetail] = useState<RegistrationDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const detailRequest = useRef(0);
+  const reviewPanel = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (selectedId && window.matchMedia("(max-width: 1279px)").matches) {
+      reviewPanel.current?.focus();
+    }
+  }, [selectedId]);
+
+  const closeDetail = () => {
+    const reviewButton = document.getElementById(`review-${selectedId}`);
+    detailRequest.current += 1;
+    setSelectedId(null);
+    setDetail(null);
+    setDetailLoading(false);
+    requestAnimationFrame(() => reviewButton?.focus());
+  };
 
   const refresh = async () => {
     setLoading(true);
@@ -186,17 +203,23 @@ export default function AdminUsers() {
   };
 
   const loadDetail = async (id: number) => {
+    const request = ++detailRequest.current;
     setSelectedId(id);
+    setDetail(null);
     setDetailLoading(true);
-    const res = await apiFetch(`/api/admin/registrations/${id}`);
-    if (!res.ok) {
+    try {
+      const res = await apiFetch(`/api/admin/registrations/${id}`);
+      if (!res.ok) throw new Error("Could not load application");
+      const result: RegistrationDetail = await res.json();
+      if (request !== detailRequest.current) return;
+      setDetail(result);
+    } catch {
+      if (request !== detailRequest.current) return;
       showToast("Could not load the application details.", "error");
       setSelectedId(null);
-      setDetailLoading(false);
-      return;
+    } finally {
+      if (request === detailRequest.current) setDetailLoading(false);
     }
-    setDetail(await res.json());
-    setDetailLoading(false);
   };
 
   const handleResumeDownload = async () => {
@@ -220,13 +243,14 @@ export default function AdminUsers() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-4">
-        <form onSubmit={handleSearchSubmit} className="flex flex-1 items-center gap-3">
+      <div className={`${selectedId ? "hidden xl:flex" : "flex"} flex-col flex-wrap items-stretch gap-3 sm:flex-row sm:items-center`}>
+        <form onSubmit={handleSearchSubmit} className="flex min-w-0 w-full items-center gap-2 xl:flex-1 xl:min-w-64">
           <input
+            aria-label="Search registrations"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email, school…"
-            className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
           />
           <button
             type="submit"
@@ -236,6 +260,7 @@ export default function AdminUsers() {
           </button>
         </form>
         <select
+          aria-label="Filter by status"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
@@ -248,6 +273,7 @@ export default function AdminUsers() {
           ))}
         </select>
         <select
+          aria-label="Filter by check-in"
           value={checkedInFilter}
           onChange={(e) => setCheckedInFilter(e.target.value)}
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
@@ -259,6 +285,7 @@ export default function AdminUsers() {
           ))}
         </select>
         <select
+          aria-label="Filter by form"
           value={formFilter}
           onChange={(e) => setFormFilter(e.target.value)}
           className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins text-gray-800 focus:border-red5 focus:outline-none"
@@ -278,9 +305,9 @@ export default function AdminUsers() {
         </button>
       </div>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4">
-        <div className="overflow-x-auto rounded-lg border border-red6/20 bg-white">
-          <table className="w-full text-sm font-poppins">
+      <div className="grid min-w-0 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-4">
+        <div className={`${selectedId ? "hidden xl:block" : ""} min-w-0 overflow-x-auto rounded-lg border border-red6/20 bg-white`}>
+          <table className="admin-record-table w-full text-sm font-poppins">
             <thead className="bg-red7 text-red6">
               <tr>
                 {COLUMNS.map((column) => (
@@ -319,17 +346,18 @@ export default function AdminUsers() {
                   {COLUMNS.map((column) => {
                     const value = row[column.key];
                     return (
-                      <td key={String(column.key)} className="px-4 py-2 text-gray-800">
+                      <td key={String(column.key)} data-label={column.label} className="px-4 py-2 text-gray-800">
                         {value == null || value === "" ? "—" : String(value)}
                       </td>
                     );
                   })}
-                  <td className="px-4 py-2 text-gray-800">
+                  <td data-label="Form" className="px-4 py-2 text-gray-800">
                     {row.form_key ?? "registration"}
                   </td>
-                  <td className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
+                  <td data-label="Checked in" className="px-4 py-2" onClick={(e) => e.stopPropagation()}>
                     <label className="flex items-center gap-2 cursor-pointer select-none">
                       <input
+                        aria-label={`Check in ${row.email}`}
                         type="checkbox"
                         checked={!!row.checked_in}
                         onChange={(e) => handleCheckIn(row.id, e.target.checked)}
@@ -340,9 +368,10 @@ export default function AdminUsers() {
                       </span>
                     </label>
                   </td>
-                  <td className="px-4 py-2">
+                  <td data-label="Actions" className="px-4 py-2">
                     <div className="flex items-center gap-2">
                       <select
+                        aria-label={`Status for ${row.email}`}
                         value={row.status}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => {
@@ -358,6 +387,7 @@ export default function AdminUsers() {
                         ))}
                       </select>
                       <button
+                        id={`review-${row.id}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           loadDetail(row.id);
@@ -374,7 +404,17 @@ export default function AdminUsers() {
           </table>
         </div>
 
-        <div className="min-h-[60vh] rounded-lg border border-red6/20 bg-white p-5">
+        <div
+          ref={reviewPanel}
+          tabIndex={-1}
+          aria-label="Application review"
+          className={`${selectedId ? "" : "hidden xl:block"} min-w-0 scroll-mt-4 rounded-lg border border-red6/20 bg-white p-3 sm:p-5 xl:min-h-[60vh] [overflow-wrap:anywhere]`}
+        >
+          {selectedId && (
+            <button onClick={closeDetail} className="mb-4 min-h-11 rounded-lg border border-red5 px-3 py-2 text-sm font-poppins text-red5 xl:hidden">
+              ← Back to registrations
+            </button>
+          )}
           {!selectedId && (
             <div className="flex h-full items-center justify-center text-center">
               <p className="max-w-xs text-sm font-poppins text-gray-500">
@@ -390,8 +430,8 @@ export default function AdminUsers() {
           {detail && !detailLoading && (
             <div className="flex h-full flex-col gap-4">
               <div className="border-b border-red6/10 pb-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
                     <h2 className="text-xl font-poppins font-semibold text-red6">
                       {detail.first_name || "Unknown"} {detail.last_name || ""}
                     </h2>
@@ -413,6 +453,16 @@ export default function AdminUsers() {
                     : "Not checked in"}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
+                  <label className="flex w-full flex-col gap-1 text-xs font-poppins text-gray-600 xl:hidden">
+                    Application status
+                    <select
+                      value={detail.status}
+                      onChange={(event) => handleStatusChange(detail.id, event.target.value)}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-800"
+                    >
+                      {STATUS_OPTIONS.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </select>
+                  </label>
                   <button
                     onClick={handleResumeDownload}
                     disabled={!detail.resume_path}
@@ -455,11 +505,11 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-xs font-poppins text-gray-500">
+      <div className={`${selectedId ? "hidden xl:flex" : "flex"} flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-poppins text-gray-500`}>
         <p>
           Showing {filteredRows.length} of {count} registrations.
         </p>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setPage((current) => Math.max(0, current - 1))}
             disabled={page === 0}

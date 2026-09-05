@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import DynamicForm from "./DynamicForm";
 import type { FormConfig, FormField } from "@/lib/formConfig";
 import { buildSchemaFromFields } from "@/lib/buildSchema";
@@ -70,6 +70,41 @@ function formatStatusLabel(status?: string | null): string {
 
 export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: ApplicationPanelProps) {
   const { showToast } = useToast();
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const panel = useRef<HTMLDivElement>(null);
+  const closePanel = useRef(onClose);
+  closePanel.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeButton.current?.focus({ preventScroll: true });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePanel.current();
+      if (event.key !== "Tab") return;
+      const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+      ) ?? []).filter((element) => element.getClientRects().length > 0);
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      if (!first || !last) return;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus({ preventScroll: true });
+    };
+  }, [isOpen]);
   const [isLoading, setIsLoading] = useState(false);
   const [isBootstrapping, setIsBootstrapping] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -224,25 +259,30 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
       {/* Backdrop */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 transition-opacity duration-300"
-          style={{ left: "224px" }} // sidebar width = 56 * 4 = 224px
+          className="fixed inset-0 lg:left-56 bg-black/40 z-40 transition-opacity duration-300"
           onClick={onClose}
         />
       )}
 
       {/* Slide-in panel */}
       <div
-        className={`fixed top-0 right-0 bottom-0 z-50 w-[620px] bg-white shadow-2xl flex flex-col transition-transform duration-350 ease-in-out ${
-          isOpen ? "translate-x-0" : "translate-x-full"
+        ref={panel}
+        role="dialog"
+        aria-modal={isOpen ? true : undefined}
+        aria-label="Application form"
+        aria-hidden={!isOpen}
+        inert={!isOpen}
+        className={`fixed top-0 right-0 z-50 h-dvh w-full sm:max-w-[620px] bg-white flex flex-col transition-transform duration-350 ease-in-out ${
+          isOpen ? "translate-x-0 shadow-2xl" : "translate-x-full"
         }`}
       >
         {/* Panel header */}
-        <div className="flex items-center justify-between px-8 pt-8 pb-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="text-4xl font-jersey10 text-gray-900">
+        <div className="flex items-center justify-between gap-2 px-4 pt-4 sm:px-8 sm:pt-8 pb-4 border-b border-gray-100 shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-[clamp(1.5rem,7vw,2.25rem)] sm:text-4xl font-jersey10 text-gray-900">
               BigRed<span className="text-red5">//</span>Hacks
             </h2>
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
               <p className="font-poppins text-sm text-gray-500">Fall 2026 Application</p>
               {hasExistingSubmission && (
                 <span className="rounded-full bg-red7 px-2.5 py-1 text-[11px] font-poppins font-semibold uppercase tracking-widest text-red6">
@@ -252,8 +292,10 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
             </div>
           </div>
           <button
+            ref={closeButton}
+            aria-label="Close application"
             onClick={onClose}
-            className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800 text-xl leading-none"
+            className="w-11 h-11 shrink-0 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors text-gray-500 hover:text-gray-800 text-xl leading-none"
           >
             ×
           </button>
@@ -261,20 +303,20 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
 
         {/* Profile pre-fill banner */}
         {showPrefillBanner && (
-          <div className="mx-8 mt-4 bg-red7 border border-red5/20 rounded-xl px-5 py-3.5 flex items-center justify-between gap-4 shrink-0">
+          <div className="mx-4 sm:mx-8 mt-4 bg-red7 border border-red5/20 rounded-xl px-4 py-3 flex flex-col items-start sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
             <p className="font-poppins text-sm text-gray-700">
               Pre-fill from your saved profile?
             </p>
-            <div className="flex gap-2 shrink-0">
+            <div className="flex flex-wrap gap-2 shrink-0">
               <button
                 onClick={handlePrefillAccept}
-                className="px-4 py-1.5 bg-red5 hover:bg-red3 text-white text-xs font-poppins font-semibold rounded-lg transition-colors"
+                className="min-h-11 sm:min-h-0 px-4 py-1.5 bg-red5 hover:bg-red3 text-white text-xs font-poppins font-semibold rounded-lg transition-colors"
               >
                 Yes, pre-fill
               </button>
               <button
                 onClick={handlePrefillDecline}
-                className="px-4 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-poppins font-medium rounded-lg transition-colors"
+                className="min-h-11 sm:min-h-0 px-4 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-600 text-xs font-poppins font-medium rounded-lg transition-colors"
               >
                 Start fresh
               </button>
@@ -283,7 +325,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
         )}
 
         {/* Form content */}
-        <div className="flex-1 overflow-y-auto overscroll-contain px-8 py-6">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-6">
           {isBootstrapping ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-poppins text-sm text-gray-500">Loading application…</p>

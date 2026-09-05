@@ -281,7 +281,7 @@ export default function TeamPage() {
   return (
     <>
       <RegistrationLayout className="bg-[#fffdfa]">
-        <div className="flex flex-col gap-5 items-center p-10">
+        <div className="flex flex-col gap-5 items-center min-w-0 p-0 sm:p-4 xl:p-10">
           {renderView()}
         </div>
       </RegistrationLayout>
@@ -323,7 +323,7 @@ export default function TeamPage() {
           value={newTeamName}
           onChange={(event) => setNewTeamName(event.target.value)}
           placeholder="Hack On Heroes"
-          className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:border-red5 focus:outline-none"
+          className="mt-2 w-full rounded-lg border border-gray-200 px-3 py-2 text-base sm:text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:border-red5 focus:outline-none"
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();

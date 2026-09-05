@@ -5,6 +5,8 @@ import { isAdmin, requireAdmin } from '../middleware/requireAdmin';
 import { validate } from '../middleware/validate';
 import { RegistrationStatusSchema } from '../types/registration';
 
+import { buildMetrics, metricsQuerySchema, MetricRow } from '../utils/adminMetrics';
+
 const router = Router();
 
 function escapeCsvValue(value: unknown): string {
@@ -483,34 +485,35 @@ router.put(
 
 /**
  * GET /api/admin/metrics
- * Counts by status, school, and level_of_study.
+ * Combined registration filters and aggregate breakdowns. Dates are inclusive UTC days.
  */
-router.get('/metrics', async (_req: Request, res: Response) => {
+router.get('/metrics', async (req: Request, res: Response) => {
+  const parsed = metricsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid metrics filters.' });
+    return;
+  }
   try {
-    const { data, error } = await supabase.from('registrations').select('status, school, level_of_study');
-
-    if (error) {
-      res.status(500).json({ error: error.message });
-      return;
-    }
-
-    const total = data?.length ?? 0;
-    const tally = (key: 'status' | 'school' | 'level_of_study') => {
-      const counts: Record<string, number> = {};
-      for (const row of data ?? []) {
-        const k = (row as Record<string, string>)[key] ?? 'unknown';
-        counts[k] = (counts[k] ?? 0) + 1;
+    const rows: MetricRow[] = [];
+    // Explicit pages avoid silently counting only Supabase's first response page.
+    const pageSize = 1000;
+    let total = 0;
+    do {
+      const { data, error, count } = await supabase.from('registrations')
+        .select('status, school, level_of_study, form_key, checked_in, created_at', { count: 'exact' })
+        .order('id', { ascending: true })
+        .range(rows.length, rows.length + pageSize - 1);
+      if (error) {
+        res.status(500).json({ error: error.message });
+        return;
       }
-      return counts;
-    };
+      total = count ?? 0;
+      if (!data?.length) break;
+      rows.push(...data);
+    } while (rows.length < total);
 
-    res.json({
-      total,
-      by_status: tally('status'),
-      by_school: tally('school'),
-      by_level_of_study: tally('level_of_study'),
-    });
-  } catch (err) {
+    res.json(buildMetrics(rows, parsed.data));
+  } catch {
     res.status(500).json({ error: 'Internal server error' });
   }
 });

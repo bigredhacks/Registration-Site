@@ -32,7 +32,9 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
           ancestor (body itself is `display: flex; overflow-x: hidden`, which
           was clipping the stack). */}
       {createPortal(
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3 pointer-events-none">
+        <div
+          className="fixed bottom-4 left-4 z-50 flex w-[calc(100vw-2rem)] flex-col items-end gap-3 pointer-events-none sm:bottom-6 sm:left-6 sm:w-[calc(100vw-3rem)]"
+        >
           {toasts.map((t) => (
             <Toast key={t.id} message={t.message} type={t.type} onDismiss={() => dismiss(t.id)} />
           ))}

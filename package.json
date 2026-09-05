@@ -14,7 +14,8 @@
     "build:backend": "npm run build -w backend",
     "dev": "npm run dev:frontend & npm run dev:backend",
     "build": "npm run build:frontend && npm run build:backend",
-    "lint": "npm run lint -w frontend"
+    "lint": "npm run lint -w frontend",
+    "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\""
   },
   "dependencies": {
     "serverless-http": "^3.2.0"

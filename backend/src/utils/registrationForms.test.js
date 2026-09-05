@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   buildAnswersSchema,
   projectRegistrationColumns,
-} = require('./registrationForms');
+} = require('./registrationForms.ts');
 
 test('buildAnswersSchema requires every row in a required preference grid', () => {
   const fields = [

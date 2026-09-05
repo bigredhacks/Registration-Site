@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { buildMetrics, metricsQuerySchema } = require('./adminMetrics');
+const { buildMetrics, metricsQuerySchema } = require('./adminMetrics.ts');
 const rows = [
   { status: 'approved', school: 'Cornell', level_of_study: 'Undergraduate', form_key: 'hackathon', checked_in: true, created_at: '2026-09-01T00:00:00Z' },
   { status: 'pending', school: 'Cornell', level_of_study: 'Graduate', form_key: 'hackathon', checked_in: false, created_at: '2026-09-02T23:59:59Z' },

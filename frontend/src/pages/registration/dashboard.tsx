@@ -231,11 +231,11 @@ const Dashboard = () => {
 
   return (
     <RegistrationLayout>
-      <div className="flex flex-col gap-4 px-2 py-2">
+      <div className="flex flex-col gap-4 px-0 py-2 lg:px-2">
         <h1 className="pl-1 text-3xl font-bold text-red6 font-poppins">Dashboard</h1>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-3 rounded-xl border border-red7 bg-white p-6 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-3 rounded-xl border border-red7 bg-white p-4 sm:p-6 shadow-sm">
             <p className="text-[11px] font-poppins font-semibold uppercase tracking-widest text-gray-400">
               Application
             </p>
@@ -251,20 +251,20 @@ const Dashboard = () => {
             <button
               onClick={() => registrationCard && setPanelOpen(true)}
               disabled={!registrationCard}
-              className="mt-auto w-full rounded-lg bg-red5 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-auto w-full rounded-lg bg-red5 min-h-11 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {registrationCard?.primaryActionLabel ?? "Application Unavailable"}
             </button>
           </div>
 
-          <div className="flex flex-col gap-3 rounded-xl border border-red7 bg-red7 p-6 shadow-sm">
+          <div className="flex flex-col gap-3 rounded-xl border border-red7 bg-red7 p-4 sm:p-6 shadow-sm">
             <p className="text-[11px] font-poppins font-semibold uppercase tracking-widest text-red6">
               BigRed//Hacks FA26
             </p>
             <p className="text-sm leading-relaxed text-gray-700 font-poppins">
               The largest student-run hackathon @ Cornell University, Ithaca NY.
             </p>
-            <div className="mt-auto flex items-end gap-3 border-t border-red5/20 pt-3">
+            <div className="mt-auto flex items-end justify-between gap-1 sm:justify-start sm:gap-2 xl:gap-3 border-t border-red5/20 pt-3">
               <CountdownUnit value={countdown.days} label="days" />
               <span className="mb-4 text-xl text-red5 font-jersey10">:</span>
               <CountdownUnit value={countdown.hours} label="hrs" />
@@ -277,17 +277,17 @@ const Dashboard = () => {
         </div>
 
         {emailVerified === false && (
-          <div className="flex items-center justify-between rounded-xl border border-amber-200 bg-white px-6 py-4 shadow-sm">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-amber-200 bg-white px-6 py-4 shadow-sm">
             <div>
               <p className="text-sm font-poppins font-semibold text-gray-800">Verify your email</p>
               <p className="mt-0.5 text-xs text-gray-500 font-poppins">
-                We sent a link to <span className="font-medium text-gray-700">{userEmail}</span>. Verify to secure your account and receive hackathon updates.
+                We sent a link to <span className="font-medium text-gray-700 [overflow-wrap:anywhere]">{userEmail}</span>. Verify to secure your account and receive hackathon updates.
               </p>
             </div>
             <button
               onClick={handleVerifyEmail}
               disabled={resending}
-              className="ml-4 shrink-0 rounded-lg bg-red5 px-5 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-60"
+              className="w-full sm:ml-4 sm:w-auto shrink-0 rounded-lg bg-red5 px-5 min-h-11 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-60"
             >
               {resending ? "Sending…" : "Resend Email"}
             </button>
@@ -300,7 +300,7 @@ const Dashboard = () => {
           </div>
         )}
 
-        <div className="rounded-xl border border-red7 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-red7 bg-white p-4 sm:p-6 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
             <p className="font-poppins font-semibold text-gray-800">Profile Completion</p>
             <span className="text-sm font-poppins font-bold text-red6">{pct}%</span>
@@ -316,14 +316,14 @@ const Dashboard = () => {
           {pct < 100 && (
             <button
               onClick={() => navigate("/profile")}
-              className="mt-2 text-sm font-poppins font-semibold text-red5 transition-colors hover:text-red6"
+              className="mt-2 min-h-11 text-sm font-poppins font-semibold text-red5 transition-colors hover:text-red6"
             >
               Complete profile →
             </button>
           )}
         </div>
 
-        <div className="rounded-xl border border-red7 bg-white p-6 shadow-sm">
+        <div className="rounded-xl border border-red7 bg-white p-4 sm:p-6 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="text-[11px] font-poppins font-semibold uppercase tracking-widest text-gray-400">
@@ -335,7 +335,7 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             {applicationCards.length === 0 && (
               <div className="rounded-lg border border-dashed border-red6/20 bg-red7/20 px-4 py-5">
                 <p className="font-poppins text-sm text-gray-500">No active forms are available right now.</p>
@@ -347,8 +347,8 @@ const Dashboard = () => {
                 onClick={() => openCard(registrationCard)}
                 className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-red7/20 px-4 py-5 text-left transition-colors hover:bg-red7/40"
               >
-                <div className="flex w-full items-center justify-between gap-3">
-                  <p className="font-poppins font-semibold text-gray-900">{registrationCard.title}</p>
+                <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                  <p className="font-poppins font-semibold text-gray-900 [overflow-wrap:anywhere]">{registrationCard.title}</p>
                   <span className={`rounded-full px-3 py-1 text-[11px] font-poppins font-semibold uppercase tracking-widest ${registrationTone.badge}`}>
                     {registrationCard.stateLabel}
                   </span>
@@ -370,8 +370,8 @@ const Dashboard = () => {
                   onClick={() => openCard(card)}
                   className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-white px-4 py-5 text-left transition-colors hover:bg-red7/20"
                 >
-                  <div className="flex w-full items-center justify-between gap-3">
-                    <p className="font-poppins font-semibold text-gray-900">{card.title}</p>
+                  <div className="flex w-full flex-wrap items-center justify-between gap-3">
+                    <p className="font-poppins font-semibold text-gray-900 [overflow-wrap:anywhere]">{card.title}</p>
                     <span className={`rounded-full px-3 py-1 text-[11px] font-poppins font-semibold uppercase tracking-widest ${tone.badge}`}>
                       {card.stateLabel}
                     </span>
@@ -402,7 +402,7 @@ const Dashboard = () => {
                 className="w-full rounded-xl object-cover"
               />
               <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 transition-colors duration-200 group-hover:bg-black/20">
-                <span className="rounded-xl bg-red5 px-8 py-3 text-lg font-bold text-white opacity-0 shadow-xl transition-opacity duration-200 group-hover:opacity-100 font-poppins">
+                <span className="rounded-xl bg-red5 px-4 sm:px-8 py-3 text-sm sm:text-lg font-bold text-white opacity-100 lg:opacity-0 shadow-xl transition-opacity duration-200 group-hover:opacity-100 font-poppins">
                   {registrationCard ? `${registrationCard.primaryActionLabel} →` : "Application Unavailable"}
                 </span>
               </div>
@@ -410,9 +410,9 @@ const Dashboard = () => {
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-8 rounded-xl bg-red7 px-10 py-8 shadow-sm">
-          <img src={arcade} alt="arcade machine" className="w-56 drop-shadow-lg" />
-          <p className="select-none text-8xl leading-tight text-purple9 font-jersey10">
+        <div className="flex items-center justify-center gap-4 sm:gap-8 rounded-xl bg-red7 px-4 sm:px-10 py-6 sm:py-8 shadow-sm">
+          <img src={arcade} alt="arcade machine" className="w-1/2 max-w-56 drop-shadow-lg" />
+          <p className="select-none text-5xl sm:text-8xl leading-tight text-purple9 font-jersey10">
             Hack
             <br />
             On!

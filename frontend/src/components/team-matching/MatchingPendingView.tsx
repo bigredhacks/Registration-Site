@@ -12,9 +12,9 @@ export default function MatchingPendingView({ onEditPreferences, onBack }: Match
   return (
     <>
       {/* Header with back arrow */}
-      <div className="flex gap-10 items-center w-full">
-        <button onClick={onBack} className="text-[#cb4643] text-xl">&lsaquo;</button>
-        <h1 className="font-medium text-[28px] text-[#cb4643]">
+      <div className="flex gap-3 sm:gap-10 items-center w-full">
+        <button onClick={onBack} aria-label="Back to team options" className="text-[#cb4643] text-xl min-h-11 min-w-11">&lsaquo;</button>
+        <h1 className="font-medium text-2xl sm:text-[28px] text-[#cb4643]">
           Matching you with Teammates...
         </h1>
       </div>
@@ -31,15 +31,15 @@ export default function MatchingPendingView({ onEditPreferences, onBack }: Match
 
         {/* You avatar */}
         <div className="flex flex-col items-center gap-px">
-          <img src={bearYou} alt="You" className="w-[180px] h-[180px]" />
+          <img src={bearYou} alt="You" className="w-full max-w-[180px] aspect-square mx-auto" />
           <p className="text-[20px] text-[#787170] text-center font-medium">You</p>
         </div>
 
         {/* Grey teammate placeholders */}
-        <div className="flex gap-16 items-center">
-          <img src={bearGrey1} alt="" className="w-[180px] h-[180px]" />
-          <img src={bearGrey2} alt="" className="w-[180px] h-[180px]" />
-          <img src={bearGrey3} alt="" className="w-[180px] h-[180px]" />
+        <div className="grid grid-cols-3 gap-2 sm:gap-8 xl:gap-16 items-center w-full">
+          <img src={bearGrey1} alt="" className="w-full max-w-[180px] aspect-square mx-auto" />
+          <img src={bearGrey2} alt="" className="w-full max-w-[180px] aspect-square mx-auto" />
+          <img src={bearGrey3} alt="" className="w-full max-w-[180px] aspect-square mx-auto" />
         </div>
 
         {/* Edit Team Preferences button */}

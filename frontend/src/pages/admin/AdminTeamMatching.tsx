@@ -128,16 +128,17 @@ export default function AdminTeamMatching() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-red6/20 bg-white p-5">
-        <div className="flex flex-wrap items-end gap-4">
+      <div className="rounded-lg border border-red6/20 min-w-0 bg-white p-3 sm:p-5">
+        <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap sm:gap-4">
           <div>
             <label className="mb-1 block text-xs font-poppins font-semibold uppercase tracking-widest text-gray-500">
               Pool ID
             </label>
             <input
+              aria-label="Pool ID"
               value={poolId}
               onChange={(e) => setPoolId(e.target.value)}
-              className="rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
+              className="min-w-0 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
             />
           </div>
           <div>
@@ -145,6 +146,8 @@ export default function AdminTeamMatching() {
               Team Size
             </label>
             <input
+              aria-label="Team size"
+              inputMode="numeric"
               value={teamSize}
               onChange={(e) => setTeamSize(e.target.value)}
               className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
@@ -187,7 +190,7 @@ export default function AdminTeamMatching() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <TeamListCard
           title="Current Draft"
           emptyLabel="Run the matcher to preview draft teams."
@@ -219,7 +222,7 @@ function TeamListCard({
   teams: Array<{ team_number: number; members: ParticipantSummary[] }>;
 }) {
   return (
-    <div className="rounded-lg border border-red6/20 bg-white p-5">
+    <div className="rounded-lg border border-red6/20 min-w-0 bg-white p-3 sm:p-5">
       <h2 className="mb-3 text-lg font-poppins font-semibold text-red6">{title}</h2>
       {teams.length === 0 ? (
         <p className="text-sm font-poppins text-gray-500">{emptyLabel}</p>
@@ -232,7 +235,7 @@ function TeamListCard({
               </p>
               <ul className="mt-2 flex flex-col gap-1 text-sm font-poppins text-gray-600">
                 {team.members.map((member) => (
-                  <li key={member.id}>
+                  <li key={member.id} className="[overflow-wrap:anywhere]">
                     {member.full_name} · {member.email} · {member.hacker_type}
                   </li>
                 ))}

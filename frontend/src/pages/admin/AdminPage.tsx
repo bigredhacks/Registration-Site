@@ -1,3 +1,4 @@
+import "./admin.css";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import RegistrationLayout from "@/components/layouts/RegistrationLayout";
@@ -54,18 +55,19 @@ export default function AdminPage() {
 
   return (
     <RegistrationLayout>
-      <div className="flex flex-col gap-4 px-2 py-2">
+      <div className="admin-surface flex min-w-0 flex-col gap-4 px-0 py-2 lg:px-2">
         <h1 className="text-3xl font-poppins font-bold text-red6 pl-1">Admin</h1>
 
         {/* Tab strip */}
-        <div className="flex gap-2 -mb-px">
+        <div aria-label="Admin sections" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap -mb-px">
           {TABS.map((t) => {
             const active = t.id === tab;
             return (
               <button
                 key={t.id}
+                aria-pressed={active}
                 onClick={() => setTab(t.id)}
-                className={`px-6 py-3 font-poppins font-semibold rounded-t-lg transition-colors ${
+                className={`px-3 sm:px-6 py-3 text-sm sm:text-base font-poppins font-semibold rounded-t-lg transition-colors ${
                   active
                     ? "bg-red5 text-white"
                     : "bg-red7 text-red6 hover:bg-red6/20"
@@ -78,7 +80,7 @@ export default function AdminPage() {
         </div>
 
         {/* Tab body */}
-        <div className="bg-red7 rounded-xl rounded-tl-none p-6 min-h-[60vh] shadow-sm">
+        <div className="min-w-0 bg-red7 rounded-xl sm:rounded-tl-none p-3 sm:p-6 min-h-[60vh] shadow-sm">
           {tab === "users" && <AdminUsers />}
           {tab === "stats" && <AdminStats />}
           {tab === "editor" && (

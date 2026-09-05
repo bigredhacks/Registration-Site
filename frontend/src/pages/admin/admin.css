@@ -1,0 +1,69 @@
+/* Keep dense admin records readable on a phone without duplicating controls. */
+@media (max-width: 767px) {
+  .admin-surface button,
+  .admin-surface select,
+  .admin-surface input:not([type="checkbox"]):not([type="radio"]) {
+    min-height: 44px;
+  }
+
+  .admin-surface input:not([type="checkbox"]):not([type="radio"]),
+  .admin-surface select,
+  .admin-surface textarea {
+    font-size: 16px;
+    max-width: 100%;
+  }
+
+  .admin-surface label:has(input[type="checkbox"]) {
+    min-height: 44px;
+  }
+
+  .admin-record-table,
+  .admin-record-table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-record-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .admin-record-table tbody tr {
+    display: block;
+    padding: 8px 0;
+  }
+
+  .admin-record-table td {
+    display: block;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  .admin-record-table td[data-label] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+  }
+
+  .admin-record-table td[data-label]::before {
+    content: attr(data-label);
+    font-family: var(--font-poppins);
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-brown3);
+  }
+
+  .admin-record-table td > * {
+    min-width: 0;
+  }
+
+  .admin-record-table td[data-label="Actions"] > div {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}

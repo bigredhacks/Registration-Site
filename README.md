@@ -31,6 +31,10 @@ npm run dev:backend    # Express on PORT (default 3000)
 npm run dev
 ```
 
+`npm run dev` runs both servers together. Press Ctrl+C to stop both. If either
+server fails, the other stops too, so a failed startup does not leave a server
+running in the background. Run the command again after fixing the error.
+
 The Vite dev server proxies `/api` to the backend. Override the target with `VITE_API_PROXY_TARGET` if your backend runs on a non-default port (e.g. set `PORT=5001` in `backend/.env` and `VITE_API_PROXY_TARGET=http://localhost:5001` in `frontend/.env`).
 
 ## Verification

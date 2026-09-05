@@ -9,7 +9,7 @@ interface RadioGroupProps {
 
 export default function RadioGroup({ field, value, onChange, error }: RadioGroupProps) {
   return (
-    <div className="flex flex-col gap-2.5 items-start bg-white px-6 py-6 rounded-lg w-full">
+    <div className="flex flex-col gap-2.5 items-start bg-white px-3 py-4 sm:px-6 sm:py-6 rounded-lg w-full">
       <div className="flex gap-1 items-center w-full">
         <label className="text-sm font-normal text-black leading-[1.5]">
           {field.label}
@@ -23,24 +23,16 @@ export default function RadioGroup({ field, value, onChange, error }: RadioGroup
       )}
       <div className="flex flex-col gap-1">
         {field.options.map((option) => (
-          <div key={option} className="flex gap-1 items-center">
-            <button
-              type="button"
-              onClick={() => onChange(option)}
-              className={`w-5 h-5 rounded-full border flex items-center justify-center ${
-                value === option
-                  ? "border-[#fe1736] bg-white"
-                  : "border-[#9c9494] bg-white"
-              }`}
-            >
-              {value === option && (
-                <div className="w-3 h-3 rounded-full bg-[#fe1736]" />
-              )}
-            </button>
-            <label className="text-sm font-normal text-black leading-[1.5] cursor-pointer">
-              {option}
-            </label>
-          </div>
+          <label key={option} className="flex min-h-11 sm:min-h-0 cursor-pointer items-center gap-2 py-2 sm:py-0 text-sm text-black">
+            <input
+              type="radio"
+              name={field.id}
+              checked={value === option}
+              onChange={() => onChange(option)}
+              className="h-5 w-5 shrink-0 accent-red4"
+            />
+            <span>{option}</span>
+          </label>
         ))}
       </div>
       {error && (

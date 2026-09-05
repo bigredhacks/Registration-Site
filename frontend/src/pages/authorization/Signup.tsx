@@ -85,7 +85,7 @@ export default function Signup() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-red1 to-red3 flex items-center justify-center p-4">
-      <div className="bg-white3 rounded-2xl p-8 w-full max-w-[450px] shadow-xl flex flex-col items-center">
+      <div className="bg-white3 rounded-2xl p-5 sm:p-8 w-full max-w-[450px] shadow-xl flex flex-col items-center">
         <div className="flex flex-col items-center mb-6">
           <img
             src={brhLogo}
@@ -97,7 +97,7 @@ export default function Signup() {
 
         <form onSubmit={handleSubmit} className="w-full space-y-3">
           {fields.map((field) => (
-            <div key={field.id} className="px-4 font-poppins">
+            <div key={field.id} className="px-0 sm:px-4 font-poppins">
               <label htmlFor={field.id} className="block text-sm font-medium text-brown3 mb-1">
                 {field.label} <span className="text-red4">*</span>
               </label>
@@ -114,18 +114,18 @@ export default function Signup() {
           ))}
 
           {error && (
-            <div className="px-4">
+            <div className="px-0 sm:px-4">
               <p className="text-red4 text-sm font-poppins">{error}</p>
             </div>
           )}
 
           {message && (
-            <div className="px-4">
+            <div className="px-0 sm:px-4">
               <p className="text-green-600 text-sm font-poppins">{message}</p>
             </div>
           )}
 
-          <div className="w-full px-4 mt-6">
+          <div className="w-full px-0 sm:px-4 mt-6">
             <button
               type="submit"
               disabled={loading}
@@ -137,7 +137,7 @@ export default function Signup() {
         </form>
 
         {/* Divider */}
-        <div className="w-full mt-6 mb-4 px-4">
+        <div className="w-full mt-6 mb-4 px-0 sm:px-4">
           <div className="relative flex items-center">
             <div className="flex-grow border-t border-brown3"></div>
             <span className="px-3 text-sm text-brown3 font-poppins bg-white3">or</span>
@@ -146,7 +146,7 @@ export default function Signup() {
         </div>
 
         {/* Google Sign Up */}
-        <div className="w-full px-4 mb-4">
+        <div className="w-full px-0 sm:px-4 mb-4">
           <button
             type="button"
             onClick={handleGoogleSignUp}
@@ -162,7 +162,7 @@ export default function Signup() {
           </button>
         </div>
 
-        <p className="mt-4 text-sm text-brown3 font-poppins">
+        <p className="mt-4 text-center text-sm text-brown3 font-poppins">
           Already have an account? <Link to="/login" className="underline hover:text-red4 transition">Login</Link>
         </p>
       </div>

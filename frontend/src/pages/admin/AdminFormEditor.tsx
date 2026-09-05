@@ -30,7 +30,7 @@ const TYPES_WITH_PLACEHOLDER: FormFieldType[] = ["text", "email"];
 const TYPES_WITH_GRID: FormFieldType[] = ["multipleChoiceGrid", "preferenceGrid"];
 
 const inputCls =
-  "w-full bg-white border border-gray-200 rounded px-3 py-2 text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-red5";
+  "min-w-0 w-full bg-white border border-gray-200 rounded px-3 py-2 text-sm font-poppins text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-red5";
 
 const blankField = (type: FormFieldType): FormField => {
   const base: FormField = { id: `field_${Date.now()}`, label: "New field", type, required: false } as FormField;
@@ -157,6 +157,7 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
             Form Title
           </label>
           <input
+            aria-label="Form title"
             value={config.title}
             onChange={(e) => update((c) => ({ ...c, title: e.target.value }))}
             className={`${inputCls} mt-1`}
@@ -167,12 +168,13 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
             Description
           </label>
           <input
+            aria-label="Form description"
             value={config.description ?? ""}
             onChange={(e) => update((c) => ({ ...c, description: e.target.value }))}
             className={`${inputCls} mt-1`}
           />
         </div>
-        <div className="flex items-center gap-3 text-xs font-poppins text-gray-500">
+        <div className="flex flex-wrap items-center gap-3 text-xs font-poppins text-gray-500">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -190,7 +192,8 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
       <div className="flex flex-col gap-3">
         {config.fields.map((field, idx) => (
           <FieldCard
-            key={`${field.id}-${idx}`}
+            // FieldCard is fully controlled; keep its input mounted while the ID is edited.
+            key={idx}
             field={field}
             isFirst={idx === 0}
             isLast={idx === config.fields.length - 1}
@@ -203,7 +206,7 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
       </div>
 
       {/* Add field row */}
-      <div className="bg-white border border-dashed border-red5 rounded-lg p-4 flex items-center gap-3">
+      <div className="bg-white border border-dashed border-red5 rounded-lg p-4 flex flex-wrap items-center gap-3">
         <span className="font-poppins font-semibold text-red6 text-sm">Add field:</span>
         {TYPE_OPTIONS.map((t) => (
           <button
@@ -217,7 +220,7 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
       </div>
 
       {/* Save bar */}
-      <div className="sticky bottom-0 bg-red7 -mx-6 px-6 py-3 flex justify-end gap-3 items-center">
+      <div className="sticky bottom-0 z-10 bg-red7 -mx-3 px-3 sm:-mx-6 sm:px-6 py-3 flex flex-wrap justify-end gap-3 items-center">
         {dirty && <span className="text-xs font-poppins text-amber-700">Unsaved changes</span>}
         <button
           onClick={handleSave}
@@ -286,13 +289,13 @@ function FieldCard({
   };
 
   return (
-    <div className="bg-white border border-red6/20 rounded-lg p-4 flex gap-3">
+    <div className="bg-white border border-red6/20 rounded-lg p-3 sm:p-4 grid grid-cols-[1fr_auto] gap-3 md:flex">
       {/* Reorder column */}
-      <div className="flex flex-col gap-1 shrink-0">
+      <div className="flex flex-row gap-2 shrink-0 md:flex-col md:gap-1">
         <button
           onClick={onMoveUp}
           disabled={isFirst}
-          className="w-7 h-7 rounded bg-red7 hover:bg-red6/30 text-red6 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-11 h-11 md:w-7 md:h-7 rounded bg-red7 hover:bg-red6/30 text-red6 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title="Move up"
         >
           ↑
@@ -300,7 +303,7 @@ function FieldCard({
         <button
           onClick={onMoveDown}
           disabled={isLast}
-          className="w-7 h-7 rounded bg-red7 hover:bg-red6/30 text-red6 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
+          className="w-11 h-11 md:w-7 md:h-7 rounded bg-red7 hover:bg-red6/30 text-red6 text-xs font-bold disabled:opacity-30 disabled:cursor-not-allowed"
           title="Move down"
         >
           ↓
@@ -308,12 +311,13 @@ function FieldCard({
       </div>
 
       {/* Field body */}
-      <div className="flex-1 grid grid-cols-2 gap-3">
+      <div className="order-3 col-span-full min-w-0 flex-1 grid grid-cols-1 md:order-none md:grid-cols-2 gap-3">
         <div>
           <label className="text-[10px] font-poppins font-semibold text-gray-500 uppercase tracking-widest">
             Label
           </label>
           <input
+            aria-label="Field label"
             value={field.label}
             onChange={(e) => onChange({ label: e.target.value })}
             className={`${inputCls} mt-1`}
@@ -324,6 +328,7 @@ function FieldCard({
             ID (variable name)
           </label>
           <input
+            aria-label="Field ID"
             value={field.id}
             onChange={(e) => onChange({ id: e.target.value })}
             className={`${inputCls} mt-1 font-mono text-xs`}
@@ -334,6 +339,7 @@ function FieldCard({
             Type
           </label>
           <select
+            aria-label="Field type"
             value={field.type}
             onChange={(e) => onChange({ type: e.target.value as FormFieldType })}
             className={`${inputCls} mt-1 cursor-pointer`}
@@ -343,7 +349,7 @@ function FieldCard({
             ))}
           </select>
         </div>
-        <div className="flex items-center gap-4 mt-5">
+        <div className="flex items-center gap-4 md:mt-5">
           <label className="flex items-center gap-2 text-sm font-poppins">
             <input
               type="checkbox"
@@ -355,7 +361,7 @@ function FieldCard({
         </div>
 
         {hasPlaceholder && (
-          <div className="col-span-2">
+          <div className="col-span-full">
             <label className="text-[10px] font-poppins font-semibold text-gray-500 uppercase tracking-widest">
               Placeholder
             </label>
@@ -368,7 +374,7 @@ function FieldCard({
         )}
 
         {isCheckbox && (
-          <div className="col-span-2">
+          <div className="col-span-full">
             <label className="text-[10px] font-poppins font-semibold text-gray-500 uppercase tracking-widest">
               Checkbox text
             </label>
@@ -381,7 +387,7 @@ function FieldCard({
         )}
 
         {hasOptions && (
-          <div className="col-span-2">
+          <div className="col-span-full">
             <label className="text-[10px] font-poppins font-semibold text-gray-500 uppercase tracking-widest">
               Options
             </label>
@@ -389,6 +395,7 @@ function FieldCard({
               {((field as FormField & { options?: string[] }).options ?? []).map((opt, i) => (
                 <div key={i} className="flex gap-2">
                   <input
+                    aria-label={`Option ${i + 1}`}
                     value={opt}
                     onChange={(e) => updateOption(i, e.target.value)}
                     className={inputCls}
@@ -412,7 +419,7 @@ function FieldCard({
         )}
 
         {hasGrid && (
-          <div className="col-span-2 grid grid-cols-2 gap-3">
+          <div className="col-span-full grid grid-cols-1 xl:grid-cols-2 gap-3">
             {(["rows", "columns"] as const).map((axis) => {
               const items = (field as FormField & Record<typeof axis, string[]>)[axis] ?? [];
               return (
@@ -424,6 +431,7 @@ function FieldCard({
                     {items.map((item, i) => (
                       <div key={i} className="flex gap-2">
                         <input
+                          aria-label={`${axis === "rows" ? "Row" : "Column"} ${i + 1}`}
                           value={item}
                           onChange={(e) => updateList(axis, i, e.target.value)}
                           className={inputCls}
@@ -447,7 +455,7 @@ function FieldCard({
                 </div>
               );
             })}
-            <p className="col-span-2 text-[10px] font-poppins text-gray-500 italic">
+            <p className="col-span-full text-[10px] font-poppins text-gray-500 italic">
               {field.type === "preferenceGrid"
                 ? "Users assign each row a value from the column scale (1–5 ranking)."
                 : "Users pick one column per row (e.g. skill level per technology)."}
@@ -460,7 +468,7 @@ function FieldCard({
       <div className="flex flex-col shrink-0">
         <button
           onClick={onRemove}
-          className="w-7 h-7 rounded bg-red7 hover:bg-red5 hover:text-white text-red6 text-xs font-bold transition-colors"
+          className="w-11 h-11 md:w-7 md:h-7 rounded bg-red7 hover:bg-red5 hover:text-white text-red6 text-xs font-bold transition-colors"
           title="Delete field"
         >
           🗑

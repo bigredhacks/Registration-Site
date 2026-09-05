@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } fr
 import { createPortal } from "react-dom";
 import { loadCsvOptions, type CsvType } from "@/lib/loadCsvOptions";
 import { resolveComboboxCommit } from "@/lib/combobox";
+import { getComboboxPosition } from "@/lib/comboboxPosition";
 
 interface SearchableComboboxProps {
   value: string;
@@ -28,7 +29,7 @@ export default function SearchableCombobox({
   const [inputText, setInputText] = useState(value);
   const [query, setQuery] = useState("");
   const [csvOptions, setCsvOptions] = useState<string[]>([]);
-  const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [menuRect, setMenuRect] = useState<ReturnType<typeof getComboboxPosition> | null>(null);
   const focused = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,7 +52,13 @@ export default function SearchableCombobox({
     const el = containerRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setMenuRect({ top: r.bottom + 4, left: r.left, width: r.width });
+    const viewport = window.visualViewport;
+    setMenuRect(getComboboxPosition(r, {
+      top: viewport?.offsetTop ?? 0,
+      left: viewport?.offsetLeft ?? 0,
+      width: viewport?.width ?? window.innerWidth,
+      height: viewport?.height ?? window.innerHeight,
+    }));
   }, []);
 
   useLayoutEffect(() => {
@@ -59,9 +66,13 @@ export default function SearchableCombobox({
     updateMenuRect();
     window.addEventListener("scroll", updateMenuRect, true);
     window.addEventListener("resize", updateMenuRect);
+    window.visualViewport?.addEventListener("resize", updateMenuRect);
+    window.visualViewport?.addEventListener("scroll", updateMenuRect);
     return () => {
       window.removeEventListener("scroll", updateMenuRect, true);
       window.removeEventListener("resize", updateMenuRect);
+      window.visualViewport?.removeEventListener("resize", updateMenuRect);
+      window.visualViewport?.removeEventListener("scroll", updateMenuRect);
     };
   }, [open, updateMenuRect]);
 
@@ -86,8 +97,8 @@ export default function SearchableCombobox({
         setInputText(value);
       }
     };
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
+    document.addEventListener("pointerdown", handlePointerDown);
+    return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open, allowCustomValue, inputText, value, onChange, allOptions]);
 
   const filtered = useMemo(() => {
@@ -132,7 +143,7 @@ export default function SearchableCombobox({
     !allOptions.some((o) => o.toLowerCase() === trimmedInput.toLowerCase());
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div ref={containerRef} className={`relative min-w-0 ${className}`}>
       <input
         type="text"
         value={displayValue}
@@ -141,7 +152,7 @@ export default function SearchableCombobox({
         onBlur={handleBlur}
         placeholder={placeholder}
         autoComplete="off"
-        className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
+        className="w-full min-w-0 bg-white border border-gray-200 rounded-lg px-3 py-2.5 text-base sm:text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red5 transition-colors font-poppins"
       />
       {open && (filtered.length > 0 || showAddCustom) && menuRect &&
         createPortal(
@@ -149,9 +160,7 @@ export default function SearchableCombobox({
             ref={dropdownRef}
             style={{
               position: "fixed",
-              top: menuRect.top,
-              left: menuRect.left,
-              width: menuRect.width,
+              ...menuRect,
               zIndex: 1000,
             }}
             className="bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto overscroll-contain [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-gray-200 [&::-webkit-scrollbar-thumb]:rounded-full"
@@ -160,8 +169,9 @@ export default function SearchableCombobox({
               <button
                 key={opt}
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); select(opt); }}
-                className={`w-full px-3 py-2 text-left text-sm font-poppins text-gray-800 hover:bg-red7 transition-colors ${
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => select(opt)}
+                className={`min-h-11 sm:min-h-0 w-full px-3 py-2 text-left text-sm font-poppins text-gray-800 hover:bg-red7 transition-colors ${
                   opt === value ? "bg-red7 font-medium text-red6" : ""
                 }`}
               >
@@ -172,8 +182,9 @@ export default function SearchableCombobox({
               <button
                 key="__add_custom__"
                 type="button"
-                onMouseDown={(e) => { e.preventDefault(); select(trimmedInput); }}
-                className="w-full border-t border-gray-100 px-3 py-2 text-left text-sm font-poppins text-red6 hover:bg-red7 transition-colors"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => select(trimmedInput)}
+                className="min-h-11 sm:min-h-0 w-full border-t border-gray-100 px-3 py-2 text-left text-sm font-poppins text-red6 hover:bg-red7 transition-colors"
               >
                 Use "{trimmedInput}"
               </button>

@@ -59,8 +59,8 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red1 to-red3 flex items-center justify-center px-4">
-      <div className="bg-white3 rounded-2xl shadow-2xl p-8 w-full max-w-lg">
+    <div className="min-h-screen bg-gradient-to-br from-red1 to-red3 flex items-center justify-center px-4 py-8">
+      <div className="bg-white3 rounded-2xl shadow-2xl p-5 sm:p-8 w-full max-w-lg">
         <h1 className="text-2xl text-brown1 text-center mb-2 font-poppins">
           <img
             src={brhLogo}
@@ -74,7 +74,7 @@ export default function ResetPasswordPage() {
         </p>
 
         <form onSubmit={handleResetPassword} className="space-y-5">
-          <div className="px-16 font-poppins">
+          <div className="px-0 sm:px-16 font-poppins">
             <label htmlFor="password" className="block text-sm font-medium text-brown3 mb-2">
               New Password <span className="text-red4">*</span>
             </label>
@@ -90,7 +90,7 @@ export default function ResetPasswordPage() {
             />
           </div>
 
-          <div className="px-16 font-poppins">
+          <div className="px-0 sm:px-16 font-poppins">
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-brown3 mb-2">
               Confirm Password <span className="text-red4">*</span>
             </label>
@@ -107,16 +107,16 @@ export default function ResetPasswordPage() {
           </div>
 
           {error && (
-            <div className="px-16">
+            <div className="px-0 sm:px-16">
               <p className="text-red4 text-sm font-poppins">{error}</p>
             </div>
           )}
 
-          <div className="px-5">
+          <div className="px-0 sm:px-5">
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-red4 text-white py-2.5 rounded-lg font-semibold font-poppins hover:bg-red3 transition shadow-md disabled:opacity-50"
+              className="w-full bg-red4 text-white min-h-11 py-2.5 rounded-lg font-semibold font-poppins hover:bg-red3 transition shadow-md disabled:opacity-50"
             >
               {loading ? "Updating..." : "Set New Password"}
             </button>
@@ -126,7 +126,7 @@ export default function ResetPasswordPage() {
         <div className="mt-6 text-center">
           <button
             onClick={() => navigate("/login")}
-            className="underline text-brown3 hover:text-red4 font-medium font-poppins transition"
+            className="inline-flex min-h-11 items-center underline text-brown3 hover:text-red4 font-medium font-poppins transition"
           >
             Back to Sign In
           </button>

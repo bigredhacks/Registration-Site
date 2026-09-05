@@ -59,7 +59,7 @@ export default function FileUpload({ field, value, onChange, error }: FileUpload
   };
 
   return (
-    <div className="flex flex-col gap-2.5 items-start bg-white px-6 py-6 rounded-lg w-full">
+    <div className="flex flex-col gap-2.5 items-start bg-white px-3 py-4 sm:px-6 sm:py-6 rounded-lg w-full">
       <div className="flex gap-1 items-center w-full">
         <label className="text-sm font-normal text-black leading-[1.5]">
           {field.label}
@@ -72,11 +72,20 @@ export default function FileUpload({ field, value, onChange, error }: FileUpload
         <p className="text-xs text-gray-600">{field.description}</p>
       )}
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Choose file for ${field.label}`}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleClick();
+          }
+        }}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleClick}
-        className={`w-full border-[3px] border-dashed rounded-lg flex items-center justify-center py-32 cursor-pointer transition-colors ${
+        className={`w-full border-[3px] border-dashed rounded-lg flex items-center justify-center px-3 py-12 sm:py-32 cursor-pointer transition-colors ${
           isDragging ? "border-[#fe1736] bg-red-50" : "border-[#af3532] bg-white"
         }`}
       >
@@ -91,8 +100,8 @@ export default function FileUpload({ field, value, onChange, error }: FileUpload
           className="hidden"
           required={field.required}
         />
-        <p className="text-xs font-normal text-neutral-900 text-center whitespace-pre-wrap">
-          {getFileName() || "Drop File Here"}
+        <p className="text-xs font-normal text-neutral-900 text-center whitespace-pre-wrap [overflow-wrap:anywhere]">
+          {getFileName() || "Tap to choose a file or drop it here"}
         </p>
       </div>
       {error && (

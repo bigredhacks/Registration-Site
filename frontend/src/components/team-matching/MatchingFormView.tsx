@@ -32,9 +32,9 @@ export default function MatchingFormView({
       </div>
 
       {/* Form Content */}
-      <div className="bg-[#fbebe9] flex flex-col items-center px-5 py-[30px] rounded-lg w-full gap-5">
+      <div className="bg-[#fbebe9] flex flex-col items-center px-2 py-4 sm:px-5 sm:py-[30px] rounded-lg w-full gap-5">
         {/* Title card */}
-        <div className="bg-white flex flex-col gap-2 px-8 py-6 rounded-lg w-full">
+        <div className="bg-white flex flex-col gap-2 px-4 sm:px-8 py-6 rounded-lg w-full">
           <p className="text-lg font-normal text-black">Team Matching Form</p>
           <p className="text-sm text-[#907960]">
             Fill out this form about yourself. Team matches will be released 1 week before the hackathon.
@@ -52,7 +52,7 @@ export default function MatchingFormView({
         </div>
       </div>
 
-      <button onClick={onBack} className="text-[#cb4643] font-medium text-sm">
+      <button onClick={onBack} className="text-[#cb4643] font-medium text-sm min-h-11">
         Back
       </button>
     </>

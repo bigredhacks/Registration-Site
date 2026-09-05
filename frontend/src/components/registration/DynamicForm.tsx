@@ -194,10 +194,10 @@ export default function DynamicForm({
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
+    <div className="min-w-0 w-full max-w-4xl mx-auto">
       {!hideHeader && (
         <div className="mb-8 text-center">
-          <h1 className="text-5xl font-jersey10 text-gray-900">
+          <h1 className="text-4xl sm:text-5xl font-jersey10 text-gray-900">
             BigRed<span className="text-red5">//</span>Hacks
           </h1>
           {config.title && (

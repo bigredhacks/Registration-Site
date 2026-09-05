@@ -23,7 +23,8 @@ const SideButton: React.FC<SideButtonProps> = memo(({
   return (
     <Link
       to={to}
-      className={`flex items-center gap-3 px-4 h-12 font-medium rounded-lg transition-colors duration-200 ${
+      aria-current={isActive ? "page" : undefined}
+      className={`flex min-w-0 items-center gap-2 px-2 h-12 text-sm lg:gap-3 lg:px-4 lg:text-base font-medium rounded-lg transition-colors duration-200 ${
         isActive
             ? 'bg-white text-red5'
             : 'text-white hover:bg-red4'
@@ -36,7 +37,7 @@ const SideButton: React.FC<SideButtonProps> = memo(({
         <img
           src={isActive && activeIcon ? activeIcon : icon}
           alt=""
-          className="w-7 transition-opacity duration-200"
+          className="w-6 shrink-0 lg:w-7 transition-opacity duration-200"
           loading="eager"
         />
       ) : null}

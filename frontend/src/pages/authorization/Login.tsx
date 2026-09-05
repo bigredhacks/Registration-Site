@@ -73,8 +73,8 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-red1 to-red3 flex items-center justify-center px-4">
-      <div className="bg-white3 rounded-2xl shadow-2xl p-8 w-full max-w-lg">
+    <div className="min-h-screen bg-gradient-to-br from-red1 to-red3 flex items-center justify-center px-4 py-8">
+      <div className="bg-white3 rounded-2xl shadow-2xl p-5 sm:p-8 w-full max-w-lg">
         <h1 className="text-2xl text-brown1 text-center mb-2 font-poppins">
             <img
             src={brhLogo}
@@ -85,7 +85,7 @@ const Login = () => {
         </h1>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="px-16 font-poppins">
+          <div className="px-0 sm:px-16 font-poppins">
             <label htmlFor="email" className="block text-sm font-medium text-brown3 mb-2">
               Email <span className="text-red4">*</span>
             </label>
@@ -100,7 +100,7 @@ const Login = () => {
             />
           </div>
 
-          <div className="px-16 font-poppins">
+          <div className="px-0 sm:px-16 font-poppins">
             <label htmlFor="password" className="block text-sm font-medium text-brown3 mb-2">
               Password <span className="text-red4">*</span>
             </label>
@@ -119,29 +119,29 @@ const Login = () => {
             <button
               type="button"
               onClick={handleForgotPassword}
-              className="underline hover:text-red4 transition"
+              className="inline-flex min-h-11 items-center underline hover:text-red4 transition"
             >
               Forgot password?
             </button>
           </div>
 
           {error && (
-            <div className="px-16">
+            <div className="px-0 sm:px-16">
               <p className="text-red4 text-sm font-poppins">{error}</p>
             </div>
           )}
 
           {message && (
-            <div className="px-16">
+            <div className="px-0 sm:px-16">
               <p className="text-green-600 text-sm font-poppins">{message}</p>
             </div>
           )}
 
-          <div className="px-5">
+          <div className="px-0 sm:px-5">
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-red4 text-white py-2.5 rounded-lg font-semibold font-poppins hover:bg-red3 transition shadow-md disabled:opacity-50"
+                className="w-full bg-red4 text-white min-h-11 py-2.5 rounded-lg font-semibold font-poppins hover:bg-red3 transition shadow-md disabled:opacity-50"
             >
                 {loading ? "Signing in..." : "Sign In"}
             </button>
@@ -150,7 +150,7 @@ const Login = () => {
         </form>
 
         {/* Divider */}
-        <div className="mt-6 mb-6 px-5">
+        <div className="mt-6 mb-6 px-0 sm:px-5">
           <div className="relative flex items-center">
             <div className="flex-grow border-t border-brown3"></div>
             <span className="px-3 text-sm text-brown3 font-poppins bg-white3">or</span>
@@ -159,11 +159,11 @@ const Login = () => {
         </div>
 
         {/* Google Sign In */}
-        <div className="px-5 mb-6">
+        <div className="px-0 sm:px-5 mb-6">
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            className="w-full bg-white border border-gray-300 text-gray-700 py-2.5 rounded-lg font-medium font-poppins hover:bg-gray-50 transition shadow-sm flex items-center justify-center gap-2"
+            className="w-full bg-white border border-gray-300 text-gray-700 min-h-11 py-2.5 rounded-lg font-medium font-poppins hover:bg-gray-50 transition shadow-sm flex items-center justify-center gap-2"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -176,7 +176,7 @@ const Login = () => {
         </div>
 
         <div className="mt-6 text-center">
-            <Link to="/signup" className="underline text-brown3 hover:text-red4 font-medium font-poppins transition">
+            <Link to="/signup" className="inline-flex min-h-11 items-center underline text-brown3 hover:text-red4 font-medium font-poppins transition">
               Create New Account
             </Link>
         </div>

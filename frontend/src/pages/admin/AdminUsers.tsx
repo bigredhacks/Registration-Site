@@ -4,6 +4,7 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { useAdminSelection } from './AdminSelectionContext';
 import { studentName, type AdminStudent } from './adminApprovalState';
 import AdminApprovalFilters, { type ApprovalAnswerFilter, type ApprovalFilterField } from './AdminApprovalFilters';
+import AdminSelect from '@/components/AdminSelect';
 
 interface Registration extends AdminStudent {
   created_at: string;
@@ -16,7 +17,8 @@ interface Registration extends AdminStudent {
   resume_path?: string | null;
   answers?: Record<string, unknown>;
 }
-const PAGE_SIZE = 50;
+const PAGE_SIZES = [25, 50, 100, 200];
+const PAGE_SIZE_KEY = 'brh.admin.pageSize';
 const STATUSES = ['pending', 'approved', 'rejected', 'waitlisted'];
 type Dir = 'asc' | 'desc';
 type Sort = { column: string; dir: Dir };
@@ -56,6 +58,10 @@ export default function AdminUsers() {
   const [filterFields, setFilterFields] = useState<ApprovalFilterField[]>([]);
   const [sort, setSort] = useState<Sort | null>(null);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(() => {
+    const stored = Number(localStorage.getItem(PAGE_SIZE_KEY));
+    return PAGE_SIZES.includes(stored) ? stored : 50;
+  });
   const [refreshKey, setRefreshKey] = useState(0);
   const [adding, setAdding] = useState(false);
   const [detail, setDetail] = useState<Registration | null>(null);
@@ -76,7 +82,7 @@ export default function AdminUsers() {
     setLoading(true);
     setError('');
     const params = filters();
-    params.set('limit', String(PAGE_SIZE)); params.set('offset', String(page * PAGE_SIZE));
+    params.set('limit', String(pageSize)); params.set('offset', String(page * pageSize));
     apiFetch(`/api/admin/approval/students?${params}`).then(async res => {
       const body = await res.json();
       if (!current) return;
@@ -87,12 +93,12 @@ export default function AdminUsers() {
       }
       setFilterFields(body.fields ?? []);
       setRows(body.data ?? []); setCount(body.count ?? 0); sync(body.data ?? []);
-      setPage(value => Math.min(value, Math.max(0, Math.ceil((body.count ?? 0) / PAGE_SIZE) - 1)));
+      setPage(value => Math.min(value, Math.max(0, Math.ceil((body.count ?? 0) / pageSize) - 1)));
     }).catch(() => { if (current) { setRows([]); setError('Could not load students.'); } })
       .finally(() => { if (current) setLoading(false); });
     const requests = cohortRequest;
     return () => { current = false; requests.current++; };
-  }, [filters, page, revision, refreshKey, sync, invalidDates]);
+  }, [filters, page, pageSize, revision, refreshKey, sync, invalidDates]);
 
   useEffect(() => {
     if (selectPage.current) selectPage.current.indeterminate = rows.some(row => selected.has(row.id)) && !rows.every(row => selected.has(row.id));
@@ -179,8 +185,10 @@ export default function AdminUsers() {
         <input className="admin-input" aria-label="Search students" disabled={invalidDates} placeholder="Name, email, school…" value={search} onChange={event => setSearch(event.target.value)} />
         <button className="admin-button" type="submit" disabled={invalidDates}>Search</button>
       </form>
-      <select aria-label="Filter by status" className="admin-input" disabled={invalidDates} value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{STATUSES.map(value => <option key={value}>{value}</option>)}</select>
-      <select aria-label="Filter by attendance" className="admin-input" disabled={invalidDates} value={checkedIn} onChange={event => { setCheckedIn(event.target.value); setPage(0); }}><option value="">All attendance</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
+      <AdminSelect aria-label="Filter by status" className="admin-input" disabled={invalidDates} value={status} placeholder="All statuses"
+        options={STATUSES.map(value => ({ value, label: value }))} onChange={value => { setStatus(value); setPage(0); }} />
+      <AdminSelect aria-label="Filter by attendance" className="admin-input" disabled={invalidDates} value={checkedIn} placeholder="All attendance"
+        options={[{ value: 'true', label: 'Checked in' }, { value: 'false', label: 'Not checked in' }]} onChange={value => { setCheckedIn(value); setPage(0); }} />
       <div role="group" aria-label="Submitted date range (UTC)" className="admin-date-range"><span>Submitted</span>
         <input type="date" className="admin-input" aria-label="Submitted from (UTC)" aria-invalid={invalidDates} value={from} onChange={event => { setFrom(event.target.value); setPage(0); }} />
         <span className="admin-meta">to</span>
@@ -190,7 +198,11 @@ export default function AdminUsers() {
     </div>
     {invalidDates && <p role="alert" className="text-red6 mb-3">Start date must be on or before end date.</p>}
     <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading || invalidDates} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
-    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || invalidDates || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
+    <div className="admin-toolbar my-3"><div className="flex flex-wrap items-center gap-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span>
+      <label className="admin-meta">Per page <AdminSelect aria-label="Rows per page" className="admin-input" value={String(pageSize)}
+        options={PAGE_SIZES.map(size => ({ value: String(size), label: String(size) }))}
+        onChange={value => { localStorage.setItem(PAGE_SIZE_KEY, value); setPageSize(Number(value)); setPage(0); }} /></label>
+    </div><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || invalidDates || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>
@@ -229,7 +241,7 @@ export default function AdminUsers() {
           <td data-label="Actions"><button className="admin-button" id={`review-${row.id}`} onClick={() => void loadDetail(row.id)}>Review</button></td>
         </tr>)}</tbody>
       </table></div>
-      <div className="admin-toolbar mt-4"><span className="admin-meta">Page {page + 1} of {Math.max(1, Math.ceil(count / PAGE_SIZE))}</span><div className="flex gap-2"><button className="admin-button" disabled={!page || loading} onClick={() => setPage(value => value - 1)}>Previous</button><button className="admin-button" disabled={(page + 1) * PAGE_SIZE >= count || loading} onClick={() => setPage(value => value + 1)}>Next</button></div></div>
+      <div className="admin-toolbar mt-4"><span className="admin-meta">Page {page + 1} of {Math.max(1, Math.ceil(count / pageSize))}</span><div className="flex gap-2"><button className="admin-button" disabled={!page || loading} onClick={() => setPage(value => value - 1)}>Previous</button><button className="admin-button" disabled={(page + 1) * pageSize >= count || loading} onClick={() => setPage(value => value + 1)}>Next</button></div></div>
     </>}
   </fieldset>;
 }

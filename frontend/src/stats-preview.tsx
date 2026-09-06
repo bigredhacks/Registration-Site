@@ -27,6 +27,7 @@ window.fetch = async (input, init) => {
   const result = {
     total: matching.length,
     overall_total: rows.length,
+    approved_checked_in: matching.filter(row => row.status === 'approved' && row.checked_in === 'true').length,
     options: Object.fromEntries(fields.map(key => [key, [...new Set(rows.map(row => row[key]))].sort()])),
     ...Object.fromEntries(fields.map(key => [`by_${key}`, matching.reduce((counts, row) => {
       counts[row[key]] = (counts[row[key]] ?? 0) + 1;

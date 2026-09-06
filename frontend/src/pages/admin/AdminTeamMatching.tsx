@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import AdminSelect from "@/components/AdminSelect";
 import { useToast } from "@/components/Toast/ToastContext";
 import { useAdminSelection } from "./AdminSelectionContext";
 import type { AdminStudent } from "./adminApprovalState";
@@ -137,10 +138,8 @@ export default function AdminTeamMatching() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <input type="search" aria-label="Search teams or students" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tab === 'teams' ? 'Team, name, or email' : 'Name or email'} className={`${control} flex-1`} />
-            <select aria-label="Filter team admission status" value={status} onChange={(event) => setStatus(event.target.value)} className={control}>
-              <option value="">All statuses</option>
-              {Object.entries(statusLabels).filter(([key]) => tab === 'teams' || key !== 'mixed').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
+            <AdminSelect aria-label="Filter team admission status" value={status} onChange={setStatus} className={control} placeholder="All statuses"
+              options={Object.entries(statusLabels).filter(([key]) => tab === 'teams' || key !== 'mixed').map(([value, label]) => ({ value, label }))} />
             <button type="button" className={button} disabled={!filteredStudents.length} onClick={() => add(filteredStudents)}>
               Add {tab === 'teams' ? 'filtered teams' : 'filtered students'} ({filteredStudents.length})
             </button>
@@ -185,9 +184,8 @@ export default function AdminTeamMatching() {
         <>
           <div className="flex flex-wrap items-center gap-2">
             <label htmlFor="matcher-size" className="text-xs font-semibold text-gray-600">Team size</label>
-            <select id="matcher-size" value={teamSize} onChange={(event) => setTeamSize(event.target.value)} disabled={!!busy} className={control}>
-              <option value="2">2</option><option value="3">3</option><option value="4">4</option>
-            </select>
+            <AdminSelect id="matcher-size" value={teamSize} onChange={setTeamSize} disabled={!!busy} className={control}
+              options={[{ value: '2', label: '2' }, { value: '3', label: '3' }, { value: '4', label: '4' }]} />
             <button type="button" className={primary} disabled={!!busy || data.looking.length < 2} onClick={() => void runAction('generate')}>{busy === 'generate' ? 'Generating…' : 'Generate draft'}</button>
             <span className="text-xs text-gray-500">{data.looking.length} available</span>
           </div>

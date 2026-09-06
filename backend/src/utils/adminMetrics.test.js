@@ -28,6 +28,22 @@ test('missing values stay filterable and distinct from false', () => {
   assert.equal(buildMetrics(rows, { checked_in: 'false' }).total, 2);
   assert.equal(buildMetrics(rows, { checked_in: '' }).total, 1);
 });
+test('approved_checked_in counts rows that are both approved and checked in', () => {
+  const checkedInButRejected = { ...rows[0], status: 'rejected', checked_in: true };
+  const result = buildMetrics([...rows, checkedInButRejected], {});
+  // Check-in is independent of status, so neither tally alone gives this number:
+  // two rows are checked in and two are approved, but only one row is both.
+  assert.equal(result.by_checked_in.true, 2);
+  assert.equal(result.by_status.approved, 2);
+  assert.equal(result.approved_checked_in, 1);
+  assert.equal(buildMetrics([checkedInButRejected], {}).approved_checked_in, 0);
+  assert.equal(buildMetrics([{ ...rows[0], checked_in: false }], {}).approved_checked_in, 0);
+});
+test('approved_checked_in respects the active filters', () => {
+  assert.equal(buildMetrics(rows, {}).approved_checked_in, 1);
+  assert.equal(buildMetrics(rows, { form_key: 'workshop' }).approved_checked_in, 0);
+  assert.equal(buildMetrics(rows, { from: '2026-09-02' }).approved_checked_in, 0);
+});
 test('handles object property names safely', () => {
   const result = buildMetrics([{ ...rows[0], school: '__proto__' }, { ...rows[0], school: 'constructor' }], {});
   assert.equal(result.by_school.__proto__, 1);

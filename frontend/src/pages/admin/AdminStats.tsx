@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import AdminSelect from "@/components/AdminSelect";
 
 const dimensions = [
   { key: "status", label: "Status" },
@@ -13,6 +14,7 @@ type Filters = Partial<Record<Dimension | "from" | "to", string>>;
 type Metrics = {
   total: number;
   overall_total: number;
+  approved_checked_in: number;
   options: Record<Dimension, string[]>;
 } & Record<`by_${Dimension}`, Record<string, number>>;
 
@@ -99,11 +101,10 @@ export default function AdminStats() {
           {dimensions.map(({ key, label }) => (
             <label key={key} className="flex min-w-0 flex-col gap-1.5 text-xs font-semibold text-gray-600">
               {label}
-              <select className={control} value={filters[key] === undefined ? "all" : `value:${filters[key]}`}
-                onChange={(event) => updateFilter(key, event.target.value === "all" ? undefined : event.target.value.slice(6))}>
-                <option value="all">All</option>
-                {(metrics?.options[key] ?? []).map((value) => <option key={value} value={`value:${value}`}>{labelFor(key, value)}</option>)}
-              </select>
+              <AdminSelect className={control} fullWidth aria-label={label} placeholder="All"
+                value={filters[key] === undefined ? "" : `value:${filters[key]}`}
+                options={(metrics?.options[key] ?? []).map((value) => ({ value: `value:${value}`, label: labelFor(key, value) }))}
+                onChange={(next) => updateFilter(key, next === "" ? undefined : next.slice(6))} />
             </label>
           ))}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -127,9 +128,9 @@ export default function AdminStats() {
           </div>
         ) : !ready ? <p role="status" className="py-8 text-sm text-gray-500">Loading statistics…</p> : (
           <div className="grid gap-3 md:grid-cols-3">
-            <Summary label="Matching registrations" value={metrics.total.toLocaleString()} detail={`${percentage(metrics.total, metrics.overall_total)} of ${metrics.overall_total.toLocaleString()} total`} primary />
-            <Summary label="Approved" value={(metrics.by_status.approved ?? 0).toLocaleString()} detail={`${percentage(metrics.by_status.approved ?? 0, metrics.total)} of matching registrations`} />
-            <Summary label="Checked in" value={(metrics.by_checked_in.true ?? 0).toLocaleString()} detail={`${percentage(metrics.by_checked_in.true ?? 0, metrics.total)} of matching registrations`} />
+            <Summary label="Submitted" value={metrics.total.toLocaleString()} detail={`${percentage(metrics.total, metrics.overall_total)} of ${metrics.overall_total.toLocaleString()} total`} primary />
+            <Summary label="Approved" value={(metrics.by_status.approved ?? 0).toLocaleString()} detail={`${percentage(metrics.by_status.approved ?? 0, metrics.total)} of submitted`} />
+            <Summary label="Approved & checked in" value={metrics.approved_checked_in.toLocaleString()} detail={`${percentage(metrics.approved_checked_in, metrics.by_status.approved ?? 0)} of approved`} />
           </div>
         )}
       </div>
@@ -138,9 +139,9 @@ export default function AdminStats() {
         <div className="flex flex-wrap items-end gap-4 border-b border-red6/10 p-3 sm:p-5">
           <label className="flex min-w-40 flex-1 flex-col gap-1.5 text-xs font-semibold text-gray-600">
             Break down by
-            <select value={dimension} onChange={(event) => { setDimension(event.target.value as Dimension); setSearch(""); }} className={control}>
-              {dimensions.map(({ key, label }) => <option key={key} value={key}>{label}</option>)}
-            </select>
+            <AdminSelect className={control} fullWidth aria-label="Break down by" value={dimension}
+              options={dimensions.map(({ key, label }) => ({ value: key, label }))}
+              onChange={(next) => { setDimension(next as Dimension); setSearch(""); }} />
           </label>
           <label className="flex min-w-40 flex-1 flex-col gap-1.5 text-xs font-semibold text-gray-600">
             Find a group
@@ -148,9 +149,8 @@ export default function AdminStats() {
           </label>
           <label className="flex min-w-40 flex-col gap-1.5 text-xs font-semibold text-gray-600">
             Sort by
-            <select value={sort} onChange={(event) => setSort(event.target.value)} className={control}>
-              <option value="most">Most registrations</option><option value="least">Fewest registrations</option><option value="name">Name A–Z</option>
-            </select>
+            <AdminSelect className={control} fullWidth aria-label="Sort by" value={sort} onChange={setSort}
+              options={[{ value: "most", label: "Most registrations" }, { value: "least", label: "Fewest registrations" }, { value: "name", label: "Name A–Z" }]} />
           </label>
         </div>
         {ready && (metrics.total === 0 ? (

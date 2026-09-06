@@ -12,6 +12,7 @@ export interface ApprovalStudent {
   status: string;
   form_key?: string | null;
   checked_in?: boolean | null;
+  created_at?: string | null;
 }
 
 export interface ApprovalAnswerFilter {
@@ -104,15 +105,66 @@ export function normalizeIdentity(value: string): string {
 
 export function filterApprovalStudents<T extends ApprovalStudent>(rows: T[], filters: {
   status?: string; search?: string; checkedIn?: string; answers?: ApprovalAnswerFilter[];
+  from?: string; to?: string;
 }): T[] {
   const search = normalizeIdentity(filters.search ?? '');
   return rows.filter(row => {
     if (filters.status && row.status !== filters.status) return false;
     if (filters.checkedIn === 'true' && row.checked_in !== true) return false;
     if (filters.checkedIn === 'false' && row.checked_in === true) return false;
+    if (filters.from || filters.to) {
+      // Inclusive UTC days compared as date prefixes, the same way buildMetrics slices
+      // created_at — so a count here matches the equivalent range on the Stats tab.
+      const day = (row.created_at ?? '').slice(0, 10);
+      if (!day) return false;
+      if (filters.from && day < filters.from) return false;
+      if (filters.to && day > filters.to) return false;
+    }
     if (filters.answers && !filters.answers.every(filter => matchesApprovalAnswer(row, filter))) return false;
     return !search || [row.email, `${row.first_name ?? ''} ${row.last_name ?? ''}`, String(approvalAnswerValue(row, 'school') ?? '')]
       .some(value => normalizeIdentity(value ?? '').includes(search));
+  });
+}
+
+export const sortableApprovalColumns = ['created_at', 'status', 'email', 'name', 'first_name', 'last_name', 'school', 'level_of_study'] as const;
+export type SortableApprovalColumn = typeof sortableApprovalColumns[number];
+
+function sortValue(row: ApprovalStudent, column: SortableApprovalColumn): string {
+  // The Student column renders "First Last", so sorting it has to use both parts —
+  // ordering on first_name alone leaves everyone sharing a first name unsorted.
+  if (column === 'name') {
+    return [...answerValues(approvalAnswerValue(row, 'first_name')), ...answerValues(approvalAnswerValue(row, 'last_name'))].join(' ');
+  }
+  // `created_at` and `status` are row columns only; the rest may be answered on the
+  // form, so they go through the same answers-first lookup the list and filters use.
+  const raw = column === 'created_at' || column === 'status'
+    ? row[column]
+    : approvalAnswerValue(row, column);
+  return answerValues(raw).join(' ');
+}
+
+/**
+ * Orders the filtered list. Sorting happens here rather than in PostgREST because
+ * answers live in JSONB and the rows are already filtered in memory by this point.
+ * An unrecognised column falls back to the unsorted order rather than erroring, so a
+ * stale bookmark reorders the table instead of breaking it.
+ */
+export function sortApprovalStudents<T extends ApprovalStudent>(rows: T[], sort?: string, dir?: string): T[] {
+  if (!(sortableApprovalColumns as readonly string[]).includes(sort ?? '')) return rows;
+  const column = sort as SortableApprovalColumn;
+  // Newest-first reads better for a date; everything else reads better A–Z.
+  const ascending = dir === 'asc' || dir === 'desc' ? dir === 'asc' : column !== 'created_at';
+  return [...rows].sort((a, b) => {
+    const left = sortValue(a, column);
+    const right = sortValue(b, column);
+    // Unanswered rows sink to the bottom in both directions rather than forming a
+    // leading block of blanks when the sort is flipped.
+    if (!left || !right) return left ? -1 : right ? 1 : b.id - a.id;
+    const order = column === 'created_at'
+      ? left.localeCompare(right)
+      : left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+    // Ties keep the newest-id-first order the unsorted list uses, so paging is stable.
+    return (ascending ? order : -order) || b.id - a.id;
   });
 }
 

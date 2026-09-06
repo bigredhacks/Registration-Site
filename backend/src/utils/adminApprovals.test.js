@@ -23,3 +23,56 @@ test('export preserves registration fields and dynamic answers with CSV quoting'
   assert.ok(csv.includes('"\'=1+1"'));
   assert.ok(csv.includes('[""design"",""frontend""]'));
 });
+
+test('form filters combine exact choices, multi-select answers, booleans, text and grid rows', () => {
+  const students = [
+    { ...rows[0], school: 'Stale School', answers: { school: ' Cornell  University ', age: '18–20', interests: ['Design', 'Hardware'], first_time: false, reason: 'Build accessible tools', skills: { Frontend: 'Advanced', Backend: 'Beginner' } } },
+    { ...rows[1], answers: { school: 'Cornell University', age: '18–20', interests: ['Design'], first_time: true, reason: 'Build accessible tools', skills: { Frontend: 'Beginner' } } },
+    { ...rows[2], answers: { school: 'Cornell University College', age: '18–20', interests: ['Design'], first_time: false, reason: 'Build accessible tools', skills: { Frontend: 'Advanced' } } },
+  ];
+  const filters = [
+    { field: 'school', operator: 'is', values: ['cornell university', 'RIT'] },
+    { field: 'age', operator: 'is', values: ['18-20'] },
+    { field: 'interests', operator: 'is', values: ['hardware', 'design'] },
+    { field: 'first_time', operator: 'is', values: ['No'] },
+    { field: 'reason', operator: 'contains', values: ['ACCESSIBLE'] },
+    { field: 'skills', row: 'Frontend', operator: 'is', values: ['Advanced'] },
+  ];
+  assert.deepEqual(filterApprovalStudents(students, { answers: filters }).map(row => row.id), [1]);
+  assert.deepEqual(filterApprovalStudents(students, { answers: filters, status: 'approved' }), []);
+  assert.deepEqual(filterApprovalStudents(students, { answers: [{ field: 'interests', operator: 'is_not', values: ['Hardware'] }] }).map(row => row.id), [2, 3]);
+  assert.deepEqual(filterApprovalStudents(students, { search: 'stale' }), []);
+});
+
+test('unanswered filters distinguish false, zero, empty arrays and explicitly cleared legacy answers', () => {
+  const { matchesApprovalAnswer } = require('./adminApprovals.ts');
+  const student = { ...rows[0], school: 'Legacy school', answers: { school: '', consent: false, count: 0, tags: [], blanks: [' '] } };
+  for (const field of ['school', 'tags', 'blanks', 'missing']) {
+    assert.equal(matchesApprovalAnswer(student, { field, operator: 'empty' }), true, field);
+    assert.equal(matchesApprovalAnswer(student, { field, operator: 'is_not', values: ['Something'] }), false, field);
+  }
+  for (const field of ['consent', 'count']) assert.equal(matchesApprovalAnswer(student, { field, operator: 'not_empty' }), true);
+  assert.equal(matchesApprovalAnswer(student, { field: 'count', operator: 'gte', values: ['0'] }), true);
+  assert.equal(matchesApprovalAnswer(student, { field: 'count', operator: 'gt', values: ['0'] }), false);
+  assert.equal(matchesApprovalAnswer({ ...student, answers: { count: '18–20' } }, { field: 'count', operator: 'lt', values: ['21'] }), false);
+});
+
+test('filter catalog uses custom question labels, options and grid rows, with legacy fallbacks', () => {
+  const { approvalFilterFields } = require('./adminApprovals.ts');
+  const students = [{ ...rows[0], school: 'Legacy school', answers: { university: 'Custom school', consent: false } }];
+  const fields = approvalFilterFields(students, [
+    { id: 'university', label: 'Where do you study?', type: 'dropdown', options: ['Cornell University'] },
+    { id: 'consent', label: 'I agree', type: 'checkbox' },
+    { id: 'skills', label: 'Skills', type: 'multipleChoiceGrid', rows: ['Frontend'], columns: ['Beginner', 'Advanced'] },
+    { id: 'essay', label: 'Why join?', type: 'text' },
+    { id: 'info', label: 'Instructions', type: 'note' },
+    { id: 'attachment', label: 'Upload', type: 'file' },
+  ]);
+  assert.deepEqual(fields.find(field => field.field === 'university').options, ['Cornell University', 'Custom school']);
+  assert.equal(fields.find(field => field.field === 'university').label, 'Where do you study?');
+  assert.deepEqual(fields.find(field => field.field === 'consent').options, ['No', 'Yes']);
+  assert.equal(fields.find(field => field.field === 'skills').row, 'Frontend');
+  assert.equal(fields.find(field => field.field === 'essay').kind, 'text');
+  assert.ok(fields.some(field => field.field === 'school'));
+  assert.ok(!fields.some(field => ['attachment', 'info'].includes(field.field)));
+});

@@ -5,6 +5,7 @@ import { ApprovalWorkspace } from './pages/admin/AdminPage';
 import AdminSelectionProvider from './pages/admin/AdminSelectionProvider';
 import AdminFormEditor from './pages/admin/AdminFormEditor';
 import AdminFormList from './pages/admin/AdminFormList';
+import type { ApprovalAnswerFilter, ApprovalFilterField } from './pages/admin/AdminApprovalFilters';
 import type { AdminStudent } from './pages/admin/adminApprovalState';
 import type { FormField } from './lib/formConfig';
 import type { MatcherTeam, ParticipantSummary, TeamOverview } from './pages/admin/adminTeamMatchingState';
@@ -46,11 +47,20 @@ const students: Student[] = Array.from({ length: 66 }, (_, index) => {
     status: index < 4 ? 'approved' : ['pending', 'approved', 'pending', 'waitlisted', 'pending', 'rejected'][index % 6],
     checked_in: index < 2, checked_in_at: index < 2 ? '2026-09-05T14:00:00Z' : null,
     created_at: `2026-08-${String(index % 28 + 1).padStart(2, '0')}T14:00:00Z`,
-    answers: { first_name, last_name, email, school: schools[index % schools.length], level_of_study: 'Undergraduate', major: 'Computer Science', shirt_size: ['S', 'M', 'L'][index % 3], why_hack: 'Build a useful project with a team and learn something new.', dietary_restrictions: ['None'], mlh_code_of_conduct: true },
+    answers: { first_name, last_name, email, school: schools[index % schools.length], age: ['Under 18', '18–20', '21–24', '25–30', '31+'][index % 5], level_of_study: ['Freshman', 'Sophomore', 'Junior', 'Senior'][index % 4], major: ['Computer Science', 'Physics', 'Mathematics'][index % 3], shirt_size: ['S', 'M', 'L'][index % 3], why_hack: 'Build a useful project with a team and learn something new.', dietary_restrictions: index % 3 ? ['None'] : ['Vegetarian', 'Gluten-Free'], first_time_hacker: index % 2 === 0, technical_skills: { Frontend: index % 2 ? 'Beginner' : 'Advanced' }, mlh_code_of_conduct: true },
   };
 });
 students.push(...students.slice(0, 8).map(student => ({ ...student, id: student.id + 100, form_key: 'workshop', status: 'pending', checked_in: false, checked_in_at: null })));
-const fields: FormField[] = [{ id: 'first_name', label: 'First name', type: 'text', required: true }, { id: 'last_name', label: 'Last name', type: 'text', required: true }, { id: 'email', label: 'Email', type: 'email', required: true }];
+const fields: FormField[] = [
+  { id: 'first_name', label: 'First name', type: 'text', required: true },
+  { id: 'last_name', label: 'Last name', type: 'text', required: true },
+  { id: 'email', label: 'Email', type: 'email', required: true },
+  ...[['school', 'School'], ['age', 'Age group'], ['level_of_study', 'Level of study'], ['major', 'Major'], ['shirt_size', 'Shirt size']].map(([id, label]): FormField => ({ id, label, type: 'dropdown', options: [], required: true })),
+  { id: 'why_hack', label: 'Why do you want to attend?', type: 'text', required: false },
+  { id: 'dietary_restrictions', label: 'Dietary restrictions', type: 'checkboxGroup', options: ['None', 'Vegetarian', 'Gluten-Free'], required: false },
+  { id: 'first_time_hacker', label: 'First hackathon', type: 'checkbox', checkboxText: 'This is my first hackathon', required: false },
+  { id: 'technical_skills', label: 'Technical skills', type: 'multipleChoiceGrid', rows: ['Frontend'], columns: ['Beginner', 'Advanced'], required: false },
+];
 const forms: PreviewForm[] = ['registration', 'workshop'].map(key => ({ key,
   title: key === 'registration' ? 'BigRed//Hacks Fall 2026' : 'Workshop RSVP', description: '', fields,
   is_active: true, version: 1, updated_at: '2026-09-05T14:00:00Z',
@@ -89,9 +99,43 @@ function overview(formKey: string, pool: string): TeamOverview {
     }),
   };
 }
+function sampleAnswer(student: Student, field: string, row?: string): string[] {
+  let value = Object.prototype.hasOwnProperty.call(student.answers, field) ? student.answers[field] : student[field as keyof Student];
+  if (row !== undefined) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[row] : undefined;
+  return (Array.isArray(value) ? value : [value]).flatMap(answer => answer == null || answer === '' ? [] : [typeof answer === 'boolean' ? answer ? 'Yes' : 'No' : String(answer)]);
+}
+function sampleFilterFields(formKey: string): ApprovalFilterField[] {
+  return (forms.find(form => form.key === formKey)?.fields ?? []).flatMap(field => {
+    if (field.type === 'file' || field.type === 'note') return [];
+    const grid = field.type === 'multipleChoiceGrid' || field.type === 'preferenceGrid';
+    return (grid ? field.rows : [undefined]).map(row => ({ field: field.id, row,
+      label: row === undefined ? field.label : `${field.label} · ${row}`,
+      kind: ['text', 'email'].includes(field.type) ? 'text' : 'choice',
+      options: [...new Set(students.filter(student => student.form_key === formKey).flatMap(student => sampleAnswer(student, field.id, row)))].sort(),
+    }));
+  });
+}
+function sampleMatches(student: Student, filter: ApprovalAnswerFilter) {
+  const answers = sampleAnswer(student, filter.field, filter.row).map(normalize);
+  if (filter.operator === 'empty') return answers.length === 0;
+  if (filter.operator === 'not_empty') return answers.length > 0;
+  if (!answers.length) return false;
+  const values = (filter.values ?? []).map(normalize);
+  if (filter.operator === 'is') return answers.some(answer => values.includes(answer));
+  if (filter.operator === 'is_not') return answers.every(answer => !values.includes(answer));
+  if (filter.operator === 'contains') return answers.some(answer => answer.includes(values[0]));
+  if (filter.operator === 'not_contains') return answers.every(answer => !answer.includes(values[0]));
+  return answers.some(answer => {
+    const number = Number(answer), target = Number(values[0]);
+    if (!Number.isFinite(number) || !Number.isFinite(target)) return false;
+    return filter.operator === 'gt' ? number > target : filter.operator === 'gte' ? number >= target : filter.operator === 'lt' ? number < target : number <= target;
+  });
+}
 function filtered(params: URLSearchParams) {
   const query = normalize(params.get('q') ?? '');
+  const answerFilters = JSON.parse(params.get('answers') ?? '[]') as ApprovalAnswerFilter[];
   return students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
+    && answerFilters.every(filter => sampleMatches(student, filter))
     && (!params.get('status') || student.status === params.get('status'))
     && (!params.get('checked_in') || String(student.checked_in) === params.get('checked_in'))
     && (!query || [fullName(student), student.email, student.school].some(value => normalize(value).includes(query))))
@@ -126,7 +170,7 @@ window.fetch = async (input, init) => {
   if (method === 'GET' && ['/api/admin/approval/students', '/api/admin/approval/selection'].includes(path)) {
     const rows = filtered(url.searchParams);
     const offset = Number(url.searchParams.get('offset') ?? 0);
-    return json({ data: path.endsWith('/selection') ? rows : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length });
+    return json({ data: path.endsWith('/selection') ? rows : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, fields: sampleFilterFields(formKey) });
   }
   if (method === 'GET' && (path.endsWith('/export.csv') || path.endsWith('/export'))) {
     const rows = filtered(url.searchParams);

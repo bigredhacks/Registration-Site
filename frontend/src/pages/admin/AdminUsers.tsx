@@ -3,6 +3,7 @@ import { apiFetch } from '@/lib/api';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAdminSelection } from './AdminSelectionContext';
 import { studentName, type AdminStudent } from './adminApprovalState';
+import AdminApprovalFilters, { type ApprovalAnswerFilter, type ApprovalFilterField } from './AdminApprovalFilters';
 
 interface Registration extends AdminStudent {
   created_at: string;
@@ -33,6 +34,10 @@ export default function AdminUsers() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [checkedIn, setCheckedIn] = useState('');
+  const [answerFilters, setAnswerFilters] = useState<ApprovalAnswerFilter[]>([]);
+  const [draftAnswerFilters, setDraftAnswerFilters] = useState<ApprovalAnswerFilter[]>([]);
+  const filtersChanged = JSON.stringify(draftAnswerFilters) !== JSON.stringify(answerFilters);
+  const [filterFields, setFilterFields] = useState<ApprovalFilterField[]>([]);
   const [page, setPage] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [adding, setAdding] = useState(false);
@@ -45,7 +50,7 @@ export default function AdminUsers() {
   const detailPanel = useRef<HTMLDivElement>(null);
   const selectPage = useRef<HTMLInputElement>(null);
 
-  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status, checked_in: checkedIn }), [formKey, query, status, checkedIn]);
+  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status, checked_in: checkedIn, answers: JSON.stringify(answerFilters) }), [formKey, query, status, checkedIn, answerFilters]);
   useEffect(() => {
     let current = true;
     cohortRequest.current++;
@@ -55,9 +60,14 @@ export default function AdminUsers() {
     const params = filters();
     params.set('limit', String(PAGE_SIZE)); params.set('offset', String(page * PAGE_SIZE));
     apiFetch(`/api/admin/approval/students?${params}`).then(async res => {
-      if (!res.ok) throw new Error();
       const body = await res.json();
       if (!current) return;
+      if (!res.ok) {
+        setRows([]); setCount(0);
+        setError(typeof body.error === 'string' ? body.error : 'Could not load students.');
+        return;
+      }
+      setFilterFields(body.fields ?? []);
       setRows(body.data ?? []); setCount(body.count ?? 0); sync(body.data ?? []);
       setPage(value => Math.min(value, Math.max(0, Math.ceil((body.count ?? 0) / PAGE_SIZE) - 1)));
     }).catch(() => { if (current) { setRows([]); setError('Could not load students.'); } })
@@ -138,7 +148,8 @@ export default function AdminUsers() {
       <select aria-label="Filter by status" className="admin-input" value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{STATUSES.map(value => <option key={value}>{value}</option>)}</select>
       <select aria-label="Filter by attendance" className="admin-input" value={checkedIn} onChange={event => { setCheckedIn(event.target.value); setPage(0); }}><option value="">All attendance</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
     </div>
-    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={loading || adding || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" onClick={() => void exportCsv()}>Export CSV</button></div></div>
+    <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
+    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>
@@ -150,7 +161,7 @@ export default function AdminUsers() {
       </>}
     </section> : <>
       <div className="admin-table-wrap"><table className="admin-record-table admin-approval-table">
-        <thead><tr><th><input ref={selectPage} type="checkbox" aria-label="Select this page" checked={rows.length > 0 && rows.every(row => selected.has(row.id))} disabled={loading || !rows.length} onChange={event => { if (event.target.checked) add(rows); else rows.forEach(row => remove(row.id)); }} /></th><th>Student</th><th>School</th><th>Status</th><th>Actions</th></tr></thead>
+        <thead><tr><th><input ref={selectPage} type="checkbox" aria-label="Select this page" checked={rows.length > 0 && rows.every(row => selected.has(row.id))} disabled={filtersChanged || loading || !rows.length} onChange={event => { if (event.target.checked) add(rows); else rows.forEach(row => remove(row.id)); }} /></th><th>Student</th><th>School</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>{loading ? <tr><td colSpan={5}>Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={5}>No students found.</td></tr> : rows.map(row => <tr key={row.id} className={selected.has(row.id) ? 'admin-row-selected' : ''}>
           <td data-label="Select"><input type="checkbox" aria-label={`Select ${studentName(row)}`} checked={selected.has(row.id)} onChange={() => toggle(row)} /></td>
           <td data-label="Student"><div><p>{studentName(row)}</p><p className="admin-meta break-all">{row.email}</p></div></td>

@@ -13,8 +13,13 @@ let records = [];
 let reads = [];
 let writes = [];
 let queryCount = 0;
+let formFields = [];
 
 supabase.from = (table) => {
+  if (table === 'form_configs') {
+    const builder = { select() { return builder; }, eq() { return builder; }, async maybeSingle() { return { data: { fields: formFields }, error: null }; } };
+    return builder;
+  }
   assert.equal(table, 'registrations');
   queryCount += 1;
   const query = { filters: [], columns: '*', range: null, payload: null };
@@ -45,6 +50,7 @@ supabase.from = (table) => {
 
 function reset(nextRecords) {
   records = nextRecords;
+  formFields = [];
   reads = [];
   writes = [];
   queryCount = 0;
@@ -162,5 +168,60 @@ test('CSV export fetches complete records and dynamic answers within the same fo
   assert.ok(res.body.includes('[""design"",""frontend""]'));
   assert.equal(res.body.includes('Pending response'), false);
   assert.equal(res.body.includes('Other form response'), false);
+  assert.deepEqual(writes, []);
+});
+
+test('custom form filters share one cohort across pages, selection and CSV, with form-wide choices', async () => {
+  reset([
+    ...Array.from({ length: 1105 }, (_, index) => student(index + 1, 'registration', {
+      answers: { university: index % 2 ? 'Cornell' : 'RIT', attendance_days: ['Saturday', 'Sunday'], returning: false },
+    })),
+    student(9000, 'workshop', { answers: { university: 'Another form school', attendance_days: ['Saturday'] } }),
+  ]);
+  formFields = [
+    { id: 'university', label: 'Your university', type: 'dropdown', options: [] },
+    { id: 'attendance_days', label: 'Days attending', type: 'checkboxGroup', options: ['Friday', 'Saturday', 'Sunday'] },
+    { id: 'returning', label: 'Returning hacker?', type: 'checkbox' },
+  ];
+  const query = { form_key: 'registration', status: 'pending', answers: JSON.stringify([
+    { field: 'university', operator: 'is', values: ['cornell'] },
+    { field: 'attendance_days', operator: 'is', values: ['Saturday'] },
+    { field: 'returning', operator: 'is', values: ['No'] },
+  ]) };
+  const list = await request('get', '/students', { ...query, offset: '50', limit: '50' });
+  assert.equal(list.statusCode, 200);
+  assert.equal(list.body.count, 552);
+  assert.equal(list.body.data.length, 50);
+  assert.ok(list.body.data.every(row => row.id % 2 === 0));
+  assert.deepEqual(list.body.fields.find(field => field.field === 'university').options, ['Cornell', 'RIT']);
+  const selection = await request('get', '/selection', query);
+  assert.equal(selection.body.count, list.body.count);
+  assert.equal(selection.body.data.length, 552);
+  assert.ok(selection.body.data.every(row => row.id % 2 === 0 && row.form_key === 'registration'));
+  const csv = await request('get', '/export.csv', query);
+  assert.equal(csv.statusCode, 200);
+  assert.equal(csv.body.split('\r\n').length, 553);
+  assert.ok(!csv.body.includes('RIT'));
+  assert.ok(!csv.body.includes('Another form school'));
+  const empty = await request('get', '/students', { ...query, status: 'approved' });
+  assert.equal(empty.body.count, 0);
+  assert.deepEqual(empty.body.fields, list.body.fields);
+  assert.deepEqual(writes, []);
+});
+
+test('malformed and unavailable form filters fail closed for bulk selection', async () => {
+  reset([student(1, 'registration', { answers: { custom: 'Yes' } })]);
+  formFields = [{ id: 'custom', label: 'Custom question', type: 'text' }];
+  for (const answers of [
+    '{broken', ['[]', '[]'], JSON.stringify({}),
+    JSON.stringify([{ field: 'custom', operator: 'is', values: [] }]),
+    JSON.stringify([{ field: 'custom', operator: 'contains', values: [''] }]),
+    JSON.stringify([{ field: 'custom', operator: 'lt', values: ['18–20'] }]),
+    JSON.stringify([{ field: 'removed_question', operator: 'empty' }]),
+    JSON.stringify([{ field: 'custom', row: 'Invalid row', operator: 'empty' }]),
+  ]) {
+    const result = await request('get', '/selection', { form_key: 'registration', answers });
+    assert.equal(result.statusCode, 400, JSON.stringify(answers));
+  }
   assert.deepEqual(writes, []);
 });

@@ -6,6 +6,7 @@ import {
 import { validate } from '../middleware/validate';
 import { isAdmin, resolveOwnerOrAdmin } from '../middleware/requireAdmin';
 import { sendRegistrationConfirmation } from '../utils/email';
+import { isRegistrationClosed, registrationClosedError } from '../utils/registrationClosure';
 import {
   buildAnswersSchema,
   projectRegistrationColumns,
@@ -45,6 +46,8 @@ type FormConfigRow = {
   title: string;
   version: number;
   fields: DynamicFormField[];
+  is_active: boolean;
+  closes_at: string | null;
 };
 
 function getFormKey(req: Request): string {
@@ -55,9 +58,8 @@ function getFormKey(req: Request): string {
 async function getUserFormConfig(formKey: string): Promise<FormConfigRow | null> {
   const { data, error } = await supabase
     .from('form_configs')
-    .select('key, title, version, fields')
+    .select('*')
     .eq('key', formKey)
-    .eq('is_active', true)
     .maybeSingle();
 
   if (error) {
@@ -65,6 +67,20 @@ async function getUserFormConfig(formKey: string): Promise<FormConfigRow | null>
   }
 
   return data as FormConfigRow | null;
+}
+
+async function ensureRegistrationWritable(req: Request, res: Response, formKey: string, allowAdmin = false) {
+  if (allowAdmin && await isAdmin(req.user!.id)) return true;
+  const config = await getUserFormConfig(formKey);
+  if (!config?.is_active) {
+    res.status(404).json({ error: `Active form "${formKey}" not found` });
+    return false;
+  }
+  if (isRegistrationClosed(config.closes_at)) {
+    res.status(403).json(registrationClosedError(config.closes_at!));
+    return false;
+  }
+  return true;
 }
 
 function legacyAnswersFromRow(row: Partial<RegistrationRow>): Record<string, unknown> {
@@ -109,12 +125,20 @@ async function parseAnswersFromBody(
   req: Request,
   formKey: string,
   rawBody: Record<string, unknown> = req.body ?? {},
+  allowClosed = false,
 ) {
   const formConfig = await getUserFormConfig(formKey);
-  if (!formConfig) {
+  if (!formConfig || (!allowClosed && !formConfig.is_active)) {
     return {
       status: 404 as const,
       body: { error: `Active form "${formKey}" not found` },
+    };
+  }
+
+  if (!allowClosed && isRegistrationClosed(formConfig.closes_at)) {
+    return {
+      status: 403 as const,
+      body: registrationClosedError(formConfig.closes_at!),
     };
   }
 
@@ -148,6 +172,7 @@ async function parseAnswersFromBody(
  */
 router.post('/me/resume-upload-url', async (req: Request, res: Response) => {
   try {
+    if (!await ensureRegistrationWritable(req, res, getFormKey(req))) return;
     const filename = String(req.body?.filename || 'resume.pdf').replace(/[^A-Za-z0-9._-]/g, '_');
     const objectPath = `${req.user!.id}/${filename}`;
 
@@ -176,6 +201,7 @@ router.post('/me/resume', async (req: Request, res: Response) => {
   try {
     const resumePath = String(req.body?.resume_path || '');
     const formKey = getFormKey(req);
+    if (!await ensureRegistrationWritable(req, res, formKey)) return;
     if (!resumePath.startsWith(`${req.user!.id}/`)) {
       res.status(400).json({ error: 'resume_path must be inside the caller\'s folder' });
       return;
@@ -465,23 +491,27 @@ router.put(
       const owned = await resolveOwnerOrAdmin<RegistrationRow>('registrations', req.params.id, req, res);
       if (!owned) return;
 
+      const admin = await isAdmin(req.user!.id);
+      const formKey = owned.form_key?.trim() || 'registration';
       let updates: Record<string, unknown> = { ...req.body };
 
       if (
-        Object.prototype.hasOwnProperty.call(req.body, 'answers') &&
-        req.body.answers &&
-        typeof req.body.answers === 'object' &&
-        !Array.isArray(req.body.answers)
+        !admin || (
+          Object.prototype.hasOwnProperty.call(req.body, 'answers') &&
+          req.body.answers &&
+          typeof req.body.answers === 'object' &&
+          !Array.isArray(req.body.answers)
+        )
       ) {
-        const formKey =
-          typeof owned.form_key === 'string' && owned.form_key.trim()
-            ? owned.form_key
-            : 'registration';
-
+        // Student updates only project validated answers. Never accept ownership,
+        // form_key, approval, or attendance columns directly from their request.
         const parsed = await parseAnswersFromBody(
           req,
           formKey,
-          req.body.answers as Record<string, unknown>,
+          req.body.answers && typeof req.body.answers === 'object' && !Array.isArray(req.body.answers)
+            ? req.body.answers as Record<string, unknown>
+            : req.body,
+          admin,
         );
         if (parsed.status !== 200) {
           res.status(parsed.status).json(parsed.body);
@@ -525,8 +555,9 @@ router.delete(
   validate({ params: RegistrationParamsSchema }),
   async (req: Request, res: Response) => {
     try {
-      const owned = await resolveOwnerOrAdmin('registrations', req.params.id, req, res, 'user_id');
+      const owned = await resolveOwnerOrAdmin<RegistrationRow>('registrations', req.params.id, req, res, 'user_id, form_key');
       if (!owned) return;
+      if (!await ensureRegistrationWritable(req, res, owned.form_key?.trim() || 'registration', true)) return;
 
       const { error } = await supabase
         .from('registrations')

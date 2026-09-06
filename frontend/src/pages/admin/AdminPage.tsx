@@ -8,14 +8,17 @@ import AdminStats from "./AdminStats";
 import AdminFormEditor from "./AdminFormEditor";
 import AdminFormList from "./AdminFormList";
 import AdminTeamMatching from "./AdminTeamMatching";
+import AdminSelectionProvider from "./AdminSelectionProvider";
+import AdminSelectionPanel from "./AdminSelectionPanel";
+import { useAdminSelection } from "./AdminSelectionContext";
 
 type Tab = "editor" | "stats" | "users" | "teams";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "users", label: "Approvals" },
+  { id: "teams", label: "Team Matching" },
   { id: "editor", label: "Application Editor" },
   { id: "stats", label: "Stats" },
-  { id: "users", label: "Users" },
-  { id: "teams", label: "Team Matching" },
 ];
 
 export default function AdminPage() {
@@ -55,6 +58,7 @@ export default function AdminPage() {
 
   return (
     <RegistrationLayout>
+      <AdminSelectionProvider>
       <div className="admin-surface flex min-w-0 flex-col gap-4 px-0 py-2 lg:px-2">
         <h1 className="text-3xl font-poppins font-bold text-red6 pl-1">Admin</h1>
 
@@ -81,16 +85,43 @@ export default function AdminPage() {
 
         {/* Tab body */}
         <div className="min-w-0 bg-red7 rounded-xl sm:rounded-tl-none p-3 sm:p-6 min-h-[60vh] shadow-sm">
-          {tab === "users" && <AdminUsers />}
+          <div hidden={tab !== "users" && tab !== "teams"}>
+            <ApprovalWorkspace tab={tab} />
+          </div>
           {tab === "stats" && <AdminStats />}
           {tab === "editor" && (
             editingKey
               ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} />
               : <AdminFormList onSelect={setEditingKey} />
           )}
-          {tab === "teams" && <AdminTeamMatching />}
         </div>
       </div>
+      </AdminSelectionProvider>
     </RegistrationLayout>
   );
+}
+
+export function ApprovalWorkspace({ tab }: { tab: Tab }) {
+  const { formKey, setFormKey, forms, busy, selected } = useAdminSelection();
+  return <>
+    <div className="admin-toolbar mb-4">
+      <label className="admin-form-picker">Application
+        <select className="admin-input" value={formKey} disabled={busy} onChange={event => setFormKey(event.target.value)}>
+          {!forms.some(form => form.key === formKey) && <option value={formKey}>{formKey}</option>}
+          {forms.map(form => <option key={form.key} value={form.key}>{form.title}</option>)}
+        </select>
+      </label>
+    </div>
+    <div className="admin-approval-workspace">
+      <button className="admin-button admin-selection-jump" aria-controls="admin-selected-panel" onClick={() => {
+        const panel = document.getElementById('admin-selected-panel');
+        panel?.scrollIntoView({ block: 'start' }); panel?.focus({ preventScroll: true });
+      }}>Selected students ({selected.size}) ↓</button>
+      <div className="min-w-0" key={`browse-${formKey}`} id="admin-browse-list">
+        <div hidden={tab !== 'users'}><AdminUsers /></div>
+        <fieldset disabled={busy} hidden={tab !== 'teams'}><AdminTeamMatching /></fieldset>
+      </div>
+      <AdminSelectionPanel key={`selection-${formKey}`} />
+    </div>
+  </>;
 }

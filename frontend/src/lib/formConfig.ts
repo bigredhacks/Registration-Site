@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { RegistrationClosure } from "./registrationClosure";
 
 // Form field types
 export type FormFieldType =
@@ -98,7 +99,7 @@ export type FormField =
   | PreferenceGridFormField
   | NoteFormField;
 
-export interface FormConfig {
+export interface FormConfig extends RegistrationClosure {
   title: string;
   description?: string;
   schema: z.ZodType;

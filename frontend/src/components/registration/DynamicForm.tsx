@@ -18,6 +18,7 @@ interface DynamicFormProps {
   hideHeader?: boolean;
   submissionErrors?: Record<string, string>;
   submitLabel?: string;
+  readOnly?: boolean;
 }
 
 export default function DynamicForm({
@@ -28,6 +29,7 @@ export default function DynamicForm({
   hideHeader = false,
   submissionErrors = {},
   submitLabel = "Submit Application",
+  readOnly = false,
 }: DynamicFormProps) {
   const [formData, setFormData] = useState<Record<string, unknown>>(initialValues);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -35,7 +37,7 @@ export default function DynamicForm({
   useEffect(() => {
     setFormData(initialValues);
     setErrors({});
-  }, [initialValues]);
+  }, [initialValues, readOnly]);
 
   useEffect(() => {
     if (Object.keys(submissionErrors).length === 0) return;
@@ -43,6 +45,7 @@ export default function DynamicForm({
   }, [submissionErrors]);
 
   const handleFieldChange = (fieldId: string, value: unknown) => {
+    if (readOnly) return;
     setFormData((prev) => ({
       ...prev,
       [fieldId]: value,
@@ -74,6 +77,7 @@ export default function DynamicForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (readOnly || isLoading) return;
 
     if (!validateForm()) {
       return;
@@ -210,11 +214,13 @@ export default function DynamicForm({
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {config.fields.map((field) => (
-          <div key={field.id}>{renderField(field)}</div>
-        ))}
+        <fieldset disabled={readOnly} className="min-w-0 space-y-4">
+          {config.fields.map((field) => (
+            <div key={field.id}>{renderField(field)}</div>
+          ))}
+        </fieldset>
 
-        <div className="pt-4">
+        {!readOnly && <div className="pt-4">
           <button
             type="submit"
             disabled={isLoading}
@@ -222,7 +228,7 @@ export default function DynamicForm({
           >
             {isLoading ? "Submitting…" : submitLabel}
           </button>
-        </div>
+        </div>}
       </form>
     </div>
   );

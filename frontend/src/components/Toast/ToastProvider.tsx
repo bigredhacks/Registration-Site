@@ -28,12 +28,10 @@ export default function ToastProvider({ children }: { children: React.ReactNode 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Render into document.body so the toast escapes any flex/overflow
-          ancestor (body itself is `display: flex; overflow-x: hidden`, which
-          was clipping the stack). */}
+      {/* Keep notifications outside layout containers that clip overflow. */}
       {createPortal(
         <div
-          className="fixed bottom-4 left-4 z-50 flex w-[calc(100vw-2rem)] flex-col items-end gap-3 pointer-events-none sm:bottom-6 sm:left-6 sm:w-[calc(100vw-3rem)]"
+          className="toast-stack"
         >
           {toasts.map((t) => (
             <Toast key={t.id} message={t.message} type={t.type} onDismiss={() => dismiss(t.id)} />

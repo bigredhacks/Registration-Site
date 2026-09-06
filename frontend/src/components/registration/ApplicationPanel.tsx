@@ -5,6 +5,8 @@ import { buildSchemaFromFields } from "@/lib/buildSchema";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
 import { extractSubmissionFeedback } from "@/lib/registrationUi";
+import { formatRegistrationDeadline, isRegistrationClosed } from "@/lib/registrationClosure";
+import { useRegistrationClock } from "@/lib/useRegistrationClock";
 
 interface ApplicationPanelProps {
   isOpen: boolean;
@@ -117,6 +119,8 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   const [profileValues, setProfileValues] = useState<Record<string, unknown> | null>(null);
   const [submissionErrors, setSubmissionErrors] = useState<Record<string, string>>({});
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
+  const now = useRegistrationClock(config?.server_now);
+  const closed = isRegistrationClosed(config?.closes_at, now);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -143,6 +147,9 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
             description: remote.description ?? undefined,
             schema: buildSchemaFromFields(fields),
             fields,
+            closes_at: remote.closes_at,
+            closes_timezone: remote.closes_timezone,
+            server_now: remote.server_now,
           });
           setConfigUnavailable(false);
         } else if (!cancelled) {
@@ -197,6 +204,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   }, [isOpen]);
 
   const showPrefillBanner =
+    !closed &&
     !hasExistingSubmission &&
     profileValues !== null &&
     !prefillBannerDismissed &&
@@ -212,6 +220,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   };
 
   const handleSubmit = async (data: Record<string, unknown>) => {
+    if (closed) return;
     setIsLoading(true);
     setSubmissionErrors({});
     try {
@@ -230,8 +239,12 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           setHasExistingSubmission(true);
           return;
         }
+        const body = await res.json().catch(() => null);
+        if (body?.code === "REGISTRATION_CLOSED") {
+          setConfig((current) => current ? { ...current, closes_at: body.closes_at, server_now: body.server_now } : current);
+        }
         const feedback = extractSubmissionFeedback(
-          await res.json().catch(() => null),
+          body,
           "Failed to submit application. Please try again.",
         );
         setSubmissionErrors(feedback.fieldErrors);
@@ -326,6 +339,12 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
 
         {/* Form content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-6">
+          {!isBootstrapping && config?.closes_at && (
+            <p role="status" className="mb-4 rounded-lg bg-red7 p-3 font-poppins text-sm text-red6">
+              {closed ? "Registration closed" : "Registration closes"} · {formatRegistrationDeadline(config.closes_at, config.closes_timezone)}
+              {closed && hasExistingSubmission && <span className="block mt-1">Your submitted answers are available below. Changes are closed.</span>}
+            </p>
+          )}
           {isBootstrapping ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-poppins text-sm text-gray-500">Loading application…</p>
@@ -343,6 +362,8 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
                 Back to Dashboard
               </button>
             </div>
+          ) : closed && !hasExistingSubmission ? (
+            <p className="font-poppins text-sm text-gray-600">Applications are no longer being accepted.</p>
           ) : isSubmitted ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <p className="text-6xl font-jersey10 text-red5">Done!</p>
@@ -370,6 +391,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
               hideHeader
               submissionErrors={submissionErrors}
               submitLabel={hasExistingSubmission ? "Update Application" : "Submit Application"}
+              readOnly={closed}
             />
           )}
         </div>

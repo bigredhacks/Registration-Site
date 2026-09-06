@@ -3,8 +3,10 @@ import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
 import { FORM_PRESETS, type FormPreset } from "@/lib/formPresets";
 import Modal from "@/components/Modal";
+import { formatRegistrationDeadline, isRegistrationClosed, type RegistrationClosure } from "@/lib/registrationClosure";
+import { useRegistrationClock } from "@/lib/useRegistrationClock";
 
-export interface FormSummary {
+export interface FormSummary extends RegistrationClosure {
   key: string;
   title: string;
   description: string | null;
@@ -22,26 +24,31 @@ export default function AdminFormList({ onSelect }: Props) {
   const { showToast } = useToast();
   const [forms, setForms] = useState<FormSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showPresetPicker, setShowPresetPicker] = useState(false);
   const [selectedPreset, setSelectedPreset] = useState<FormPreset | null>(null);
   const [newFormKey, setNewFormKey] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<FormSummary | null>(null);
+  const now = useRegistrationClock(forms[0]?.server_now);
 
   const refresh = async () => {
     setLoading(true);
-    const res = await apiFetch("/api/admin/form-configs");
-    if (!res.ok) {
-      showToast("Failed to load forms.", "error");
+    setLoadError(false);
+    try {
+      const res = await apiFetch("/api/admin/form-configs");
+      if (!res.ok) throw new Error("Failed to load forms");
+      setForms(await res.json());
+    } catch {
+      setLoadError(true);
+      showToast("Failed to load forms. Try again.", "error");
+    } finally {
       setLoading(false);
-      return;
     }
-    setForms(await res.json());
-    setLoading(false);
   };
 
   useEffect(() => {
-    refresh().catch(() => setLoading(false));
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -106,9 +113,6 @@ export default function AdminFormList({ onSelect }: Props) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm font-poppins text-gray-600">
-          Forms drive the registration page and other applications. Only one form per key can be active.
-        </p>
         <button
           onClick={() => setShowPresetPicker(true)}
           disabled={creating}
@@ -117,6 +121,13 @@ export default function AdminFormList({ onSelect }: Props) {
           + Create New Form
         </button>
       </div>
+
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-800">
+          <span>Could not load forms.</span>
+          <button onClick={() => void refresh()} className="font-semibold underline">Retry</button>
+        </div>
+      )}
 
       {/* Forms table */}
       <div className="min-w-0 bg-white border border-red6/20 rounded-lg overflow-x-auto">
@@ -128,6 +139,7 @@ export default function AdminFormList({ onSelect }: Props) {
               <th className="text-left px-4 py-3 font-semibold">Fields</th>
               <th className="text-left px-4 py-3 font-semibold">Version</th>
               <th className="text-left px-4 py-3 font-semibold">Active</th>
+              <th className="text-left px-4 py-3 font-semibold">Registration closes</th>
               <th className="text-left px-4 py-3 font-semibold">Updated</th>
               <th className="text-right px-4 py-3 font-semibold">Actions</th>
             </tr>
@@ -135,12 +147,12 @@ export default function AdminFormList({ onSelect }: Props) {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Loading…</td>
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">Loading…</td>
               </tr>
             )}
-            {!loading && forms.length === 0 && (
+            {!loading && !loadError && forms.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-4 py-8 text-center text-gray-500">
                   No forms yet. Create one from a preset.
                 </td>
               </tr>
@@ -164,6 +176,14 @@ export default function AdminFormList({ onSelect }: Props) {
                   >
                     {f.is_active ? "Active" : "Draft"}
                   </button>
+                </td>
+                <td data-label="Registration closes" className="px-4 py-2 text-gray-600 text-xs">
+                  {f.closes_at ? (
+                    <>
+                      <span className="block font-semibold">{isRegistrationClosed(f.closes_at, now) ? "Closed" : "Scheduled"}</span>
+                      {formatRegistrationDeadline(f.closes_at, f.closes_timezone)}
+                    </>
+                  ) : "No deadline"}
                 </td>
                 <td data-label="Updated" className="px-4 py-2 text-gray-500 text-xs">
                   {new Date(f.updated_at).toLocaleDateString()}

@@ -12,6 +12,8 @@ interface Registration extends AdminStudent {
   shirt_size?: string | null;
   checked_in?: boolean | null;
   checked_in_at?: string | null;
+  /** Legacy Supabase Storage path (`<user_id>/<filename>`) from the pre-Box uploader. */
+  resume_path?: string | null;
   answers?: Record<string, unknown>;
 }
 const PAGE_SIZE = 50;
@@ -147,6 +149,17 @@ export default function AdminUsers() {
       URL.revokeObjectURL(url);
     } catch { showToast('Export failed.', 'error'); }
   };
+  // Pre-Box registrations still carry a Supabase Storage path; the bucket is private,
+  // so the file is reached through a short-lived signed URL rather than a direct link.
+  const openResume = async (id: number) => {
+    try {
+      const res = await apiFetch(`/api/admin/registrations/${id}/resume-download-url`);
+      if (!res.ok) throw new Error();
+      const { signedUrl } = await res.json();
+      if (!signedUrl) throw new Error();
+      window.open(signedUrl, '_blank', 'noopener,noreferrer');
+    } catch { showToast('Could not open the resume.', 'error'); }
+  };
   const checkIn = async () => {
     if (!detail) return;
     setCheckingIn(true);
@@ -185,7 +198,12 @@ export default function AdminUsers() {
       {detail && <>
         <div className="admin-toolbar"><div><h2>{studentName(detail)}</h2><p className="admin-meta break-all">{detail.email}</p></div><span className={`admin-status admin-status-${detail.status}`}>{detail.status}</span></div>
         <div className="admin-toolbar my-4"><p className="admin-meta">{detail.checked_in ? `Checked in${detail.checked_in_at ? ` · ${new Date(detail.checked_in_at).toLocaleString()}` : ''}` : 'Not checked in'}</p>
-          <button className="admin-button" disabled={checkingIn} onClick={() => void checkIn()}>{detail.checked_in ? 'Undo check-in' : 'Check in'}</button>
+          <div className="flex flex-wrap gap-2">
+            {/* Only pre-Box registrations have a stored file; resumes now go to a shared
+                Box folder that can't be resolved to one applicant. */}
+            {detail.resume_path && <button className="admin-button" onClick={() => void openResume(detail.id)}>View resume</button>}
+            <button className="admin-button" disabled={checkingIn} onClick={() => void checkIn()}>{detail.checked_in ? 'Undo check-in' : 'Check in'}</button>
+          </div>
         </div>
         <dl className="admin-answer-list">{Object.entries(detail.answers ?? {}).map(([key, value]) => <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{formatAnswer(value)}</dd></div>)}</dl>
       </>}

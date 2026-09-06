@@ -1,3 +1,50 @@
+.admin-surface [hidden] { display: none !important; }
+.admin-approval-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 310px; align-items: start; gap: 20px; font-family: var(--font-poppins); font-size: 14px; color: #39272a; }
+.admin-approval-workspace fieldset { min-width: 0; }
+.admin-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+.admin-toolbar h2, .admin-selection-panel h2, .admin-detail h2 { font-size: 16px; font-weight: 600; }
+.admin-search { display: flex; flex: 1 1 250px; gap: 8px; min-width: 0; }
+.admin-search input { flex: 1; width: 0; }
+.admin-input { min-width: 0; border: 1px solid #d8c9cb; border-radius: 6px; background: white; padding: 8px 10px; color: #39272a; }
+.admin-form-picker { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; font-family: var(--font-poppins); font-size: 14px; }
+.admin-button { border: 1px solid #d8c9cb; border-radius: 6px; background: white; padding: 7px 11px; color: #862838; font-weight: 500; cursor: pointer; }
+.admin-button:hover:not(:disabled) { background: #faebed; }
+.admin-button-primary { background: var(--color-red5); border-color: var(--color-red5); color: white; }
+.admin-button-primary:hover:not(:disabled) { background: var(--color-red3); }
+.admin-text-button { color: #8b2738; padding: 4px 6px; cursor: pointer; }
+.admin-button:disabled, .admin-text-button:disabled, .admin-input:disabled, fieldset:disabled .admin-button { opacity: .5; cursor: not-allowed; }
+.admin-count { border-radius: 4px; background: #f6e8ea; padding: 2px 7px; margin-left: 4px; font-variant-numeric: tabular-nums; }
+.admin-meta { font-size: 12px; color: #75666a; }
+.admin-selection-panel, .admin-detail { border: 1px solid #e1cfd2; border-radius: 8px; background: white; padding: 16px; }
+.admin-selection-panel { position: sticky; top: 16px; max-height: calc(100dvh - 32px); overflow-y: auto; scroll-margin-top: 64px; }
+.admin-selection-jump, .admin-selection-return { display: none; }
+.admin-selected-list { max-height: 340px; overflow-y: auto; margin: 12px 0; }
+.admin-selected-list li { display: flex; justify-content: space-between; gap: 8px; align-items: start; border-bottom: 1px solid #eddee0; padding: 10px 0; }
+.admin-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-paste-panel { margin-top: 18px; border-top: 1px solid #eddee0; padding-top: 16px; }
+.admin-paste-panel textarea { width: 100%; margin: 8px 0; resize: vertical; }
+.admin-identity-results { margin-top: 12px; }
+.admin-identity-result { border-bottom: 1px solid #eddee0; padding: 9px 0; }
+.admin-identity-result select { width: 100%; margin-top: 5px; }
+.admin-check { display: flex; align-items: center; gap: 8px; }
+.admin-table-wrap { overflow-x: auto; border: 1px solid #e1cfd2; border-radius: 8px; background: white; }
+.admin-approval-table { width: 100%; text-align: left; }
+.admin-approval-table th { padding: 12px; font-weight: 500; color: #752435; background: #f8e9eb; }
+.admin-approval-table td { padding: 12px; border-top: 1px solid #eddee0; }
+.admin-row-selected { background: #fff5f5; }
+.admin-approval-table input[type=checkbox], .admin-check input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--color-red5); }
+.admin-status { display: inline-block; border-radius: 4px; padding: 3px 7px; background: #f1ecec; color: #66585c; font-size: 12px; text-transform: capitalize; white-space: nowrap; }
+.admin-status-approved { background: #e8f3eb; color: #285e3b; }
+.admin-status-rejected { background: #fbe9ea; color: #9b293b; }
+.admin-status-mixed, .admin-status-waitlisted { background: #faf0dc; color: #805b16; }
+.admin-answer-list > div { padding: 12px 0; border-top: 1px solid #eddee0; overflow-wrap: anywhere; }
+.admin-answer-list dt { font-size: 12px; color: #75666a; text-transform: capitalize; margin-bottom: 4px; }
+@media (max-width: 1199px) {
+  .admin-approval-workspace { grid-template-columns: minmax(0, 1fr); }
+  .admin-selection-panel { position: static; max-height: none; overflow-y: visible; }
+  .admin-selection-jump { display: block; position: sticky; top: 8px; z-index: 10; justify-self: start; }
+  .admin-selection-return { display: block; margin-bottom: 8px; }
+}
 /* Keep dense admin records readable on a phone without duplicating controls. */
 @media (max-width: 767px) {
   .admin-surface button,

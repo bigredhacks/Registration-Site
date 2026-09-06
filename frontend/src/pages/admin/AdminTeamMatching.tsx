@@ -1,249 +1,278 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
+import { useAdminSelection } from "./AdminSelectionContext";
+import type { AdminStudent } from "./adminApprovalState";
 import {
-  buildGenerateDraftErrorState,
-  buildGenerateDraftSuccessState,
-  type MatcherTeam,
-  type ParticipantSummary,
+  buildGenerateDraftErrorState, buildGenerateDraftSuccessState, teamMatchesSearch, uniqueTeamStudents,
+  type ExistingTeam, type MatcherTeam, type ParticipantSummary, type TeamOverview,
 } from "./adminTeamMatchingState";
 
-interface SavedTeam {
-  id: string;
-  team_number: number;
-  members: {
-    id: string;
-    participant_id: string;
-    participant: ParticipantSummary;
-  }[];
-}
+const control = "min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none";
+const button = "rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-poppins font-medium text-gray-700 hover:border-red5 hover:text-red5 disabled:cursor-not-allowed disabled:opacity-40";
+const primary = "rounded-lg bg-red5 px-3 py-2 text-sm font-poppins font-semibold text-white hover:bg-red3 disabled:cursor-not-allowed disabled:opacity-40";
+const statusLabels: Record<string, string> = { approved: "Approved", pending: "Pending", rejected: "Rejected", waitlisted: "Waitlisted", mixed: "Mixed", missing_application: "Missing application" };
+const emptyOverview: TeamOverview = { teams: [], participants: [], looking: [], savedTeams: [], registrations: [] };
 
 export default function AdminTeamMatching() {
   const { showToast } = useToast();
+  const { selected, add, remove, toggle, sync, revision, formKey } = useAdminSelection();
+  const [tab, setTab] = useState<"teams" | "looking" | "drafts">("teams");
+  const [poolInput, setPoolInput] = useState("default");
   const [poolId, setPoolId] = useState("default");
   const [teamSize, setTeamSize] = useState("4");
-  const [participantsCount, setParticipantsCount] = useState<number | null>(null);
-  const [draftTeams, setDraftTeams] = useState<MatcherTeam[]>([]);
-  const [generateError, setGenerateError] = useState<string | null>(null);
-  const [savedTeams, setSavedTeams] = useState<SavedTeam[]>([]);
-  const [loadingSaved, setLoadingSaved] = useState(true);
-  const [running, setRunning] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [publishing, setPublishing] = useState(false);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [data, setData] = useState<TeamOverview>(emptyOverview);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ReturnType<typeof buildGenerateDraftSuccessState> | null>(null);
+  const [busy, setBusy] = useState<"generate" | "save" | "publish" | null>(null);
+  const requestId = useRef(0);
+  const draftEpoch = useRef(0);
 
-  const refreshSaved = async () => {
-    setLoadingSaved(true);
-    const res = await apiFetch(`/api/teams/saved?pool_id=${encodeURIComponent(poolId)}`);
-    if (!res.ok) {
-      setSavedTeams([]);
-      setLoadingSaved(false);
-      return;
-    }
-    setSavedTeams(await res.json());
-    setLoadingSaved(false);
-  };
+  const refresh = useCallback(async () => {
+    const id = ++requestId.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({ pool_id: poolId, form_key: formKey });
+      const response = await apiFetch(`/api/teams/admin?${params}`);
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || "Could not load teams.");
+      if (id === requestId.current) {
+        const overview = body as TeamOverview;
+        setData(overview);
+        sync(uniqueTeamStudents(overview.registrations ?? [], formKey));
+      }
+    } catch (cause) {
+      if (id === requestId.current) setError(cause instanceof Error ? cause.message : "Could not load teams.");
+    } finally { if (id === requestId.current) setLoading(false); }
+  }, [poolId, formKey, sync]);
 
   useEffect(() => {
-    refreshSaved().catch(() => setLoadingSaved(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [poolId]);
+    setData(emptyOverview);
+    setDraft(null);
+    draftEpoch.current += 1;
+  }, [poolId, formKey]);
+  useEffect(() => {
+    void refresh();
+    return () => { requestId.current += 1; };
+  }, [refresh, revision]);
 
-  const handleGenerate = async () => {
-    setRunning(true);
-    const params = new URLSearchParams({
-      pool_id: poolId,
-      team_size: teamSize,
-    });
-    const res = await apiFetch(`/api/teams?${params.toString()}`);
-    setRunning(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const nextState = buildGenerateDraftErrorState(
-        body.error || "Could not run the team matcher.",
-      );
-      setParticipantsCount(nextState.participantsCount);
-      setDraftTeams(nextState.draftTeams);
-      setGenerateError(nextState.generateError);
-      showToast(nextState.generateError ?? "Could not run the team matcher.", "error");
-      return;
-    }
-    const body = await res.json();
-    const nextState = buildGenerateDraftSuccessState(body);
-    setParticipantsCount(nextState.participantsCount);
-    setDraftTeams(nextState.draftTeams);
-    setGenerateError(nextState.generateError);
+  const participantsById = useMemo(() => new Map(data.participants.map((person) => [person.id, person])), [data.participants]);
+  const hydrate = (person: ParticipantSummary) => participantsById.get(person.id) ?? person;
+  const filteredTeams = data.teams.filter((team) => (!status || team.status === status) && teamMatchesSearch(team, query));
+  const filteredPeople = data.looking.filter((person) => (!status || (person.registration?.status ?? "missing_application") === status)
+    && [person.full_name, person.email].some((value) => value.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())));
+  const filteredStudents = uniqueTeamStudents(tab === "teams"
+    ? filteredTeams.flatMap((team) => team.members.map((member) => member.registration))
+    : filteredPeople.map((person) => person.registration), formKey);
+  const savedConflicts = data.savedTeams.reduce((total, team) => total + (team.conflicts ?? 0) + (team.missing_members ?? 0), 0);
+  const currentDraft = draft?.draftTeams.map((team) => ({ ...team, members: team.members.map(hydrate) })) ?? [];
+  const currentConflicts = currentDraft.some((team) => team.members.some((member) => member.current_team_name));
+
+  const runAction = async (action: "generate" | "save" | "publish") => {
+    const epoch = draftEpoch.current;
+    setBusy(action);
+    try {
+      const params = new URLSearchParams({ pool_id: poolId, form_key: formKey, team_size: teamSize });
+      const response = action === "generate"
+        ? await apiFetch(`/api/teams?${params}`)
+        : await apiFetch(`/api/teams/${action}`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pool_id: poolId, ...(action === "save" ? {
+            teams: currentDraft.map((team) => ({ team_number: team.team_number, pool_id: poolId,
+              members: team.members.map((member) => ({ participant_id: member.id })) })),
+          } : {}) }),
+        });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || `Could not ${action} teams.`);
+      if (epoch !== draftEpoch.current) return;
+      if (action === "generate") setDraft(buildGenerateDraftSuccessState(body));
+      else {
+        showToast(action === "save" ? "Draft saved." : `Published ${body.published_teams} teams.`, "success");
+        if (action === "publish") setDraft(null);
+        await refresh();
+      }
+    } catch (cause) {
+      if (epoch !== draftEpoch.current) return;
+      const message = cause instanceof Error ? cause.message : `Could not ${action} teams.`;
+      if (action === "generate") setDraft(buildGenerateDraftErrorState(message));
+      showToast(message, "error");
+      if (action !== "generate") await refresh();
+    } finally { setBusy(null); }
   };
 
-  const handleSave = async () => {
-    if (draftTeams.length === 0) {
-      showToast("Generate teams before saving them.", "error");
-      return;
-    }
-    setSaving(true);
-    const res = await apiFetch("/api/teams/save", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pool_id: poolId,
-        teams: draftTeams.map((team) => ({
-          team_number: team.team_number,
-          pool_id: poolId,
-          members: team.members.map((member) => ({ participant_id: member.id })),
-        })),
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      showToast(body.error || "Could not save matcher teams.", "error");
-      return;
-    }
-    showToast("Saved matcher teams.", "success");
-    await refreshSaved();
-  };
-
-  const handlePublish = async () => {
-    if (savedTeams.length === 0) {
-      showToast("Save teams before publishing them.", "error");
-      return;
-    }
-    setPublishing(true);
-    const res = await apiFetch("/api/teams/publish", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pool_id: poolId }),
-    });
-    setPublishing(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      showToast(body.error || "Could not publish matcher teams.", "error");
-      return;
-    }
-    const body = await res.json();
-    showToast(
-      `Published ${body.published_teams ?? 0} matcher teams to the real team system.`,
-      "success",
-    );
+  const selectTeam = (team: ExistingTeam) => {
+    const students = uniqueTeamStudents(team.members.map((member) => member.registration), formKey);
+    if (students.length && students.every((student) => selected.has(student.id))) students.forEach((student) => remove(student.id));
+    else add(students);
   };
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-red6/20 min-w-0 bg-white p-3 sm:p-5">
-        <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap sm:gap-4">
-          <div>
-            <label className="mb-1 block text-xs font-poppins font-semibold uppercase tracking-widest text-gray-500">
-              Pool ID
-            </label>
-            <input
-              aria-label="Pool ID"
-              value={poolId}
-              onChange={(e) => setPoolId(e.target.value)}
-              className="min-w-0 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-poppins font-semibold uppercase tracking-widest text-gray-500">
-              Team Size
-            </label>
-            <input
-              aria-label="Team size"
-              inputMode="numeric"
-              value={teamSize}
-              onChange={(e) => setTeamSize(e.target.value)}
-              className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm font-poppins focus:border-red5 focus:outline-none"
-            />
-          </div>
-          <button
-            onClick={handleGenerate}
-            disabled={running}
-            className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-50"
-          >
-            {running ? "Generating…" : "Generate Draft"}
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving || draftTeams.length === 0}
-            className="rounded-lg bg-red5 px-4 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "Save Draft"}
-          </button>
-          <button
-            onClick={handlePublish}
-            disabled={publishing || savedTeams.length === 0}
-            className="rounded-lg border border-red5 px-4 py-2 text-sm font-poppins font-semibold text-red5 transition-colors hover:bg-red5 hover:text-white disabled:opacity-50"
-          >
-            {publishing ? "Publishing…" : "Publish to User Teams"}
-          </button>
+    <div className="flex min-w-0 flex-col gap-4 font-poppins">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-1 rounded-lg border border-gray-200 bg-white p-1" role="tablist" aria-label="Team views">
+          {([['teams', 'Existing teams', data.teams.length], ['looking', 'Looking for teams', data.looking.length], ['drafts', 'Match drafts', data.savedTeams.length]] as const).map(([key, label, count]) => (
+            <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setStatus(""); }}
+              className={`rounded-md px-3 py-2 text-xs font-semibold ${tab === key ? 'bg-red7 text-red6' : 'text-gray-500 hover:bg-gray-50'}`}>
+              {label} <span className="ml-1 tabular-nums opacity-65">{loading ? '…' : count}</span>
+            </button>
+          ))}
         </div>
-        <p className="mt-3 text-xs font-poppins text-gray-500">
-          Draft teams stay in the matcher tables until you publish them into the real team system used by `/team`.
-        </p>
-        {participantsCount !== null && (
-          <p className="mt-2 text-sm font-poppins text-gray-700">
-            Generated draft for {participantsCount} participants across {draftTeams.length} teams.
-          </p>
-        )}
-        {generateError && (
-          <p className="mt-2 text-sm font-poppins text-red6">
-            {generateError}
-          </p>
-        )}
+        <button type="button" className={button} disabled={loading || !!busy} onClick={() => void refresh()}>Refresh</button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <TeamListCard
-          title="Current Draft"
-          emptyLabel="Run the matcher to preview draft teams."
-          teams={draftTeams.map((team) => ({
-            team_number: team.team_number,
-            members: team.members,
-          }))}
-        />
-        <TeamListCard
-          title="Saved Drafts"
-          emptyLabel={loadingSaved ? "Loading saved drafts…" : "No saved drafts for this pool."}
-          teams={savedTeams.map((team) => ({
-            team_number: team.team_number,
-            members: team.members.map((member) => member.participant),
-          }))}
-        />
-      </div>
+      {tab !== 'teams' && (
+        <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); if (poolInput.trim()) setPoolId(poolInput.trim()); }}>
+          <label htmlFor="team-pool" className="text-xs font-semibold text-gray-600">Pool</label>
+          <input id="team-pool" className={`${control} w-40`} value={poolInput} onChange={(event) => setPoolInput(event.target.value)} disabled={!!busy} />
+          <button className={button} disabled={!!busy || !poolInput.trim() || poolInput.trim() === poolId}>Load pool</button>
+        </form>
+      )}
+
+      {error && <div role="alert" className="rounded-lg border border-red5/20 bg-red7 p-3 text-sm text-red6">{error}</div>}
+      {loading ? <p className="py-8 text-center text-sm text-gray-500">Loading teams…</p> : error ? null : tab !== 'drafts' ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="search" aria-label="Search teams or students" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={tab === 'teams' ? 'Team, name, or email' : 'Name or email'} className={`${control} flex-1`} />
+            <select aria-label="Filter team admission status" value={status} onChange={(event) => setStatus(event.target.value)} className={control}>
+              <option value="">All statuses</option>
+              {Object.entries(statusLabels).filter(([key]) => tab === 'teams' || key !== 'mixed').map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <button type="button" className={button} disabled={!filteredStudents.length} onClick={() => add(filteredStudents)}>
+              Add {tab === 'teams' ? 'filtered teams' : 'filtered students'} ({filteredStudents.length})
+            </button>
+          </div>
+          {tab === 'teams' ? (
+            <div className="flex flex-col gap-3">
+              {!filteredTeams.length && <Empty>No teams found.</Empty>}
+              {filteredTeams.map((team) => {
+                const students = uniqueTeamStudents(team.members.map((member) => member.registration), formKey);
+                const selectedCount = students.filter((student) => selected.has(student.id)).length;
+                const approvedCount = team.members.filter((member) => member.registration?.status === 'approved').length;
+                return (
+                  <section key={team.id} className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+                    <div className="flex flex-wrap items-center gap-3 border-b border-gray-100 bg-gray-50/70 px-4 py-3">
+                      <input type="checkbox" aria-label={`Select team ${team.name}`} disabled={!students.length}
+                        checked={students.length > 0 && selectedCount === students.length} ref={(node) => { if (node) node.indeterminate = selectedCount > 0 && selectedCount < students.length; }}
+                        onChange={() => selectTeam(team)} className="size-4 accent-red5" />
+                      <h2 className="min-w-0 flex-1 break-words text-sm font-semibold text-gray-900">{team.name}</h2>
+                      <span className="text-xs tabular-nums text-gray-500">{team.members.length}/4 members · {approvedCount} approved</span>
+                      <Status value={team.status} />
+                    </div>
+                    <div className="divide-y divide-gray-100">
+                      {team.members.map((member) => <StudentRow key={member.user_id} name={member.full_name} email={member.email} registration={member.registration}
+                        checked={!!member.registration && selected.has(member.registration.id)} onToggle={() => member.registration && toggle(member.registration)} />)}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+              {!filteredPeople.length ? <Empty>No students found.</Empty> : <div className="divide-y divide-gray-100">
+                {filteredPeople.map((person) => <StudentRow key={person.id} name={person.full_name} email={person.email} registration={person.registration}
+                  participant={person}
+                  secondary={person.hacker_type === 'FirstTimeHacker' ? 'First-time hacker' : 'Veteran hacker'}
+                  checked={!!person.registration && selected.has(person.registration.id)} onToggle={() => person.registration && toggle(person.registration)} />)}
+              </div>}
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <label htmlFor="matcher-size" className="text-xs font-semibold text-gray-600">Team size</label>
+            <select id="matcher-size" value={teamSize} onChange={(event) => setTeamSize(event.target.value)} disabled={!!busy} className={control}>
+              <option value="2">2</option><option value="3">3</option><option value="4">4</option>
+            </select>
+            <button type="button" className={primary} disabled={!!busy || data.looking.length < 2} onClick={() => void runAction('generate')}>{busy === 'generate' ? 'Generating…' : 'Generate draft'}</button>
+            <span className="text-xs text-gray-500">{data.looking.length} available</span>
+          </div>
+          {draft && <section className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Current draft <span className="ml-1 font-normal text-gray-500">{currentDraft.length} teams</span></h2>
+              <button type="button" className={button} disabled={!!busy || !currentDraft.length || currentConflicts} onClick={() => void runAction('save')}>{busy === 'save' ? 'Saving…' : 'Save draft'}</button>
+            </div>
+            {draft.generateError && <p role="alert" className="text-sm text-red6">{draft.generateError}</p>}
+            {currentConflicts && <p className="text-xs text-red6">Some draft members now belong to existing teams. Generate a new draft.</p>}
+            <DraftList teams={currentDraft} onAdd={(people) => add(uniqueTeamStudents(people.map((person) => person.registration), formKey))} />
+            {!!draft.unmatched.length && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+              <h3 className="text-xs font-semibold text-amber-900">Unmatched ({draft.unmatched.length})</h3>
+              {draft.unmatched.map(hydrate).map((person) => <p key={person.id} className="mt-1 text-sm text-amber-900">{person.full_name} · {person.email}</p>)}
+            </div>}
+          </section>}
+          <section className="flex flex-col gap-3 border-t border-gray-200 pt-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-gray-900">Saved draft <span className="ml-1 font-normal text-gray-500">{data.savedTeams.length} teams</span></h2>
+              <button type="button" className={primary} disabled={!!busy || !data.savedTeams.length || savedConflicts > 0} onClick={() => void runAction('publish')}>{busy === 'publish' ? 'Publishing…' : 'Publish teams'}</button>
+            </div>
+            {savedConflicts > 0 && <p className="text-xs text-red6">{savedConflicts} members are already on teams or no longer available. Generate and save a new draft.</p>}
+            {!data.savedTeams.length ? <Empty>No saved draft.</Empty> : <DraftList teams={data.savedTeams} onAdd={(people) => add(uniqueTeamStudents(people.map((person) => person.registration), formKey))} />}
+          </section>
+        </>
+      )}
     </div>
   );
 }
 
-function TeamListCard({
-  title,
-  emptyLabel,
-  teams,
-}: {
-  title: string;
-  emptyLabel: string;
-  teams: Array<{ team_number: number; members: ParticipantSummary[] }>;
+function Status({ value }: { value: string }) {
+  const color = value === 'approved' ? 'bg-green-50 text-green-800' : value === 'rejected' ? 'bg-red-50 text-red-800'
+    : value === 'missing_application' || value === 'mixed' ? 'bg-amber-50 text-amber-900' : 'bg-gray-100 text-gray-600';
+  return <span className={`whitespace-nowrap rounded px-2 py-1 text-[11px] font-medium ${color}`}>{statusLabels[value] ?? value}</span>;
+}
+function Empty({ children }: { children: React.ReactNode }) {
+  return <p className="px-4 py-8 text-center text-sm text-gray-500">{children}</p>;
+}
+function StudentRow({ name, email, registration, checked, onToggle, secondary, participant }: {
+  name: string; email: string; registration?: AdminStudent | null; checked: boolean; onToggle: () => void; secondary?: string; participant?: ParticipantSummary;
 }) {
-  return (
-    <div className="rounded-lg border border-red6/20 min-w-0 bg-white p-3 sm:p-5">
-      <h2 className="mb-3 text-lg font-poppins font-semibold text-red6">{title}</h2>
-      {teams.length === 0 ? (
-        <p className="text-sm font-poppins text-gray-500">{emptyLabel}</p>
-      ) : (
-        <div className="flex flex-col gap-3">
-          {teams.map((team) => (
-            <div key={team.team_number} className="rounded-lg border border-red6/10 bg-red7/30 px-4 py-3">
-              <p className="text-sm font-poppins font-semibold text-gray-800">
-                Team {team.team_number}
-              </p>
-              <ul className="mt-2 flex flex-col gap-1 text-sm font-poppins text-gray-600">
-                {team.members.map((member) => (
-                  <li key={member.id} className="[overflow-wrap:anywhere]">
-                    {member.full_name} · {member.email} · {member.hacker_type}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      )}
+  return <div className="flex flex-wrap items-center gap-3 px-4 py-3">
+    <input type="checkbox" aria-label={`Select ${email || name}`} checked={checked} disabled={!registration} onChange={onToggle} className="size-4 accent-red5" />
+    <div className="min-w-0 flex-1"><p className="break-words text-sm font-medium text-gray-800">{name}</p><p className="break-all text-xs text-gray-500">{email || 'Email unavailable'}</p></div>
+    {secondary && <span className="hidden text-xs text-gray-500 sm:block">{secondary}</span>}
+    <Status value={registration?.status ?? 'missing_application'} />
+    {participant && <MatchingDetails participant={participant} />}
+  </div>;
+}
+
+function MatchingDetails({ participant }: { participant: ParticipantSummary }) {
+  const rows = [
+    { role: 'Frontend', experience: participant.frontend_experience, preference: participant.frontend_preference, skills: participant.frontend_skills },
+    { role: 'Backend', experience: participant.backend_experience, preference: participant.backend_preference, skills: participant.backend_skills },
+    { role: 'Design', experience: participant.design_experience, preference: participant.design_preference, skills: participant.design_skills },
+    { role: 'Hardware', experience: participant.hardware_experience, preference: participant.hardware_preference, skills: participant.hardware_skills },
+  ];
+  return <details className="min-w-0 basis-full pl-7 text-xs">
+    <summary className="w-fit cursor-pointer select-none font-medium text-gray-600 hover:text-red5">Matching details</summary>
+    <div className="mt-3 overflow-x-auto rounded-md border border-gray-100">
+      <table className="w-full text-left text-xs">
+        <thead className="bg-gray-50 text-gray-500"><tr>
+          {['Role', 'Experience', 'Preference', 'Skills'].map((label) => <th key={label} scope="col" className="px-3 py-2 font-medium">{label}</th>)}
+        </tr></thead>
+        <tbody className="divide-y divide-gray-100 text-gray-700">{rows.map((row) => <tr key={row.role}>
+          <th scope="row" className="px-3 py-2 font-medium">{row.role}</th>
+          <td className="px-3 py-2">{row.experience || '—'}</td>
+          <td className="px-3 py-2 tabular-nums">{row.preference === undefined ? '—' : `${row.preference}/5`}</td>
+          <td className="min-w-32 px-3 py-2">{row.skills?.join(', ') || '—'}</td>
+        </tr>)}</tbody>
+      </table>
     </div>
-  );
+    <p className="mt-2 text-gray-500">Any role: {participant.any_role_preference === undefined ? '—' : `${participant.any_role_preference}/5`}</p>
+  </details>;
+}
+function DraftList({ teams, onAdd }: { teams: MatcherTeam[]; onAdd: (people: ParticipantSummary[]) => void }) {
+  return <div className="grid min-w-0 grid-cols-1 gap-3 2xl:grid-cols-2">
+    {teams.map((team) => <div key={team.id ?? team.team_number} className="min-w-0 rounded-lg border border-gray-200 bg-white p-4">
+      <div className="mb-3 flex items-center justify-between gap-2"><h3 className="text-sm font-semibold text-gray-900">Team {team.team_number}</h3>
+        <button type="button" className="text-xs font-semibold text-red5 disabled:opacity-40" disabled={!team.members.some((member) => member.registration)} onClick={() => onAdd(team.members)}>Add students</button></div>
+      <ul className="space-y-3">{team.members.map((member) => <li key={member.id} className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1"><p className="break-words text-xs font-medium text-gray-800">{member.full_name}</p><p className="break-all text-xs text-gray-500">{member.email}</p>
+          {member.current_team_name && <p className="text-xs text-amber-800">On {member.current_team_name}</p>}</div>
+        <Status value={member.registration?.status ?? 'missing_application'} />
+      </li>)}</ul>
+    </div>)}
+  </div>;
 }

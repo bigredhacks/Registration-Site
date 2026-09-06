@@ -4,8 +4,10 @@ import { supabase } from '../config/supabase';
 import { isAdmin, requireAdmin } from '../middleware/requireAdmin';
 import { validate } from '../middleware/validate';
 import { RegistrationStatusSchema } from '../types/registration';
+import adminApprovalsRouter from './adminApprovals';
 
 import { buildMetrics, metricsQuerySchema, MetricRow } from '../utils/adminMetrics';
+import { formConfigWriteError, RegistrationClosesAtSchema, RegistrationTimezoneSchema, registrationClosureResponse } from '../utils/registrationClosure';
 
 const router = Router();
 
@@ -28,6 +30,7 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 router.use(requireAdmin);
+router.use('/approval', adminApprovalsRouter);
 
 /**
  * GET /api/admin/registrations
@@ -317,13 +320,15 @@ const FormConfigUpdateSchema = z.object({
   description: z.string().optional(),
   fields: z.array(FormFieldSchema).optional(),
   is_active: z.boolean().optional(),
+  closes_at: RegistrationClosesAtSchema.optional(),
+  closes_timezone: RegistrationTimezoneSchema.optional(),
 });
 
 router.get('/form-configs', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('form_configs')
-      .select('key, title, description, is_active, version, updated_at, fields')
+      .select('*')
       .order('updated_at', { ascending: false });
 
     if (error) {
@@ -337,12 +342,15 @@ router.get('/form-configs', async (_req: Request, res: Response) => {
       title: row.title,
       description: row.description,
       is_active: row.is_active,
+      closes_at: row.closes_at,
+      closes_timezone: row.closes_timezone,
       version: row.version,
       updated_at: row.updated_at,
       fields_count: Array.isArray(row.fields) ? row.fields.length : 0,
     }));
 
-    res.json(summary);
+    const now = Date.now();
+    res.json(summary.map((form) => registrationClosureResponse(form, now)));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -354,6 +362,8 @@ const FormConfigCreateSchema = z.object({
   description: z.string().optional(),
   fields: z.array(FormFieldSchema).default([]),
   is_active: z.boolean().default(false),
+  closes_at: RegistrationClosesAtSchema.optional(),
+  closes_timezone: RegistrationTimezoneSchema.optional(),
 });
 
 router.post(
@@ -361,7 +371,7 @@ router.post(
   validate({ body: FormConfigCreateSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { key, title, description, fields, is_active } = req.body;
+      const { key, title, description, fields, is_active, closes_at, closes_timezone } = req.body;
 
       const { data: existing } = await supabase
         .from('form_configs')
@@ -381,6 +391,8 @@ router.post(
           description: description ?? '',
           fields,
           is_active,
+          closes_at,
+          closes_timezone,
           version: 1,
           updated_at: new Date().toISOString(),
           updated_by: req.user!.id,
@@ -389,10 +401,10 @@ router.post(
         .single();
 
       if (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: formConfigWriteError(error) });
         return;
       }
-      res.status(201).json(data);
+      res.status(201).json(registrationClosureResponse(data));
     } catch (err) {
       res.status(500).json({ error: 'Internal server error' });
     }
@@ -404,7 +416,7 @@ router.delete('/form-configs/:key', async (req: Request, res: Response) => {
     const { key } = req.params;
     const { error } = await supabase.from('form_configs').delete().eq('key', key);
     if (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: formConfigWriteError(error) });
       return;
     }
     res.status(204).send();
@@ -423,14 +435,14 @@ router.get('/form-configs/:key', async (req: Request, res: Response) => {
       .maybeSingle();
 
     if (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: formConfigWriteError(error) });
       return;
     }
     if (!data) {
       res.status(404).json({ error: 'Form config not found' });
       return;
     }
-    res.json(data);
+    res.json(registrationClosureResponse(data));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -473,10 +485,10 @@ router.put(
         .single();
 
       if (error) {
-        res.status(500).json({ error: error.message });
+        res.status(500).json({ error: formConfigWriteError(error) });
         return;
       }
-      res.json(data);
+      res.json(registrationClosureResponse(data));
     } catch (err) {
       res.status(500).json({ error: 'Internal server error' });
     }

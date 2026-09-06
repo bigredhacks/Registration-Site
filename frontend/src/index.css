@@ -135,3 +135,30 @@ button {
     transparent
   );
 }
+
+/* Size from the fixed containing block, not a viewport-wide flex row. */
+.toast-stack {
+  position: fixed;
+  z-index: 1000;
+  right: max(1rem, env(safe-area-inset-right));
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  width: min(24rem, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+  pointer-events: none;
+}
+
+@keyframes toast-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.toast-enter { animation: toast-enter 0.2s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-enter { animation: none; }
+}

@@ -14,6 +14,8 @@ import {
 } from "../../lib/registrationUi";
 import arcade from "@/assets/arcade_device2.png";
 import siteBanner from "@/assets/site_banner.png";
+import { formatRegistrationDeadline } from "@/lib/registrationClosure";
+import { useRegistrationClock } from "@/lib/useRegistrationClock";
 
 const EVENT_DATE = new Date("2026-10-02T09:00:00-04:00");
 
@@ -115,6 +117,15 @@ function getApplicationSummary(card: ApplicationCard | undefined) {
     };
   }
 
+  if (card.closed) {
+    return {
+      headline: card.started ? card.stateLabel : "Registration closed",
+      body: card.started
+        ? "Registration has closed. You can review your submitted application."
+        : "The application deadline has passed.",
+    };
+  }
+
   switch (card.status) {
     case "approved":
       return {
@@ -155,6 +166,7 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [activeForms, setActiveForms] = useState<ActiveFormSummary[]>([]);
   const [registrations, setRegistrations] = useState<UserRegistrationSummary[]>([]);
+  const registrationNow = useRegistrationClock(activeForms[0]?.server_now);
   const { pct, missing } = computeCompletion(profile);
 
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
@@ -194,8 +206,8 @@ const Dashboard = () => {
   }, [location.pathname]);
 
   const applicationCards = useMemo(
-    () => buildApplicationCards(activeForms, registrations),
-    [activeForms, registrations],
+    () => buildApplicationCards(activeForms, registrations, registrationNow),
+    [activeForms, registrations, registrationNow],
   );
   const registrationCard = applicationCards.find((card) => card.key === "registration");
   const visibleCards = applicationCards.filter((card) => card.key !== "registration");
@@ -359,6 +371,9 @@ const Dashboard = () => {
                 <span className="text-sm font-poppins font-semibold text-red5">
                   {registrationCard.primaryActionLabel} →
                 </span>
+                {registrationCard.closesAt && <span className="text-xs font-poppins text-gray-500">
+                  {registrationCard.closed ? "Closed" : "Closes"} · {formatRegistrationDeadline(registrationCard.closesAt, registrationCard.closesTimezone)}
+                </span>}
               </button>
             )}
 
@@ -382,6 +397,9 @@ const Dashboard = () => {
                   <span className="text-sm font-poppins font-semibold text-red5">
                     {card.primaryActionLabel} →
                   </span>
+                  {card.closesAt && <span className="text-xs font-poppins text-gray-500">
+                    {card.closed ? "Closed" : "Closes"} · {formatRegistrationDeadline(card.closesAt, card.closesTimezone)}
+                  </span>}
                 </button>
               );
             })}

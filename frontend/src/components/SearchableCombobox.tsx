@@ -143,7 +143,18 @@ export default function SearchableCombobox({
     !allOptions.some((o) => o.toLowerCase() === trimmedInput.toLowerCase());
 
   return (
-    <div ref={containerRef} className={`relative min-w-0 ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative min-w-0 ${className}`}
+      onKeyDown={(event) => {
+        if (event.key !== "Escape" || !open) return;
+        event.preventDefault();
+        event.stopPropagation();
+        // Portal events bubble here too; dismiss the menu before its parent dialog.
+        containerRef.current?.querySelector("input")?.focus();
+        setOpen(false);
+      }}
+    >
       <input
         type="text"
         value={displayValue}

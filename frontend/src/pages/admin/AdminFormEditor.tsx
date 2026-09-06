@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import { useToast } from "@/components/Toast/ToastContext";
 import type { FormField, FormFieldType } from "@/lib/formConfig";
+import { DEFAULT_REGISTRATION_TIMEZONE, deadlineToLocalInput, localInputToDeadline } from "@/lib/registrationClosure";
 
 interface FormConfigRow {
   key: string;
@@ -11,6 +12,9 @@ interface FormConfigRow {
   is_active: boolean;
   version: number;
   updated_at: string;
+  deadline_supported?: boolean;
+  closes_at: string | null;
+  closes_timezone: string;
 }
 
 const TYPE_OPTIONS: { value: FormFieldType; label: string }[] = [
@@ -54,6 +58,7 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [closingTime, setClosingTime] = useState("");
 
   useEffect(() => {
     apiFetch(`/api/admin/form-configs/${formKey}`)
@@ -63,7 +68,10 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
           setLoading(false);
           return;
         }
-        setConfig(await res.json());
+        const loaded = await res.json() as FormConfigRow;
+        loaded.closes_timezone ||= DEFAULT_REGISTRATION_TIMEZONE;
+        setConfig(loaded);
+        setClosingTime(deadlineToLocalInput(loaded.closes_at, loaded.closes_timezone));
         setLoading(false);
       })
       .catch(() => {
@@ -101,6 +109,13 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
 
   const handleSave = async () => {
     if (!config) return;
+    let closesAt: string | null;
+    try {
+      closesAt = localInputToDeadline(closingTime, config.closes_timezone);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : "Invalid closing time.", "error");
+      return;
+    }
     const ids = config.fields.map((f) => f.id);
     const dupes = ids.filter((id, i) => ids.indexOf(id) !== i);
     if (dupes.length > 0) {
@@ -113,28 +128,37 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
       return;
     }
     setSaving(true);
-    const res = await apiFetch(`/api/admin/form-configs/${formKey}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: config.title,
-        description: config.description ?? "",
-        fields: config.fields,
-        is_active: config.is_active,
-      }),
-    });
-    setSaving(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      const errMsg = body.errors?.[0]
-        ? `${body.errors[0].field}: ${body.errors[0].message}`
-        : body.error || `HTTP ${res.status}`;
-      showToast(`Save failed: ${errMsg}`, "error");
-      return;
+    try {
+      const res = await apiFetch(`/api/admin/form-configs/${formKey}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: config.title,
+          description: config.description ?? "",
+          fields: config.fields,
+          is_active: config.is_active,
+          ...(config.deadline_supported === false ? {} : {
+            closes_at: closesAt,
+            closes_timezone: config.closes_timezone,
+          }),
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const errMsg = body.errors?.[0]
+          ? `${body.errors[0].field}: ${body.errors[0].message}`
+          : body.error || `HTTP ${res.status}`;
+        showToast(`Save failed: ${errMsg}`, "error");
+        return;
+      }
+      setConfig(await res.json());
+      setDirty(false);
+      showToast("Form saved.", "success");
+    } catch {
+      showToast("Save failed. Check your connection and try again.", "error");
+    } finally {
+      setSaving(false);
     }
-    setConfig(await res.json());
-    setDirty(false);
-    showToast("Form saved.", "success");
   };
 
   if (loading) return <p className="font-poppins text-gray-500">Loading…</p>;
@@ -174,6 +198,50 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
             className={`${inputCls} mt-1`}
           />
         </div>
+        {config.deadline_supported === false && (
+          <p className="text-xs font-poppins text-amber-800">Registration deadlines unavailable until the database update is applied.</p>
+        )}
+        <fieldset disabled={config.deadline_supported === false} className="min-w-0 grid gap-3 sm:grid-cols-2 disabled:opacity-50">
+          <label className="min-w-0 text-xs font-poppins font-semibold text-gray-500">
+            Registration closes
+            <input
+              type="datetime-local"
+              step="1"
+              aria-label="Registration closes"
+              value={closingTime}
+              onChange={(event) => { setClosingTime(event.target.value); setDirty(true); }}
+              className={`${inputCls} mt-1`}
+            />
+          </label>
+          <label className="min-w-0 text-xs font-poppins font-semibold text-gray-500">
+            Time zone
+            <select
+              aria-label="Closing time zone"
+              value={config.closes_timezone}
+              onChange={(event) => {
+                const zone = event.target.value;
+                try {
+                  const instant = localInputToDeadline(closingTime, config.closes_timezone);
+                  setClosingTime(deadlineToLocalInput(instant, zone));
+                } catch { /* Keep an incomplete input available for correction. */ }
+                update((current) => ({ ...current, closes_timezone: zone }));
+              }}
+              className={`${inputCls} mt-1`}
+            >
+              {[...new Set([DEFAULT_REGISTRATION_TIMEZONE, "America/Chicago", "America/Denver", "America/Los_Angeles", "UTC", config.closes_timezone])].map((zone) => (
+                <option key={zone} value={zone}>{zone}</option>
+              ))}
+            </select>
+          </label>
+        </fieldset>
+        <button
+          type="button"
+          onClick={() => { setClosingTime(""); setDirty(true); }}
+          disabled={!closingTime || config.deadline_supported === false}
+          className="self-start text-xs font-poppins font-semibold text-red5 disabled:text-gray-400"
+        >
+          {closingTime ? "Clear deadline" : "No deadline"}
+        </button>
         <div className="flex flex-wrap items-center gap-3 text-xs font-poppins text-gray-500">
           <label className="flex items-center gap-2">
             <input

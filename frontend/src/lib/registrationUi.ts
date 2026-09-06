@@ -1,4 +1,6 @@
-export interface ActiveFormSummary {
+import { isRegistrationClosed, type RegistrationClosure } from "./registrationClosure.ts";
+
+export interface ActiveFormSummary extends RegistrationClosure {
   key: string;
   title: string;
   description: string | null;
@@ -19,6 +21,9 @@ export interface ApplicationCard {
   stateLabel: string;
   started: boolean;
   primaryActionLabel: string;
+  closed: boolean;
+  closesAt: string | null;
+  closesTimezone?: string;
 }
 
 export interface SubmissionFeedback {
@@ -40,6 +45,7 @@ function titleCaseStatus(status: string): string {
 export function buildApplicationCards(
   forms: ActiveFormSummary[],
   registrations: RegistrationSummaryLike[],
+  now = Date.now(),
 ): ApplicationCard[] {
   const registrationsByKey = new Map(
     registrations
@@ -60,6 +66,7 @@ export function buildApplicationCards(
           ? registration.status
           : null;
       const started = registration !== undefined;
+      const closed = isRegistrationClosed(form.closes_at, now);
 
       return {
         key: form.key,
@@ -67,9 +74,12 @@ export function buildApplicationCards(
         description: form.description,
         version: form.version,
         status,
-        stateLabel: status ? titleCaseStatus(status) : "Not Started",
+        closed,
+        closesAt: form.closes_at ?? null,
+        closesTimezone: form.closes_timezone,
+        stateLabel: status ? titleCaseStatus(status) : closed ? "Closed" : "Not Started",
         started,
-        primaryActionLabel: form.key === "registration"
+        primaryActionLabel: closed && !started ? "Registration closed" : form.key === "registration"
           ? started
             ? "View Application"
             : "Start Application"

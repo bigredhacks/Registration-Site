@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { supabase } from '../config/supabase';
+import { registrationClosureResponse } from '../utils/registrationClosure';
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.get('/', async (_req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('form_configs')
-      .select('key, title, description, version')
+      .select('*')
       .eq('is_active', true)
       .order('updated_at', { ascending: false });
 
@@ -20,7 +21,11 @@ router.get('/', async (_req: Request, res: Response) => {
       return;
     }
 
-    res.json(data ?? []);
+    const now = Date.now();
+    res.json((data ?? []).map((form) => registrationClosureResponse({
+      key: form.key, title: form.title, description: form.description, version: form.version,
+      closes_at: form.closes_at, closes_timezone: form.closes_timezone,
+    }, now)));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -50,7 +55,7 @@ router.get('/:key', async (req: Request, res: Response) => {
       return;
     }
 
-    res.json(data);
+    res.json(registrationClosureResponse(data));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

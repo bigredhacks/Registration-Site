@@ -11,6 +11,7 @@ import AdminTeamMatching from "./AdminTeamMatching";
 import AdminSelectionProvider from "./AdminSelectionProvider";
 import AdminSelectionPanel from "./AdminSelectionPanel";
 import { useAdminSelection } from "./AdminSelectionContext";
+import AdminSelect from "@/components/AdminSelect";
 
 type Tab = "editor" | "stats" | "users" | "teams";
 
@@ -106,10 +107,11 @@ export function ApprovalWorkspace({ tab }: { tab: Tab }) {
   return <>
     <div className="admin-toolbar mb-4">
       <label className="admin-form-picker">Application
-        <select className="admin-input" value={formKey} disabled={busy} onChange={event => setFormKey(event.target.value)}>
-          {!forms.some(form => form.key === formKey) && <option value={formKey}>{formKey}</option>}
-          {forms.map(form => <option key={form.key} value={form.key}>{form.title}</option>)}
-        </select>
+        <AdminSelect aria-label="Application" className="admin-input" value={formKey} disabled={busy} onChange={setFormKey}
+          options={[
+            ...(forms.some(form => form.key === formKey) ? [] : [{ value: formKey, label: formKey }]),
+            ...forms.map(form => ({ value: form.key, label: form.title })),
+          ]} />
       </label>
     </div>
     <div className="admin-approval-workspace">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
+import AdminSelect from "@/components/AdminSelect";
 import { useToast } from "@/components/Toast/ToastContext";
 import type { FormField, FormFieldType } from "@/lib/formConfig";
 import { DEFAULT_REGISTRATION_TIMEZONE, deadlineToLocalInput, localInputToDeadline } from "@/lib/registrationClosure";
@@ -215,23 +216,20 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
           </label>
           <label className="min-w-0 text-xs font-poppins font-semibold text-gray-500">
             Time zone
-            <select
+            <AdminSelect
               aria-label="Closing time zone"
               value={config.closes_timezone}
-              onChange={(event) => {
-                const zone = event.target.value;
+              fullWidth
+              className={`${inputCls} mt-1`}
+              options={[...new Set([DEFAULT_REGISTRATION_TIMEZONE, "America/Chicago", "America/Denver", "America/Los_Angeles", "UTC", config.closes_timezone])].map((zone) => ({ value: zone, label: zone }))}
+              onChange={(zone) => {
                 try {
                   const instant = localInputToDeadline(closingTime, config.closes_timezone);
                   setClosingTime(deadlineToLocalInput(instant, zone));
                 } catch { /* Keep an incomplete input available for correction. */ }
                 update((current) => ({ ...current, closes_timezone: zone }));
               }}
-              className={`${inputCls} mt-1`}
-            >
-              {[...new Set([DEFAULT_REGISTRATION_TIMEZONE, "America/Chicago", "America/Denver", "America/Los_Angeles", "UTC", config.closes_timezone])].map((zone) => (
-                <option key={zone} value={zone}>{zone}</option>
-              ))}
-            </select>
+            />
           </label>
         </fieldset>
         <button
@@ -406,16 +404,14 @@ function FieldCard({
           <label className="text-[10px] font-poppins font-semibold text-gray-500 uppercase tracking-widest">
             Type
           </label>
-          <select
+          <AdminSelect
             aria-label="Field type"
             value={field.type}
-            onChange={(e) => onChange({ type: e.target.value as FormFieldType })}
-            className={`${inputCls} mt-1 cursor-pointer`}
-          >
-            {TYPE_OPTIONS.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </select>
+            fullWidth
+            className={`${inputCls} mt-1`}
+            options={TYPE_OPTIONS.map((t) => ({ value: t.value, label: t.label }))}
+            onChange={(value) => onChange({ type: value as FormFieldType })}
+          />
         </div>
         <div className="flex items-center gap-4 md:mt-5">
           <label className="flex items-center gap-2 text-sm font-poppins">

@@ -1,3 +1,5 @@
+import AdminSelect from '@/components/AdminSelect';
+
 export interface ApprovalAnswerFilter {
   field: string;
   row?: string;
@@ -32,29 +34,28 @@ export default function AdminApprovalFilters({ fields, applied, draft, onChange:
   return <section className="admin-answer-filters" aria-label="Form answer filters">
     <div className="admin-toolbar">
       <span className="admin-meta">Form filters{applied.length > 0 ? ` · ${applied.length} applied` : ''}{draft.length > 1 ? ' · Match all' : ''}</span>
-      <select className="admin-input" aria-label="Add form filter" value="" disabled={disabled || draft.length >= 30 || !fields.length} onChange={event => {
-        const field = fields.find(option => keyOf(option) === event.target.value);
-        if (field) setDraft([...draft, { field: field.field, row: field.row, operator: 'is', values: [] }]);
-      }}>
-        <option value="">+ Add filter</option>
-        {fields.map(field => <option key={keyOf(field)} value={keyOf(field)}>{field.label}</option>)}
-      </select>
+      <AdminSelect className="admin-input" fullWidth aria-label="Add form filter" value="" placeholder="+ Add filter"
+        disabled={disabled || draft.length >= 30 || !fields.length}
+        options={fields.map(field => ({ value: keyOf(field), label: field.label }))}
+        onChange={value => {
+          const field = fields.find(option => keyOf(option) === value);
+          if (field) setDraft([...draft, { field: field.field, row: field.row, operator: 'is', values: [] }]);
+        }} />
     </div>
     {draft.map((filter, index) => {
       const field = fields.find(option => keyOf(option) === keyOf(filter));
       const choice = field?.kind === 'choice' && ['is', 'is_not'].includes(filter.operator);
       return <div className="admin-answer-filter" key={index}>
         <label className="admin-filter-field"><span>{field?.label ?? filter.field}</span>
-          <select className="admin-input" aria-label={`Operator for filter ${index + 1}`} value={filter.operator} onChange={event => update(index, { operator: event.target.value as ApprovalAnswerFilter['operator'], values: [] })}>
-            {Object.entries(operators).filter(([operator]) => field?.kind === 'number' || !['gt', 'gte', 'lt', 'lte'].includes(operator)).map(([operator, label]) => <option key={operator} value={operator}>{label}</option>)}
-          </select>
+          <AdminSelect className="admin-input" fullWidth aria-label={`Operator for filter ${index + 1}`} value={filter.operator}
+            options={Object.entries(operators).filter(([operator]) => field?.kind === 'number' || !['gt', 'gte', 'lt', 'lte'].includes(operator)).map(([operator, label]) => ({ value: operator, label }))}
+            onChange={value => update(index, { operator: value as ApprovalAnswerFilter['operator'], values: [] })} />
         </label>
         <div className="admin-filter-value">
           {needsValue(filter) && (choice ? <>
-            <select className="admin-input" aria-label={`Value for filter ${index + 1}`} value="" onChange={event => update(index, { values: [...(filter.values ?? []), event.target.value] })}>
-              <option value="">Choose value…</option>
-              {field.options.filter(option => !filter.values?.includes(option)).map(option => <option key={option} value={option}>{option}</option>)}
-            </select>
+            <AdminSelect className="admin-input" fullWidth aria-label={`Value for filter ${index + 1}`} value="" placeholder="Choose value…"
+              options={field.options.filter(option => !filter.values?.includes(option)).map(option => ({ value: option, label: option }))}
+              onChange={value => update(index, { values: [...(filter.values ?? []), value] })} />
             <div className="admin-filter-chips">{filter.values?.map(value => <button type="button" className="admin-button" key={value} aria-label={`Remove ${value} from filter ${index + 1}`} onClick={() => update(index, { values: filter.values?.filter(item => item !== value) })}>{value} ×</button>)}</div>
           </> : <input className="admin-input" type={field?.kind === 'number' ? 'number' : 'text'} aria-label={`Value for filter ${index + 1}`} placeholder="Enter value…" value={filter.values?.[0] ?? ''} onChange={event => update(index, { values: [event.target.value] })} />)}
         </div>

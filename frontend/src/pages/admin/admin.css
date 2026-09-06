@@ -25,7 +25,7 @@
 .admin-paste-panel textarea { width: 100%; margin: 8px 0; resize: vertical; }
 .admin-identity-results { margin-top: 12px; }
 .admin-identity-result { border-bottom: 1px solid #eddee0; padding: 9px 0; }
-.admin-identity-result select { width: 100%; margin-top: 5px; }
+.admin-identity-result select, .admin-identity-result .admin-select-wrap { width: 100%; margin-top: 5px; }
 .admin-check { display: flex; align-items: center; gap: 8px; }
 .admin-table-wrap { overflow-x: auto; border: 1px solid #e1cfd2; border-radius: 8px; background: white; }
 .admin-approval-table { width: 100%; text-align: left; }
@@ -120,7 +120,8 @@
 }
 
 .admin-answer-filters { margin-top: 12px; padding: 12px; border: 1px solid #e1cfd2; border-radius: 8px; background: #fffafb; }
-.admin-answer-filters > .admin-toolbar > select { max-width: min(100%, 400px); }
+.admin-answer-filters > .admin-toolbar > select,
+.admin-answer-filters > .admin-toolbar > .admin-select-wrap { max-width: min(100%, 400px); width: 100%; }
 .admin-answer-filter { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1.4fr) auto; align-items: start; gap: 10px; border-top: 1px solid #eddee0; margin-top: 12px; padding-top: 12px; }
 .admin-filter-field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .admin-filter-field > span { font-size: 12px; overflow-wrap: anywhere; }

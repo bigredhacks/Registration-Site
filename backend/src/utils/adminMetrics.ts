@@ -43,6 +43,7 @@ export function buildMetrics(rows: MetricRow[], filters: z.infer<typeof metricsQ
     by_level_of_study: tally('level_of_study'),
     by_form_key: tally('form_key'),
     by_checked_in: tally('checked_in'),
+    approved_checked_in: filtered.filter((row) => row.status === 'approved' && row.checked_in === true).length,
     options: Object.fromEntries(metricFields.map((field) => [field,
       [...new Set(rows.map((row) => valueOf(row, field)))].sort((a, b) => a.localeCompare(b)),
     ])),

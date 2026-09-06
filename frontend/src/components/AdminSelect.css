@@ -1,0 +1,32 @@
+.admin-select-wrap { position: relative; display: inline-block; min-width: 0; max-width: 100%; }
+.admin-select-wrap.admin-select-full { display: block; width: 100%; }
+.admin-select-wrap > .admin-select {
+  appearance: none; max-width: 100%; min-width: 0; padding: 8px 28px 8px 10px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left;
+  border: 1px solid #d8c9cb; border-radius: 6px; background: white; color: #39272a;
+  font-family: var(--font-poppins, Poppins, sans-serif); cursor: pointer;
+}
+.admin-select-full > .admin-select { width: 100%; }
+.admin-select-wrap > .admin-select:hover:not(:disabled) { border-color: #862838; }
+.admin-select-wrap > .admin-select:focus-visible, .admin-select-search:focus {
+  outline: 2px solid var(--color-red5, #b31b1b); outline-offset: 2px;
+}
+.admin-select-wrap > .admin-select:disabled { opacity: .5; cursor: not-allowed; }
+.admin-select-wrap > svg { pointer-events: none; position: absolute; right: 10px; top: 50%; translate: 0 -50%; transform: none; color: #9ca3af; }
+.admin-select-popup {
+  position: fixed; z-index: 1000; display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid #d8c9cb; border-radius: 8px; background: white; color: #39272a;
+  font-family: var(--font-poppins, Poppins, sans-serif); font-size: 14px;
+  box-shadow: 0 8px 20px #39272a26;
+}
+.admin-select-search { flex-shrink: 0; min-width: 0; margin: 6px; border: 1px solid #d8c9cb; border-radius: 4px; padding: 6px 8px; background: white; font: inherit; }
+.admin-select-list { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.admin-select-option { padding: 8px 12px; cursor: pointer; overflow-wrap: anywhere; }
+.admin-select-option.is-active { background: var(--color-red7, #fdecea); }
+.admin-select-option[aria-selected="true"] { font-weight: 500; color: var(--color-red6, #8b1515); }
+.admin-select-message { margin: 0; padding: 8px 12px; color: #75666a; overflow-wrap: anywhere; }
+.admin-select-hint { flex-shrink: 0; border-top: 1px solid #eddee0; padding-block: 6px; font-size: 12px; }
+@media (max-width: 767px) {
+  .admin-select-wrap > .admin-select, .admin-select-search { min-height: 44px; font-size: 16px; }
+  .admin-select-option { min-height: 44px; }
+}

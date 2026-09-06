@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useAdminSelection } from './AdminSelectionContext';
 import { parseStudentList, studentName, type IdentityMatch } from './adminApprovalState';
+import AdminSelect from '@/components/AdminSelect';
 
 export default function AdminSelectionPanel() {
   const { selected, remove, clear, add, formKey, busy, notice, decide } = useAdminSelection();
@@ -49,7 +50,9 @@ export default function AdminSelectionPanel() {
       <div className="admin-selection-actions">
         <button className="admin-button admin-button-primary" disabled={!selected.size} onClick={() => void decide('approved')}>{busy ? 'Updating…' : 'Approve'}</button>
         <button className="admin-button" disabled={!selected.size} onClick={() => void decide('rejected')}>Reject</button>
-        <select aria-label="Other approval actions" value="" disabled={!selected.size} onChange={event => { if (event.target.value) void decide(event.target.value); }} className="admin-input"><option value="">More…</option><option value="waitlisted">Waitlist</option><option value="pending">Set pending</option></select>
+        <AdminSelect aria-label="Other approval actions" value="" disabled={!selected.size} className="admin-input" placeholder="More…"
+          options={[{ value: 'waitlisted', label: 'Waitlist' }, { value: 'pending', label: 'Set pending' }]}
+          onChange={value => { if (value) void decide(value); }} />
       </div>
       {notice && <p className="admin-meta mt-3" role="status">{notice}</p>}
       <div className="admin-paste-panel">
@@ -60,7 +63,10 @@ export default function AdminSelectionPanel() {
         {!!matches.length && <div className="admin-identity-results" aria-live="polite">
           {matches.map((match, index) => <div key={index} className="admin-identity-result">
             <p className="break-all">{match.input}</p>
-            {match.duplicate ? <span className="admin-meta">Duplicate entry</span> : match.matches.length === 0 ? <span className="text-red6">Not found</span> : match.matches.length === 1 ? <label className="admin-check"><input type="checkbox" checked={!!choices[index]} disabled={selected.has(match.matches[0].id)} onChange={event => setChoices(previous => ({ ...previous, [index]: event.target.checked ? match.matches[0].id : 0 }))} /><span className="admin-meta">{selected.has(match.matches[0].id) ? 'Already selected' : `Matched · ${studentName(match.matches[0])}`}</span></label> : <label className="admin-meta">{match.matches.length} matches<select className="admin-input" value={choices[index] ?? ''} onChange={event => setChoices(previous => ({ ...previous, [index]: Number(event.target.value) }))}><option value="">Choose student…</option>{match.matches.map(student => <option key={student.id} value={student.id}>{studentName(student)} · {student.email}</option>)}</select></label>}
+            {match.duplicate ? <span className="admin-meta">Duplicate entry</span> : match.matches.length === 0 ? <span className="text-red6">Not found</span> : match.matches.length === 1 ? <label className="admin-check"><input type="checkbox" checked={!!choices[index]} disabled={selected.has(match.matches[0].id)} onChange={event => setChoices(previous => ({ ...previous, [index]: event.target.checked ? match.matches[0].id : 0 }))} /><span className="admin-meta">{selected.has(match.matches[0].id) ? 'Already selected' : `Matched · ${studentName(match.matches[0])}`}</span></label> : <label className="admin-meta">{match.matches.length} matches<AdminSelect aria-label={`Choose student for ${match.input}`} className="admin-input" fullWidth placeholder="Choose student…"
+              value={choices[index] ? String(choices[index]) : ''}
+              options={match.matches.map(student => ({ value: String(student.id), label: `${studentName(student)} · ${student.email}` }))}
+              onChange={value => setChoices(previous => ({ ...previous, [index]: Number(value) }))} /></label>}
           </div>)}
           <button className="admin-button" disabled={!unique.length} onClick={() => { add(unique); setMatches([]); setText(''); setChoices({}); }}>Add {unique.length} matched students</button>
         </div>}

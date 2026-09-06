@@ -76,3 +76,49 @@ test('filter catalog uses custom question labels, options and grid rows, with le
   assert.ok(fields.some(field => field.field === 'school'));
   assert.ok(!fields.some(field => ['attachment', 'info'].includes(field.field)));
 });
+
+test('sorting orders by answers or columns, honours per-column defaults and sinks blanks', () => {
+  const { sortApprovalStudents } = require('./adminApprovals.ts');
+  const students = [
+    { ...rows[0], created_at: '2026-01-02T00:00:00Z', answers: { school: 'Cornell' } },
+    { ...rows[1], created_at: '2026-03-04T00:00:00Z', answers: { school: 'anderson college' } },
+    { ...rows[2], created_at: '2026-02-03T00:00:00Z', answers: {} },
+  ];
+  // Dates open newest-first; names and schools open A-Z.
+  assert.deepEqual(sortApprovalStudents(students, 'created_at').map(row => row.id), [2, 3, 1]);
+  assert.deepEqual(sortApprovalStudents(students, 'created_at', 'asc').map(row => row.id), [1, 3, 2]);
+  // Case-insensitive, and the unanswered school stays last in both directions.
+  assert.deepEqual(sortApprovalStudents(students, 'school').map(row => row.id), [2, 1, 3]);
+  assert.deepEqual(sortApprovalStudents(students, 'school', 'desc').map(row => row.id), [1, 2, 3]);
+  // Answers win over the stale column, matching how the list and filters read school.
+  assert.deepEqual(sortApprovalStudents([{ ...students[0], school: 'Zzz College' }, students[1]], 'school').map(row => row.id), [2, 1]);
+  // Ties fall back to newest id first, so paging over equal values stays stable.
+  assert.deepEqual(sortApprovalStudents(students, 'first_name').map(row => row.id), [3, 2, 1]);
+  // The Student column renders "First Last", so its sort breaks first-name ties on
+  // the surname rather than leaving every shared first name unordered.
+  const sams = [
+    { ...rows[0], id: 10, first_name: 'Sam', last_name: 'Alvarez' },
+    { ...rows[0], id: 11, first_name: 'Sam', last_name: 'Rivera' },
+    { ...rows[0], id: 12, first_name: 'Alex', last_name: 'Zhang' },
+  ];
+  assert.deepEqual(sortApprovalStudents(sams, 'name').map(row => row.id), [12, 10, 11]);
+  // first_name alone can't separate the two Sams, so they keep the id tiebreak order.
+  assert.deepEqual(sortApprovalStudents(sams, 'first_name').map(row => row.id), [12, 11, 10]);
+  // An unrecognised column leaves the order untouched rather than erroring.
+  assert.deepEqual(sortApprovalStudents(students, 'answers').map(row => row.id), [1, 2, 3]);
+  assert.deepEqual(sortApprovalStudents(students).map(row => row.id), [1, 2, 3]);
+});
+
+test('submitted date range uses inclusive UTC days and excludes rows without a date', () => {
+  const students = [
+    { ...rows[0], created_at: '2026-01-01T23:59:59Z' },
+    { ...rows[1], created_at: '2026-01-02T00:00:00Z' },
+    { ...rows[2], created_at: null },
+  ];
+  // Both bounds are inclusive whole UTC days, matching buildMetrics.
+  assert.deepEqual(filterApprovalStudents(students, { from: '2026-01-02' }).map(row => row.id), [2]);
+  assert.deepEqual(filterApprovalStudents(students, { to: '2026-01-01' }).map(row => row.id), [1]);
+  assert.deepEqual(filterApprovalStudents(students, { from: '2026-01-01', to: '2026-01-02' }).map(row => row.id), [1, 2]);
+  // No bounds means no date filtering, so the undated row survives.
+  assert.deepEqual(filterApprovalStudents(students, {}).map(row => row.id), [1, 2, 3]);
+});

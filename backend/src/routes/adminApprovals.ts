@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { supabase } from '../config/supabase';
 import { validate } from '../middleware/validate';
 import { RegistrationStatusSchema } from '../types/registration';
-import { approvalAnswerValue, approvalFilterFields, buildApprovalCsv, filterApprovalStudents, resolveApprovalIdentities, type ApprovalStudent } from '../utils/adminApprovals';
+import { approvalAnswerValue, approvalFilterFields, buildApprovalCsv, filterApprovalStudents, resolveApprovalIdentities, sortApprovalStudents, type ApprovalStudent } from '../utils/adminApprovals';
 
 // Mounted after requireAdmin in admin.ts.
 const router = Router();
@@ -30,8 +30,17 @@ const filtersSchema = z.object({
       ctx.addIssue({ code: 'custom', message: 'Enter a number.' });
     }
   })).max(30)).optional(),
+  sort: z.string().max(100).optional(),
+  dir: z.enum(['asc', 'desc', '']).optional(),
+  // Blank params ("?from=") mean "no bound" rather than an invalid date.
+  from: z.union([z.iso.date(), z.literal('')]).optional(),
+  to: z.union([z.iso.date(), z.literal('')]).optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  // Reject an inverted range rather than returning an unexplained empty list, matching
+  // metricsQuerySchema so both date-filtered endpoints answer a bad range the same way.
+}).refine(value => !value.from || !value.to || value.from <= value.to, {
+  message: 'Start date must be on or before end date.',
 });
 
 async function loadStudents(formKey: string, allFields = false) {
@@ -57,7 +66,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
   const parsed = filtersSchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid registration filters.' }); return; }
   try {
-    const { form_key, status, q, checked_in, offset, limit, answers } = parsed.data;
+    const { form_key, status, q, checked_in, offset, limit, answers, sort, dir, from, to } = parsed.data;
     const allRows = await loadStudents(form_key, req.path === '/export.csv');
     const { data: config, error: configError } = await supabase.from('form_configs').select('fields').eq('key', form_key).maybeSingle();
     if (configError) throw configError;
@@ -65,7 +74,9 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
     if (answers?.some(filter => !fields.some(field => field.field === filter.field && field.row === filter.row))) {
       res.status(400).json({ error: 'A filtered question is no longer available. Remove it and try again.' }); return;
     }
-    const rows = filterApprovalStudents(allRows, { status, search: q, checkedIn: checked_in, answers });
+    // Sorting before the CSV/selection branch keeps the export and "add all filtered"
+    // in the same order as the screen.
+    const rows = sortApprovalStudents(filterApprovalStudents(allRows, { status, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
     if (req.path === '/export.csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="registrations.csv"');

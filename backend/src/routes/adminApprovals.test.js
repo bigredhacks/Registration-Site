@@ -225,3 +225,16 @@ test('malformed and unavailable form filters fail closed for bulk selection', as
   }
   assert.deepEqual(writes, []);
 });
+
+test('an inverted submitted range is rejected rather than answered with an empty list', async () => {
+  reset([student(1, 'registration', { created_at: '2026-08-05T00:00:00Z' })]);
+  const inverted = await request('get', '/students', { form_key: 'registration', from: '2026-08-20', to: '2026-08-10' });
+  assert.equal(inverted.statusCode, 400);
+  assert.equal(inverted.body.error, 'Invalid registration filters.');
+  // Blank bounds still mean "no filter", and a valid range is unaffected.
+  for (const query of [{ from: '', to: '' }, { from: '2026-08-01', to: '2026-08-31' }, { from: '2026-08-05', to: '2026-08-05' }]) {
+    const res = await request('get', '/students', { form_key: 'registration', ...query });
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body.data.map((row) => row.id), [1]);
+  }
+});

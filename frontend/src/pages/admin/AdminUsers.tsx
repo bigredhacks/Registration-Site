@@ -176,11 +176,11 @@ export default function AdminUsers() {
   return <fieldset disabled={busy} className="admin-students-view">
     <div className="admin-toolbar">
       <form className="admin-search" onSubmit={event => { event.preventDefault(); setPage(0); setQuery(search.trim()); setRefreshKey(value => value + 1); }}>
-        <input className="admin-input" aria-label="Search students" placeholder="Name, email, school…" value={search} onChange={event => setSearch(event.target.value)} />
-        <button className="admin-button" type="submit">Search</button>
+        <input className="admin-input" aria-label="Search students" disabled={invalidDates} placeholder="Name, email, school…" value={search} onChange={event => setSearch(event.target.value)} />
+        <button className="admin-button" type="submit" disabled={invalidDates}>Search</button>
       </form>
-      <select aria-label="Filter by status" className="admin-input" value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{STATUSES.map(value => <option key={value}>{value}</option>)}</select>
-      <select aria-label="Filter by attendance" className="admin-input" value={checkedIn} onChange={event => { setCheckedIn(event.target.value); setPage(0); }}><option value="">All attendance</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
+      <select aria-label="Filter by status" className="admin-input" disabled={invalidDates} value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{STATUSES.map(value => <option key={value}>{value}</option>)}</select>
+      <select aria-label="Filter by attendance" className="admin-input" disabled={invalidDates} value={checkedIn} onChange={event => { setCheckedIn(event.target.value); setPage(0); }}><option value="">All attendance</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
       <div role="group" aria-label="Submitted date range (UTC)" className="admin-date-range"><span>Submitted</span>
         <input type="date" className="admin-input" aria-label="Submitted from (UTC)" aria-invalid={invalidDates} value={from} onChange={event => { setFrom(event.target.value); setPage(0); }} />
         <span className="admin-meta">to</span>
@@ -189,8 +189,8 @@ export default function AdminUsers() {
       </div>
     </div>
     {invalidDates && <p role="alert" className="text-red6 mb-3">Start date must be on or before end date.</p>}
-    <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
-    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
+    <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading || invalidDates} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
+    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || invalidDates || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>
@@ -214,7 +214,7 @@ export default function AdminUsers() {
           {SORT_COLUMNS.map(({ column, label, defaultDir }) => {
             const active = sort?.column === column;
             return <th key={column} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-              <button type="button" className="admin-sort-button" disabled={loading} onClick={() => toggleSort(column, defaultDir)}>
+              <button type="button" className="admin-sort-button" disabled={loading || invalidDates} onClick={() => toggleSort(column, defaultDir)}>
                 {label}<span aria-hidden="true" className={active ? '' : 'opacity-30'}>{active && sort.dir === 'desc' ? '↓' : '↑'}</span>
               </button>
             </th>;

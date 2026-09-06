@@ -16,6 +16,17 @@ interface Registration extends AdminStudent {
 }
 const PAGE_SIZE = 50;
 const STATUSES = ['pending', 'approved', 'rejected', 'waitlisted'];
+type Dir = 'asc' | 'desc';
+type Sort = { column: string; dir: Dir };
+// `column` mirrors the server's whitelist in backend/src/utils/adminApprovals.ts.
+// `defaultDir` is the direction a column opens on, so dates start newest-first
+// rather than at the oldest applicant.
+const SORT_COLUMNS: { column: string; label: string; defaultDir: Dir }[] = [
+  { column: 'name', label: 'Student', defaultDir: 'asc' },
+  { column: 'school', label: 'School', defaultDir: 'asc' },
+  { column: 'status', label: 'Status', defaultDir: 'asc' },
+  { column: 'created_at', label: 'Submitted', defaultDir: 'desc' },
+];
 function formatAnswer(value: unknown): string {
   if (value == null || value === '') return '—';
   if (Array.isArray(value)) return value.map(formatAnswer).join(', ') || '—';
@@ -34,10 +45,14 @@ export default function AdminUsers() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
   const [checkedIn, setCheckedIn] = useState('');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const invalidDates = Boolean(from && to && from > to);
   const [answerFilters, setAnswerFilters] = useState<ApprovalAnswerFilter[]>([]);
   const [draftAnswerFilters, setDraftAnswerFilters] = useState<ApprovalAnswerFilter[]>([]);
   const filtersChanged = JSON.stringify(draftAnswerFilters) !== JSON.stringify(answerFilters);
   const [filterFields, setFilterFields] = useState<ApprovalFilterField[]>([]);
+  const [sort, setSort] = useState<Sort | null>(null);
   const [page, setPage] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [adding, setAdding] = useState(false);
@@ -50,8 +65,9 @@ export default function AdminUsers() {
   const detailPanel = useRef<HTMLDivElement>(null);
   const selectPage = useRef<HTMLInputElement>(null);
 
-  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status, checked_in: checkedIn, answers: JSON.stringify(answerFilters) }), [formKey, query, status, checkedIn, answerFilters]);
+  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status, checked_in: checkedIn, answers: JSON.stringify(answerFilters), sort: sort?.column ?? '', dir: sort?.dir ?? '', from, to }), [formKey, query, status, checkedIn, answerFilters, sort, from, to]);
   useEffect(() => {
+    if (invalidDates) { setRows([]); setCount(0); setError(''); setLoading(false); return; }
     let current = true;
     cohortRequest.current++;
     setAdding(false);
@@ -74,12 +90,17 @@ export default function AdminUsers() {
       .finally(() => { if (current) setLoading(false); });
     const requests = cohortRequest;
     return () => { current = false; requests.current++; };
-  }, [filters, page, revision, refreshKey, sync]);
+  }, [filters, page, revision, refreshKey, sync, invalidDates]);
 
   useEffect(() => {
     if (selectPage.current) selectPage.current.indeterminate = rows.some(row => selected.has(row.id)) && !rows.every(row => selected.has(row.id));
   }, [rows, selected]);
 
+  // Re-clicking the active column flips it; a new column opens on its own default.
+  const toggleSort = (column: string, defaultDir: Dir) => {
+    setPage(0);
+    setSort(current => current?.column === column ? { column, dir: current.dir === 'asc' ? 'desc' : 'asc' } : { column, dir: defaultDir });
+  };
   const closeDetail = () => {
     detailRequest.current++;
     const previous = detailId;
@@ -147,25 +168,46 @@ export default function AdminUsers() {
       </form>
       <select aria-label="Filter by status" className="admin-input" value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="">All statuses</option>{STATUSES.map(value => <option key={value}>{value}</option>)}</select>
       <select aria-label="Filter by attendance" className="admin-input" value={checkedIn} onChange={event => { setCheckedIn(event.target.value); setPage(0); }}><option value="">All attendance</option><option value="true">Checked in</option><option value="false">Not checked in</option></select>
+      <div role="group" aria-label="Submitted date range (UTC)" className="admin-date-range"><span>Submitted</span>
+        <input type="date" className="admin-input" aria-label="Submitted from (UTC)" aria-invalid={invalidDates} value={from} onChange={event => { setFrom(event.target.value); setPage(0); }} />
+        <span className="admin-meta">to</span>
+        <input type="date" className="admin-input" aria-label="Submitted through (UTC)" aria-invalid={invalidDates} value={to} onChange={event => { setTo(event.target.value); setPage(0); }} />
+        {(from || to) && <button type="button" className="admin-text-button" onClick={() => { setFrom(''); setTo(''); setPage(0); }}>Clear</button>}
+      </div>
     </div>
+    {invalidDates && <p role="alert" className="text-red6 mb-3">Start date must be on or before end date.</p>}
     <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
-    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
+    <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>
       {detailLoading && <p className="admin-meta">Loading application…</p>}
       {detail && <>
         <div className="admin-toolbar"><div><h2>{studentName(detail)}</h2><p className="admin-meta break-all">{detail.email}</p></div><span className={`admin-status admin-status-${detail.status}`}>{detail.status}</span></div>
-        <div className="admin-toolbar my-4"><p className="admin-meta">{detail.checked_in ? `Checked in${detail.checked_in_at ? ` · ${new Date(detail.checked_in_at).toLocaleString()}` : ''}` : 'Not checked in'}</p><button className="admin-button" disabled={checkingIn} onClick={() => void checkIn()}>{detail.checked_in ? 'Undo check-in' : 'Check in'}</button></div>
+        <div className="admin-toolbar my-4"><p className="admin-meta">{detail.checked_in ? `Checked in${detail.checked_in_at ? ` · ${new Date(detail.checked_in_at).toLocaleString()}` : ''}` : 'Not checked in'}</p>
+          <button className="admin-button" disabled={checkingIn} onClick={() => void checkIn()}>{detail.checked_in ? 'Undo check-in' : 'Check in'}</button>
+        </div>
         <dl className="admin-answer-list">{Object.entries(detail.answers ?? {}).map(([key, value]) => <div key={key}><dt>{key.replace(/_/g, ' ')}</dt><dd>{formatAnswer(value)}</dd></div>)}</dl>
       </>}
     </section> : <>
       <div className="admin-table-wrap"><table className="admin-record-table admin-approval-table">
-        <thead><tr><th><input ref={selectPage} type="checkbox" aria-label="Select this page" checked={rows.length > 0 && rows.every(row => selected.has(row.id))} disabled={filtersChanged || loading || !rows.length} onChange={event => { if (event.target.checked) add(rows); else rows.forEach(row => remove(row.id)); }} /></th><th>Student</th><th>School</th><th>Status</th><th>Actions</th></tr></thead>
-        <tbody>{loading ? <tr><td colSpan={5}>Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={5}>No students found.</td></tr> : rows.map(row => <tr key={row.id} className={selected.has(row.id) ? 'admin-row-selected' : ''}>
+        <thead><tr>
+          <th><input ref={selectPage} type="checkbox" aria-label="Select this page" checked={rows.length > 0 && rows.every(row => selected.has(row.id))} disabled={filtersChanged || loading || !rows.length} onChange={event => { if (event.target.checked) add(rows); else rows.forEach(row => remove(row.id)); }} /></th>
+          {SORT_COLUMNS.map(({ column, label, defaultDir }) => {
+            const active = sort?.column === column;
+            return <th key={column} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+              <button type="button" className="admin-sort-button" disabled={loading} onClick={() => toggleSort(column, defaultDir)}>
+                {label}<span aria-hidden="true" className={active ? '' : 'opacity-30'}>{active && sort.dir === 'desc' ? '↓' : '↑'}</span>
+              </button>
+            </th>;
+          })}
+          <th>Actions</th>
+        </tr></thead>
+        <tbody>{loading ? <tr><td colSpan={6}>Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={6}>No students found.</td></tr> : rows.map(row => <tr key={row.id} className={selected.has(row.id) ? 'admin-row-selected' : ''}>
           <td data-label="Select"><input type="checkbox" aria-label={`Select ${studentName(row)}`} checked={selected.has(row.id)} onChange={() => toggle(row)} /></td>
           <td data-label="Student"><div><p>{studentName(row)}</p><p className="admin-meta break-all">{row.email}</p></div></td>
           <td data-label="School">{row.school || '—'}</td><td data-label="Status"><span className={`admin-status admin-status-${row.status}`}>{row.status}</span></td>
+          <td data-label="Submitted">{row.created_at ? <time dateTime={row.created_at} title={`${new Date(row.created_at).toLocaleString(undefined, { timeZone: 'UTC' })} UTC`}>{new Date(row.created_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</time> : '—'}</td>
           <td data-label="Actions"><button className="admin-button" id={`review-${row.id}`} onClick={() => void loadDetail(row.id)}>Review</button></td>
         </tr>)}</tbody>
       </table></div>

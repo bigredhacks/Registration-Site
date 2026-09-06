@@ -12,7 +12,7 @@
 .admin-button-primary { background: var(--color-red5); border-color: var(--color-red5); color: white; }
 .admin-button-primary:hover:not(:disabled) { background: var(--color-red3); }
 .admin-text-button { color: #8b2738; padding: 4px 6px; cursor: pointer; }
-.admin-button:disabled, .admin-text-button:disabled, .admin-input:disabled, fieldset:disabled .admin-button { opacity: .5; cursor: not-allowed; }
+.admin-button:disabled, .admin-text-button:disabled, .admin-input:disabled, .admin-sort-button:disabled, fieldset:disabled .admin-button { opacity: .5; cursor: not-allowed; }
 .admin-count { border-radius: 4px; background: #f6e8ea; padding: 2px 7px; margin-left: 4px; font-variant-numeric: tabular-nums; }
 .admin-meta { font-size: 12px; color: #75666a; }
 .admin-selection-panel, .admin-detail { border: 1px solid #e1cfd2; border-radius: 8px; background: white; padding: 16px; }
@@ -31,6 +31,10 @@
 .admin-approval-table { width: 100%; text-align: left; }
 .admin-approval-table th { padding: 12px; font-weight: 500; color: #752435; background: #f8e9eb; }
 .admin-approval-table td { padding: 12px; border-top: 1px solid #eddee0; }
+.admin-date-range { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #75666a; flex-wrap: wrap; }
+.admin-date-range input { min-width: 0; }
+.admin-sort-button { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; cursor: pointer; }
+.admin-sort-button:hover:not(:disabled) { text-decoration: underline; }
 .admin-row-selected { background: #fff5f5; }
 .admin-approval-table input[type=checkbox], .admin-check input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--color-red5); }
 .admin-status { display: inline-block; border-radius: 4px; padding: 3px 7px; background: #f1ecec; color: #66585c; font-size: 12px; text-transform: capitalize; white-space: nowrap; }

@@ -131,15 +131,37 @@ function sampleMatches(student: Student, filter: ApprovalAnswerFilter) {
     return filter.operator === 'gt' ? number > target : filter.operator === 'gte' ? number >= target : filter.operator === 'lt' ? number < target : number <= target;
   });
 }
+// Mirrors sortApprovalStudents in backend/src/utils/adminApprovals.ts closely enough
+// to exercise the header controls; blanks sink and ties fall back to newest id first.
+const SORTABLE = ['created_at', 'status', 'email', 'name', 'first_name', 'last_name', 'school', 'level_of_study'];
+const sortKey = (row: Student, sort: string) => sort === 'name'
+  ? fullName(row)
+  : String((row as unknown as Record<string, unknown>)[sort] ?? '');
+function sampleSorted(rows: Student[], sort: string, dir: string) {
+  if (!SORTABLE.includes(sort)) return rows;
+  const ascending = dir === 'asc' || dir === 'desc' ? dir === 'asc' : sort !== 'created_at';
+  return [...rows].sort((a, b) => {
+    const left = sortKey(a, sort);
+    const right = sortKey(b, sort);
+    if (!left || !right) return left ? -1 : right ? 1 : b.id - a.id;
+    const order = sort === 'created_at' ? left.localeCompare(right) : left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+    return (ascending ? order : -order) || b.id - a.id;
+  });
+}
 function filtered(params: URLSearchParams) {
   const query = normalize(params.get('q') ?? '');
   const answerFilters = JSON.parse(params.get('answers') ?? '[]') as ApprovalAnswerFilter[];
-  return students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
+  const from = params.get('from') ?? '';
+  const to = params.get('to') ?? '';
+  const rows = students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
     && answerFilters.every(filter => sampleMatches(student, filter))
     && (!params.get('status') || student.status === params.get('status'))
     && (!params.get('checked_in') || String(student.checked_in) === params.get('checked_in'))
+    && (!from || student.created_at.slice(0, 10) >= from)
+    && (!to || student.created_at.slice(0, 10) <= to)
     && (!query || [fullName(student), student.email, student.school].some(value => normalize(value).includes(query))))
     .sort((a, b) => b.id - a.id);
+  return sampleSorted(rows, params.get('sort') ?? '', params.get('dir') ?? '');
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 const originalFetch = window.fetch.bind(window);

@@ -238,3 +238,69 @@ test('an inverted submitted range is rejected rather than answered with an empty
     assert.deepEqual(res.body.data.map((row) => row.id), [1]);
   }
 });
+
+test('selection limits apply after filtering and time sorting across database batches', async () => {
+  reset([
+    ...Array.from({ length: 2400 }, (_, index) => student(index + 1, 'registration', {
+      created_at: new Date(Date.UTC(2026, 7, 1, 0, index)).toISOString(),
+      status: index % 2 === 0 ? 'pending' : 'approved',
+      answers: { school: index % 4 === 0 ? 'Cornell' : 'RIT' },
+    })),
+    student(9999, 'workshop', { status: 'pending', school: 'Cornell' }),
+  ]);
+  const query = {
+    form_key: 'registration', status: 'pending', sort: 'created_at', dir: 'asc', selection_limit: '450',
+    answers: JSON.stringify([{ field: 'school', operator: 'is', values: ['Cornell'] }]),
+  };
+  const res = await request('get', '/selection', { ...query, offset: '100', limit: '25' });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.count, 600);
+  assert.deepEqual(res.body.data.map(row => row.id), Array.from({ length: 450 }, (_, index) => index * 4 + 1));
+  assert.deepEqual(reads.map(query => query.range), [[0, 999], [1000, 1999], [2000, 2999]]);
+  const descending = await request('get', '/selection', { ...query, dir: 'desc' });
+  assert.deepEqual(descending.body.data.map(row => row.id), Array.from({ length: 450 }, (_, index) => 2397 - index * 4));
+  assert.deepEqual(writes, []);
+});
+
+test('limited selections preserve timestamp ties, missing values, and other table orders', async () => {
+  reset([
+    student(1, 'registration', { created_at: '2026-08-01T12:00:00Z', first_name: 'Charlie' }),
+    student(2, 'registration', { created_at: '2026-08-01T12:00:00Z', first_name: 'Bob' }),
+    student(3, 'registration', { created_at: '2026-08-02T12:00:00Z', first_name: 'Alice' }),
+    student(4, 'registration', { created_at: null, first_name: 'Zoe' }),
+  ]);
+  for (const [sort, dir, expected] of [
+    ['created_at', 'asc', [2, 1, 3]], ['created_at', 'desc', [3, 2, 1]],
+    ['name', 'asc', [3, 2, 1]], ['name', 'desc', [4, 1, 2]], ['', '', [4, 3, 2]],
+  ]) {
+    const res = await request('get', '/selection', { form_key: 'registration', sort, dir, selection_limit: '3' });
+    assert.equal(res.body.count, 4);
+    assert.deepEqual(res.body.data.map(row => row.id), expected);
+  }
+});
+
+test('selection limit boundaries preserve match counts and never cap table pages or exports', async () => {
+  reset([student(1), student(2), student(3)]);
+  for (const [selection_limit, expected] of [['2', [3, 2]], ['3', [3, 2, 1]], ['450', [3, 2, 1]], [undefined, [3, 2, 1]]]) {
+    const res = await request('get', '/selection', { form_key: 'registration', selection_limit });
+    assert.equal(res.body.count, 3);
+    assert.deepEqual(res.body.data.map(row => row.id), expected);
+  }
+  const empty = await request('get', '/selection', { form_key: 'registration', status: 'approved', selection_limit: '450' });
+  assert.equal(empty.body.count, 0);
+  assert.deepEqual(empty.body.data, []);
+  const list = await request('get', '/students', { form_key: 'registration', selection_limit: '1', offset: '1', limit: '2' });
+  assert.equal(list.body.count, 3);
+  assert.deepEqual(list.body.data.map(row => row.id), [2, 1]);
+  const csv = await request('get', '/export.csv', { form_key: 'registration', selection_limit: '1' });
+  assert.equal(csv.body.split('\r\n').length, 4);
+});
+
+test('invalid selection limits reject before any database reads', async () => {
+  reset([student(1)]);
+  for (const selection_limit of ['', ' ', '0', '-1', '1.5', 'abc', 'Infinity', '9007199254740992', ['1'], ['1', '2'], { value: '1' }]) {
+    const res = await request('get', '/selection', { form_key: 'registration', selection_limit });
+    assert.equal(res.statusCode, 400, JSON.stringify(selection_limit));
+  }
+  assert.equal(queryCount, 0);
+});

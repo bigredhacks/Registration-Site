@@ -37,6 +37,7 @@ const filtersSchema = z.object({
   to: z.union([z.iso.date(), z.literal('')]).optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(200).default(50),
+  selection_limit: z.string().transform(Number).pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER)).optional(),
   // Reject an inverted range rather than returning an unexplained empty list, matching
   // metricsQuerySchema so both date-filtered endpoints answer a bad range the same way.
 }).refine(value => !value.from || !value.to || value.from <= value.to, {
@@ -66,7 +67,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
   const parsed = filtersSchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid registration filters.' }); return; }
   try {
-    const { form_key, status, q, checked_in, offset, limit, answers, sort, dir, from, to } = parsed.data;
+    const { form_key, status, q, checked_in, offset, limit, selection_limit, answers, sort, dir, from, to } = parsed.data;
     const allRows = await loadStudents(form_key, req.path === '/export.csv');
     const { data: config, error: configError } = await supabase.from('form_configs').select('fields').eq('key', form_key).maybeSingle();
     if (configError) throw configError;
@@ -74,8 +75,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
     if (answers?.some(filter => !fields.some(field => field.field === filter.field && field.row === filter.row))) {
       res.status(400).json({ error: 'A filtered question is no longer available. Remove it and try again.' }); return;
     }
-    // Sorting before the CSV/selection branch keeps the export and "add all filtered"
-    // in the same order as the screen.
+    // Export and selection follow the table order before any selection limit.
     const rows = sortApprovalStudents(filterApprovalStudents(allRows, { status, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
     if (req.path === '/export.csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -83,7 +83,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
       res.send(buildApprovalCsv(rows as unknown as Record<string, unknown>[]));
       return;
     }
-    const data = (req.path === '/selection' ? rows : rows.slice(offset, offset + limit)).map(studentSummary);
+    const data = (req.path === '/selection' ? rows.slice(0, selection_limit) : rows.slice(offset, offset + limit)).map(studentSummary);
     res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields } : {}) });
   } catch {
     res.status(500).json({ error: 'Could not load registrations.' });

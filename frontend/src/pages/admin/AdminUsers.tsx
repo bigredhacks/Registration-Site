@@ -39,7 +39,7 @@ function formatAnswer(value: unknown): string {
 }
 
 export default function AdminUsers() {
-  const { selected, add, remove, toggle, sync, revision, formKey, busy } = useAdminSelection();
+  const { selected, add, replace, remove, toggle, sync, revision, formKey, busy } = useAdminSelection();
   const { showToast } = useToast();
   const [rows, setRows] = useState<Registration[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,12 @@ export default function AdminUsers() {
     return PAGE_SIZES.includes(stored) ? stored : 50;
   });
   const [refreshKey, setRefreshKey] = useState(0);
-  const [adding, setAdding] = useState(false);
+  const [selecting, setSelecting] = useState(false);
+  const [selectionLimit, setSelectionLimit] = useState('');
+  const limit = selectionLimit.trim() ? Number(selectionLimit) : undefined;
+  const invalidLimit = limit !== undefined && (!Number.isSafeInteger(limit) || limit < 1);
+  const selectionCount = limit === undefined || invalidLimit ? count : Math.min(limit, count);
+  const sortLabel = sort ? `${SORT_COLUMNS.find(entry => entry.column === sort.column)?.label} ${sort.dir === 'asc' ? 'ascending' : 'descending'}` : 'ID descending';
   const [detail, setDetail] = useState<Registration | null>(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -78,7 +83,7 @@ export default function AdminUsers() {
     if (invalidDates) { setRows([]); setCount(0); setError(''); setLoading(false); return; }
     let current = true;
     cohortRequest.current++;
-    setAdding(false);
+    setSelecting(false);
     setLoading(true);
     setError('');
     const params = filters();
@@ -135,16 +140,19 @@ export default function AdminUsers() {
   }, [revision]);
   useEffect(() => () => { detailRequest.current++; }, []);
 
-  const addFiltered = async () => {
+  const selectFiltered = async () => {
+    if (invalidLimit) return;
     const current = ++cohortRequest.current;
-    setAdding(true);
+    setSelecting(true);
     try {
-      const res = await apiFetch(`/api/admin/approval/selection?${filters()}`);
+      const params = filters();
+      if (limit !== undefined) params.set('selection_limit', String(limit));
+      const res = await apiFetch(`/api/admin/approval/selection?${params}`);
       if (!res.ok) throw new Error();
       const body = await res.json();
-      if (current === cohortRequest.current) add(body.data ?? []);
+      if (current === cohortRequest.current) replace(body.data ?? []);
     } catch { if (current === cohortRequest.current) showToast('Could not select filtered students.', 'error'); }
-    finally { if (current === cohortRequest.current) setAdding(false); }
+    finally { if (current === cohortRequest.current) setSelecting(false); }
   };
   const exportCsv = async () => {
     try {
@@ -202,7 +210,20 @@ export default function AdminUsers() {
       <label className="admin-meta">Per page <AdminSelect aria-label="Rows per page" className="admin-input" value={String(pageSize)}
         options={PAGE_SIZES.map(size => ({ value: String(size), label: String(size) }))}
         onChange={value => { localStorage.setItem(PAGE_SIZE_KEY, value); setPageSize(Number(value)); setPage(0); }} /></label>
-    </div><div className="flex flex-wrap gap-2"><button className="admin-button" disabled={filtersChanged || loading || adding || invalidDates || !!error || !count} onClick={() => void addFiltered()}>{adding ? 'Adding…' : `Add all ${count} filtered`}</button><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div></div>
+    </div><button className="admin-button" disabled={filtersChanged || loading || invalidDates || !!error} onClick={() => void exportCsv()}>Export CSV</button></div>
+    <div className="mb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="admin-meta flex items-center gap-2" htmlFor="admin-selection-limit">Selection limit
+          <input id="admin-selection-limit" className="admin-input w-28" type="text" inputMode="numeric" placeholder="No limit"
+            aria-invalid={invalidLimit} aria-describedby={`admin-selection-help${invalidLimit ? ' admin-selection-limit-error' : ''}`} value={selectionLimit}
+            onChange={event => { setSelectionLimit(event.target.value); cohortRequest.current++; setSelecting(false); }} />
+        </label>
+        <button className="admin-button" disabled={filtersChanged || loading || selecting || invalidDates || invalidLimit || !!error || !count}
+          onClick={() => void selectFiltered()}>{selecting ? 'Selecting…' : limit === undefined ? `Select all ${count} filtered` : `Select first ${selectionCount} filtered`}</button>
+      </div>
+      <p id="admin-selection-help" className="admin-meta mt-2">Replaces your current selection using the table’s current order. Order: {sortLabel}. Blank selects all matches.</p>
+      {invalidLimit && <p id="admin-selection-limit-error" role="alert" className="text-red6 mt-2">Enter a whole number from 1 to {Number.MAX_SAFE_INTEGER.toLocaleString()} or leave blank.</p>}
+    </div>
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>

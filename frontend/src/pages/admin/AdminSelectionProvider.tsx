@@ -33,6 +33,7 @@ export default function AdminSelectionProvider({ children }: { children: ReactNo
     setNotice('');
   }, [formKey]);
   const add = useCallback((students: AdminStudent[]) => edit(previous => addToSelection(previous, students, formKey)), [edit, formKey]);
+  const replace = useCallback((students: AdminStudent[]) => edit(() => addToSelection(new Map(), students, formKey)), [edit, formKey]);
   const remove = useCallback((id: number) => edit(previous => { const next = new Map(previous); next.delete(id); return next; }), [edit]);
   const toggle = useCallback((student: AdminStudent) => edit(previous => {
     if (previous.has(student.id)) { const next = new Map(previous); next.delete(student.id); return next; }
@@ -84,7 +85,7 @@ export default function AdminSelectionProvider({ children }: { children: ReactNo
   };
 
   return <AdminSelectionContext.Provider value={{
-    selected, add, remove, toggle, sync, revision, formKey, forms, busy, notice, decide,
+    selected, add, replace, remove, toggle, sync, revision, formKey, forms, busy, notice, decide,
     clear: () => edit(() => new Map()),
     setFormKey: key => { if (!locked.current) { setForm(key); setNotice(''); } },
   }}>{children}</AdminSelectionContext.Provider>;

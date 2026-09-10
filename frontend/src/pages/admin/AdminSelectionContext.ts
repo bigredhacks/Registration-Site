@@ -4,6 +4,7 @@ import type { AdminStudent } from './adminApprovalState';
 export interface AdminSelection {
   selected: Map<number, AdminStudent>;
   add: (students: AdminStudent[]) => void;
+  replace: (students: AdminStudent[]) => void;
   remove: (id: number) => void;
   toggle: (student: AdminStudent) => void;
   clear: () => void;

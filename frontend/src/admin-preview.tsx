@@ -192,7 +192,9 @@ window.fetch = async (input, init) => {
   if (method === 'GET' && ['/api/admin/approval/students', '/api/admin/approval/selection'].includes(path)) {
     const rows = filtered(url.searchParams);
     const offset = Number(url.searchParams.get('offset') ?? 0);
-    return json({ data: path.endsWith('/selection') ? rows : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, fields: sampleFilterFields(formKey) });
+    const selectionLimit = url.searchParams.has('selection_limit') ? Number(url.searchParams.get('selection_limit')) : undefined;
+    if (selectionLimit !== undefined && (!Number.isSafeInteger(selectionLimit) || selectionLimit < 1)) return json({ error: 'Invalid registration filters.' }, 400);
+    return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, fields: sampleFilterFields(formKey) });
   }
   if (method === 'GET' && (path.endsWith('/export.csv') || path.endsWith('/export'))) {
     const rows = filtered(url.searchParams);

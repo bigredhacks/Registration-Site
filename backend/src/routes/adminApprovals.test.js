@@ -420,3 +420,38 @@ test('selection limits follow invitation filters without limiting invitation tot
   assert.match(csv.body, /student3@example.com/);
   assert.deepEqual(writes, []);
 });
+
+test('task views share full matching IDs, counts, ordered selection and CSV cohorts', async () => {
+  reset([
+    student(1, 'registration', { status: 'approved' }),
+    student(2, 'registration', { status: 'waitlisted' }),
+    student(3, 'registration', { status: 'rejected' }),
+    student(4, 'registration', { status: 'approved', released_status: 'approved', invitation_response: 'accepted' }),
+    student(5, 'registration', { status: 'rejected', released_status: 'approved', invitation_response: 'declined' }),
+    student(6, 'registration', { status: 'pending', released_status: 'approved' }),
+    student(7, 'registration', { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted' }),
+    student(8, 'registration', { status: 'pending' }),
+    student(9, 'workshop', { status: 'approved' }),
+  ]);
+  for (const [view, ids] of [['all', [8, 7, 6, 5, 4, 3, 2, 1]], ['ready', [7, 5, 3, 2, 1]], ['invitations', [6, 5, 4]]]) {
+    const query = { form_key: 'registration', view, selection_limit: '2', limit: '1' };
+    const list = await request('get', '/students', query);
+    assert.equal(list.body.count, ids.length);
+    assert.deepEqual(list.body.matchingIds, ids);
+    assert.deepEqual(list.body.data.map(row => row.id), ids.slice(0, 1));
+    const selection = await request('get', '/selection', query);
+    assert.deepEqual(selection.body.data.map(row => row.id), ids.slice(0, 2));
+    const csv = await request('get', '/export.csv', query);
+    assert.equal(csv.body.split('\r\n').length, ids.length + 1);
+    for (const id of ids) assert.ok(csv.body.includes(`student${id}@example.com`));
+  }
+  for (const [invitation_response, id] of [['accepted', 4], ['declined', 5], ['unanswered', 6]]) {
+    const list = await request('get', '/students', { form_key: 'registration', view: 'invitations', invitation_response });
+    assert.deepEqual(list.body.matchingIds, [id]);
+  }
+  const omitted = await request('get', '/students', { form_key: 'registration' });
+  assert.equal(omitted.body.count, 8);
+  const invalid = await request('get', '/students', { form_key: 'registration', view: 'invalid' });
+  assert.equal(invalid.statusCode, 400);
+  assert.deepEqual(writes, []);
+});

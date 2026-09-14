@@ -56,6 +56,9 @@ const students: Student[] = Array.from({ length: 66 }, (_, index) => {
     answers: { first_name, last_name, email, school: schools[index % schools.length], age: ['Under 18', '18–20', '21–24', '25–30', '31+'][index % 5], level_of_study: ['Freshman', 'Sophomore', 'Junior', 'Senior'][index % 4], major: ['Computer Science', 'Physics', 'Mathematics'][index % 3], shirt_size: ['S', 'M', 'L'][index % 3], why_hack: 'Build a useful project with a team and learn something new.', dietary_restrictions: index % 3 ? ['None'] : ['Vegetarian', 'Gluten-Free'], first_time_hacker: index % 2 === 0, technical_skills: { Frontend: index % 2 ? 'Beginner' : 'Advanced' }, mlh_code_of_conduct: true },
   };
 });
+Object.assign(students[4], { status: 'rejected', released_status: 'approved' });
+Object.assign(students[5], { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted', invitation_responded_at: '2026-09-14T13:00:00Z' });
+Object.assign(students[6], { status: 'pending', released_status: 'waitlisted' });
 students.push(...students.slice(0, 8).map(student => ({ ...student, id: student.id + 100, form_key: 'workshop', status: 'pending', checked_in: false, checked_in_at: null, released_status: null, decision_released_at: null, invitation_response: null, invitation_responded_at: null })));
 const fields: FormField[] = [
   { id: 'first_name', label: 'First name', type: 'text', required: true },
@@ -160,6 +163,8 @@ function filtered(params: URLSearchParams) {
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
   const rows = students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
+    && (params.get('view') !== 'ready' || (['approved', 'waitlisted', 'rejected'].includes(student.status) && student.status !== student.released_status))
+    && (params.get('view') !== 'invitations' || student.released_status === 'approved')
     && answerFilters.every(filter => sampleMatches(student, filter))
     && (!params.get('status') || student.status === params.get('status'))
     && (!params.get('released_status') || student.released_status === params.get('released_status'))
@@ -205,7 +210,7 @@ window.fetch = async (input, init) => {
     for (const student of students) if (student.form_key === formKey && student.released_status === 'approved') invitationCounts[student.invitation_response ?? 'unanswered']++;
     const selectionLimit = url.searchParams.has('selection_limit') ? Number(url.searchParams.get('selection_limit')) : undefined;
     if (selectionLimit !== undefined && (!Number.isSafeInteger(selectionLimit) || selectionLimit < 1)) return json({ error: 'Invalid registration filters.' }, 400);
-    return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, fields: sampleFilterFields(formKey), invitationCounts });
+    return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, matchingIds: rows.map(row => row.id), fields: sampleFilterFields(formKey), invitationCounts });
   }
   if (method === 'GET' && (path.endsWith('/export.csv') || path.endsWith('/export'))) {
     const rows = filtered(url.searchParams);

@@ -9,7 +9,7 @@ import AdminFormEditor from "./AdminFormEditor";
 import AdminFormList from "./AdminFormList";
 import AdminTeamMatching from "./AdminTeamMatching";
 import AdminSelectionProvider from "./AdminSelectionProvider";
-import AdminSelectionPanel from "./AdminSelectionPanel";
+import AdminSelectionActions from "./AdminSelectionActions";
 import { useAdminSelection } from "./AdminSelectionContext";
 import AdminSelect from "@/components/AdminSelect";
 
@@ -103,7 +103,7 @@ export default function AdminPage() {
 }
 
 export function ApprovalWorkspace({ tab }: { tab: Tab }) {
-  const { formKey, setFormKey, forms, busy, selected } = useAdminSelection();
+  const { formKey, setFormKey, forms, busy } = useAdminSelection();
   return <>
     <div className="admin-toolbar mb-4">
       <label className="admin-form-picker">Application
@@ -115,15 +115,11 @@ export function ApprovalWorkspace({ tab }: { tab: Tab }) {
       </label>
     </div>
     <div className="admin-approval-workspace">
-      <button className="admin-button admin-selection-jump" aria-controls="admin-selected-panel" onClick={() => {
-        const panel = document.getElementById('admin-selected-panel');
-        panel?.scrollIntoView({ block: 'start' }); panel?.focus({ preventScroll: true });
-      }}>Selected students ({selected.size}) ↓</button>
       <div className="min-w-0" key={`browse-${formKey}`} id="admin-browse-list">
         <div hidden={tab !== 'users'}><AdminUsers /></div>
         <fieldset disabled={busy} hidden={tab !== 'teams'}><AdminTeamMatching /></fieldset>
       </div>
-      <AdminSelectionPanel key={`selection-${formKey}`} />
+      {tab === 'teams' && <AdminSelectionActions />}
     </div>
   </>;
 }

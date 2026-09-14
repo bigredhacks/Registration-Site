@@ -54,3 +54,8 @@ export interface IdentityMatch {
   matches: AdminStudent[];
   duplicate: boolean;
 }
+
+export const decisionOptions = [
+  { value: 'approved', label: 'Approved' }, { value: 'waitlisted', label: 'Waitlisted' },
+  { value: 'rejected', label: 'Not selected' }, { value: 'pending', label: 'Pending' },
+];

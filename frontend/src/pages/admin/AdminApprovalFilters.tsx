@@ -20,13 +20,14 @@ const operators = {
 };
 const needsValue = (filter: ApprovalAnswerFilter) => !['empty', 'not_empty'].includes(filter.operator);
 
-export default function AdminApprovalFilters({ fields, applied, draft, onChange: setDraft, onApply, disabled }: {
+export default function AdminApprovalFilters({ fields, applied, draft, onChange: setDraft, onApply, disabled, embedded = false }: {
   fields: ApprovalFilterField[];
   applied: ApprovalAnswerFilter[];
   draft: ApprovalAnswerFilter[];
   onChange: (filters: ApprovalAnswerFilter[]) => void;
   onApply: (filters: ApprovalAnswerFilter[]) => void;
   disabled: boolean;
+  embedded?: boolean;
 }) {
   const changed = JSON.stringify(draft) !== JSON.stringify(applied);
   const valid = draft.every(filter => !needsValue(filter) || filter.values?.some(value => value.trim()));
@@ -62,7 +63,7 @@ export default function AdminApprovalFilters({ fields, applied, draft, onChange:
         <button type="button" className="admin-text-button" aria-label={`Remove filter ${index + 1}`} onClick={() => setDraft(draft.filter((_, i) => i !== index))}>Remove</button>
       </div>;
     })}
-    {(draft.length > 0 || applied.length > 0) && <div className="admin-toolbar mt-3">
+    {!embedded && (draft.length > 0 || applied.length > 0) && <div className="admin-toolbar mt-3">
       <div className="flex gap-2"><button type="button" className="admin-button admin-button-primary" disabled={disabled || !valid || !changed} onClick={() => onApply(draft)}>Apply filters</button>
         <button type="button" className="admin-text-button" disabled={disabled} onClick={() => { setDraft([]); onApply([]); }}>Clear form filters</button></div>
       {changed && <span className="admin-meta" role="status">Changes not applied</span>}

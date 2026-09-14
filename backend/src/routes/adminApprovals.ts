@@ -12,6 +12,7 @@ const columns = 'id,user_id,email,first_name,last_name,school,status,form_key,ch
 const formKeySchema = z.string().trim().min(1).max(100);
 const filtersSchema = z.object({
   form_key: formKeySchema,
+  view: z.enum(['all', 'ready', 'invitations']).optional(),
   status: RegistrationStatusSchema.or(z.literal('')).optional(),
   released_status: z.enum(['approved', 'waitlisted', 'rejected', '']).optional(),
   release_state: z.enum(['unreleased', 'changed', 'current', '']).optional(),
@@ -71,7 +72,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
   const parsed = filtersSchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid registration filters.' }); return; }
   try {
-    const { form_key, status, released_status, release_state, invitation_response, q, checked_in, offset, limit, selection_limit, answers, sort, dir, from, to } = parsed.data;
+    const { form_key, view, status, released_status, release_state, invitation_response, q, checked_in, offset, limit, selection_limit, answers, sort, dir, from, to } = parsed.data;
     const allRows = await loadStudents(form_key, req.path === '/export.csv');
     const { data: config, error: configError } = await supabase.from('form_configs').select('fields').eq('key', form_key).maybeSingle();
     if (configError) throw configError;
@@ -80,7 +81,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
       res.status(400).json({ error: 'A filtered question is no longer available. Remove it and try again.' }); return;
     }
     // Export and selection follow the table order before any selection limit.
-    const rows = sortApprovalStudents(filterApprovalStudents(allRows, { status, releasedStatus: released_status, releaseState: release_state, invitationResponse: invitation_response, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
+    const rows = sortApprovalStudents(filterApprovalStudents(allRows, { view, status, releasedStatus: released_status, releaseState: release_state, invitationResponse: invitation_response, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
     if (req.path === '/export.csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="registrations.csv"');
@@ -92,7 +93,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
     if (form_key === 'registration') for (const row of allRows) {
       if (row.released_status === 'approved') invitationCounts[row.invitation_response ?? 'unanswered']++;
     }
-    res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields, invitationCounts } : {}) });
+    res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields, invitationCounts, matchingIds: rows.map(row => row.id) } : {}) });
   } catch {
     res.status(500).json({ error: 'Could not load registrations.' });
   }

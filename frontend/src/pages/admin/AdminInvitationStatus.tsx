@@ -9,6 +9,8 @@ export default function AdminInvitationStatus({ student, showDates = false }: { 
     : student.released_status === 'approved' ? 'Awaiting response' : null;
   const previousResponse = !!student.invitation_response && student.released_status !== 'approved';
 
+  if (!showDates) return <div className="admin-meta"><p>{student.released_status === 'approved' ? student.invitation_response === 'accepted' ? 'Invitation accepted' : student.invitation_response === 'declined' ? 'Invitation declined' : 'Awaiting response' : decision}</p>{previousResponse && <p className="mt-1">Previous response recorded</p>}</div>;
+
   return <div className="admin-meta mt-2 space-y-1">
     <p>Applicant sees: <span className="font-medium">{decision}</span></p>
     {student.released_status && student.released_status !== student.status && <p className="text-red6">{releaseStateLabel(student)}</p>}

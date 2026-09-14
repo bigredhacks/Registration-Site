@@ -29,14 +29,15 @@ export default function AdminDecisionRelease() {
   };
   if (formKey !== 'registration') return null;
 
-  return <div className="mt-4 border-t border-gray-200 pt-4">
-    <button className="admin-button admin-button-primary" disabled={busy || loading || !selected.size} onClick={() => void prepare()}>{loading ? 'Refreshing decisions…' : 'Release selected decisions'}</button>
-    <p className="admin-meta mt-2">Release makes the selected draft decisions visible on applicant dashboards. Send decision emails separately after release.</p>
+  return <div className="admin-release-action">
+    <button className="admin-button admin-button-primary" disabled={busy || loading || !selected.size} onClick={() => void prepare()}>{loading ? 'Refreshing decisions…' : 'Release decisions…'}</button>
+
     {error && <p role="alert" className="text-red6 mt-2">{error}</p>}
     {preview && !preview.decisions.length && <p role="status" className="admin-meta mt-2">No selected decisions are ready to release. Pending or missing applications remain selected.</p>}
     <ConfirmationDialog open={!!preview?.decisions.length} title="Release selected decisions?" busy={busy}
       confirmLabel={`Release ${preview?.decisions.length ?? 0} decisions`} onClose={() => setPreview(null)}
       onConfirm={() => { if (preview) void release(preview.decisions).finally(() => setPreview(null)); }}>
+      <p>Applies to the entire selection, including applicants outside this list. Makes decisions visible on dashboards. Does not send emails.</p>
       <p>Applicants will see these decisions immediately. Approved applicants without a recorded response can accept or decline. Previous responses are kept. No emails will be sent.</p>
       <p className="mt-2">{['approved', 'waitlisted', 'rejected'].map(status => `${preview?.students.filter(student => student.status === status).length ?? 0} ${status}`).join(' · ')}</p>
       {!!preview?.skipped && <p className="mt-2">{preview.skipped} pending or missing applications will be skipped and remain selected.</p>}

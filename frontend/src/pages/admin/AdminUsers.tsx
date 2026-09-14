@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAdminSelection } from './AdminSelectionContext';
-import { releaseStateLabel, studentName, type AdminStudent } from './adminApprovalState';
+import { studentName, type AdminStudent } from './adminApprovalState';
 import AdminApprovalFilters, { type ApprovalAnswerFilter, type ApprovalFilterField } from './AdminApprovalFilters';
 import AdminSelect from '@/components/AdminSelect';
+import AdminInvitationStatus from './AdminInvitationStatus';
+import AdminInvitationResponse from './AdminInvitationResponse';
 
 interface Registration extends AdminStudent {
   created_at: string;
@@ -196,9 +198,9 @@ export default function AdminUsers() {
 
   return <fieldset disabled={busy} className="admin-students-view">
     {formKey === 'registration' && <section aria-label="Released invitation totals" className="mb-4 rounded-lg border border-gray-200 p-3">
-      <p className="admin-meta">Released approvals · All main applications</p>
-      <p className="mt-1">{loading || error ? 'Totals unavailable while loading applications.' : `${invitationCounts.accepted} accepted · ${invitationCounts.declined} declined · ${invitationCounts.unanswered} unanswered`}</p>
-      <p className="admin-meta mt-1">Unanswered invitations remain valid until their released decision changes.</p>
+      <p className="admin-meta">Responses to released invitations</p>
+      <p className="mt-1">{loading || error ? 'Invitation totals are unavailable until applications load.' : `${invitationCounts.accepted} accepted · ${invitationCounts.declined} declined · ${invitationCounts.unanswered} awaiting response`}</p>
+      <p className="admin-meta mt-1">Counts include all currently released approvals, regardless of filters. Draft approvals are excluded. Invitations do not expire automatically.</p>
     </section>}
     <div className="admin-toolbar">
       <form className="admin-search" onSubmit={event => { event.preventDefault(); setPage(0); setQuery(search.trim()); setRefreshKey(value => value + 1); }}>
@@ -216,10 +218,22 @@ export default function AdminUsers() {
         {(from || to) && <button type="button" className="admin-text-button" onClick={() => { setFrom(''); setTo(''); setPage(0); }}>Clear</button>}
       </div>
     </div>
-    {formKey === 'registration' && <div className="admin-toolbar mb-3">
-      <AdminSelect aria-label="Filter by released decision" className="admin-input" value={releasedStatus} placeholder="All released decisions" options={['approved', 'waitlisted', 'rejected'].map(value => ({ value, label: value }))} onChange={value => { setReleasedStatus(value); setPage(0); }} />
-      <AdminSelect aria-label="Filter by release state" className="admin-input" value={releaseState} placeholder="All release states" options={[{ value: 'unreleased', label: 'Not released' }, { value: 'changed', label: 'Unpublished changes' }, { value: 'current', label: 'Released' }]} onChange={value => { setReleaseState(value); setPage(0); }} />
-      <AdminSelect aria-label="Filter by invitation response" className="admin-input" value={invitationResponse} placeholder="All invitation responses" options={[{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }]} onChange={value => { setInvitationResponse(value); setPage(0); }} />
+    {formKey === 'registration' && <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+      <div className="min-w-0">
+        <label htmlFor="applicant-visible-decision" className="admin-meta mb-1 block">Applicant sees</label>
+        <AdminSelect id="applicant-visible-decision" aria-label="Applicant sees" fullWidth className="admin-input" value={releasedStatus} placeholder="Any applicant-visible decision" options={[{ value: 'approved', label: 'Approved' }, { value: 'waitlisted', label: 'Waitlisted' }, { value: 'rejected', label: 'Not selected' }]} onChange={value => { setReleasedStatus(value); setPage(0); }} />
+        <p className="admin-meta mt-1">Any includes applicants still under review.</p>
+      </div>
+      <div className="min-w-0">
+        <label htmlFor="decision-release" className="admin-meta mb-1 block">Decision release</label>
+        <AdminSelect id="decision-release" aria-label="Decision release" fullWidth className="admin-input" value={releaseState} placeholder="Any release state" options={[{ value: 'unreleased', label: 'No decision released yet' }, { value: 'changed', label: 'Draft differs from released decision' }, { value: 'current', label: 'Draft matches released decision' }]} onChange={value => { setReleaseState(value); setPage(0); }} />
+        <p className="admin-meta mt-1">Compare the saved draft with what applicants see.</p>
+      </div>
+      <div className="min-w-0">
+        <label htmlFor="invitation-response" className="admin-meta mb-1 block">Invitation response</label>
+        <AdminSelect id="invitation-response" aria-label="Invitation response" fullWidth className="admin-input" value={invitationResponse} placeholder="Any response or no invitation" options={[{ value: 'accepted', label: 'Accepted invitation' }, { value: 'declined', label: 'Declined invitation' }, { value: 'unanswered', label: 'Invited — awaiting response' }]} onChange={value => { setInvitationResponse(value); setPage(0); }} />
+        <p className="admin-meta mt-1">Accepted and declined include previously recorded responses.</p>
+      </div>
     </div>}
     {invalidDates && <p role="alert" className="text-red6 mb-3">Start date must be on or before end date.</p>}
     <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading || invalidDates} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
@@ -247,11 +261,16 @@ export default function AdminUsers() {
       {detailLoading && <p className="admin-meta">Loading application…</p>}
       {detail && <>
         <div className="admin-toolbar"><div><h2>{studentName(detail)}</h2><p className="admin-meta break-all">{detail.email}</p></div><span className={`admin-status admin-status-${detail.status}`}>{detail.status}</span></div>
-        {formKey === 'registration' && <dl className="admin-answer-list mt-3">
-          <div><dt>Draft decision</dt><dd>{detail.status}</dd></div>
-          <div><dt>Released decision</dt><dd>{detail.released_status ?? 'Under review'} · {releaseStateLabel(detail)}{detail.decision_released_at ? ` · ${new Date(detail.decision_released_at).toLocaleString()}` : ''}</dd></div>
-          <div><dt>Invitation response</dt><dd>{detail.invitation_response ?? (detail.released_status === 'approved' ? 'Awaiting response' : 'No invitation response')}{detail.invitation_responded_at ? ` · ${new Date(detail.invitation_responded_at).toLocaleString()}` : ''}</dd></div>
-        </dl>}
+        {formKey === 'registration' && <>
+          <p className="admin-meta mt-3">Draft decision: <span className="font-medium">{detail.status}</span></p>
+          <AdminInvitationStatus student={detail} showDates />
+          <AdminInvitationResponse key={detail.id} student={detail} onSaved={student => {
+            setDetail(previous => previous?.id === student.id ? { ...previous, ...student } : previous);
+            sync([student]);
+            setRefreshKey(value => value + 1);
+            showToast('Invitation response updated. No email sent.', 'success');
+          }} />
+        </>}
         <div className="admin-toolbar my-4"><p className="admin-meta">{detail.checked_in ? `Checked in${detail.checked_in_at ? ` · ${new Date(detail.checked_in_at).toLocaleString()}` : ''}` : 'Not checked in'}</p>
           <div className="flex flex-wrap gap-2">
             {/* Only pre-Box registrations have a stored file; resumes now go to a shared
@@ -280,7 +299,7 @@ export default function AdminUsers() {
           <td data-label="Select"><input type="checkbox" aria-label={`Select ${studentName(row)}`} checked={selected.has(row.id)} onChange={() => toggle(row)} /></td>
           <td data-label="Student"><div><p>{studentName(row)}</p><p className="admin-meta break-all">{row.email}</p></div></td>
           <td data-label="School">{row.school || '—'}</td><td data-label={formKey === 'registration' ? 'Decisions & response' : 'Status'}><span className={`admin-status admin-status-${row.status}`}>{row.status}</span>
-            {formKey === 'registration' && <div className="admin-meta mt-2"><p>Released: {row.released_status ?? '—'}</p><p>{releaseStateLabel(row)}</p><p>RSVP: {row.invitation_response ?? (row.released_status === 'approved' ? 'Awaiting response' : '—')}</p></div>}
+            {formKey === 'registration' && <AdminInvitationStatus student={row} />}
           </td>
           <td data-label="Submitted">{row.created_at ? <time dateTime={row.created_at} title={`${new Date(row.created_at).toLocaleString(undefined, { timeZone: 'UTC' })} UTC`}>{new Date(row.created_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</time> : '—'}</td>
           <td data-label="Actions"><button className="admin-button" id={`review-${row.id}`} onClick={() => void loadDetail(row.id)}>Review</button></td>

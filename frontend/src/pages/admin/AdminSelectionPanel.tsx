@@ -48,6 +48,7 @@ export default function AdminSelectionPanel() {
         </li>)}
         {!selected.size && <li className="admin-meta">No students selected</li>}
       </ul>
+      {formKey === 'registration' && <p className="admin-meta mb-2">Save draft decisions</p>}
       <div className="admin-selection-actions">
         <button className="admin-button admin-button-primary" disabled={!selected.size} onClick={() => void decide('approved')}>{busy ? 'Updating…' : 'Approve'}</button>
         <button className="admin-button" disabled={!selected.size} onClick={() => void decide('rejected')}>Reject</button>
@@ -55,6 +56,7 @@ export default function AdminSelectionPanel() {
           options={[{ value: 'waitlisted', label: 'Waitlist' }, { value: 'pending', label: 'Set pending' }]}
           onChange={value => { if (value) void decide(value); }} />
       </div>
+      {formKey === 'registration' && <p className="admin-meta mt-2">These actions save drafts only. Select applicants again to release their decisions below. No emails are sent.</p>}
       {notice && <p className="admin-meta mt-3" role="status">{notice}</p>}
       <div className="admin-paste-panel">
         <label htmlFor="admin-paste-students">Add emails or full names</label>

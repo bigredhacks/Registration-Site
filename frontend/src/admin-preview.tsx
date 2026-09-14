@@ -30,6 +30,7 @@ interface Payload extends Partial<PreviewForm> {
   form_key?: string; ids?: number[]; status?: string; checked_in?: boolean;
   entries?: string[]; teams?: Draft[]; pool_id?: string;
   decisions?: ReleaseDecision[];
+  id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 const fullName = (student: Student) => `${student.first_name} ${student.last_name}`;
@@ -218,6 +219,16 @@ window.fetch = async (input, init) => {
       const identity = normalize(input); const duplicate = seen.has(identity); seen.add(identity);
       return { input, duplicate, matches: students.filter(student => student.form_key === formKey && normalize(identity.includes('@') ? student.email : fullName(student)) === identity) };
     }) });
+  }
+  if (path === '/api/admin/approval/invitation-response' && method === 'POST') {
+    const student = students.find(student => student.id === payload.id && student.form_key === 'registration'
+      && student.released_status === 'approved' && student.invitation_response === payload.expected_response
+      && student.invitation_responded_at === payload.expected_responded_at);
+    if (!student) return json({ error: 'The invitation or response has changed. Reopen this applicant’s Review page before trying again.' }, 409);
+    if (!payload.response || payload.response === payload.expected_response) return json({ error: 'Choose a different response.' }, 400);
+    student.invitation_response = payload.response;
+    student.invitation_responded_at = new Date().toISOString();
+    return json({ data: student });
   }
   if (path === '/api/admin/approval/decision' && method === 'POST') {
     const changed = students.filter(student => student.form_key === formKey && payload.ids?.includes(student.id));

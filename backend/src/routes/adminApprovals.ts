@@ -130,6 +130,29 @@ router.post('/release', validate({ body: z.object({
   }
 });
 
+router.post('/invitation-response', validate({ body: z.object({
+  id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  response: z.enum(['accepted', 'declined']),
+  expected_response: z.enum(['accepted', 'declined']),
+  expected_responded_at: z.iso.datetime({ offset: true }),
+}).strict().refine(value => value.response !== value.expected_response) }), async (req, res) => {
+  try {
+    const { id, response, expected_response, expected_responded_at } = req.body;
+    const { data, error } = await supabase.from('registrations')
+      .update({ invitation_response: response, invitation_responded_at: new Date().toISOString() })
+      .eq('id', id).eq('form_key', 'registration').eq('released_status', 'approved')
+      .eq('invitation_response', expected_response).eq('invitation_responded_at', expected_responded_at)
+      .select(columns);
+    if (error) { res.status(500).json({ error: 'Could not change the invitation response.' }); return; }
+    if (!data?.length) {
+      res.status(409).json({ error: 'The invitation or response has changed. Reopen this applicant’s Review page before trying again.' }); return;
+    }
+    res.json({ data: data[0] });
+  } catch {
+    res.status(500).json({ error: 'Could not change the invitation response.' });
+  }
+});
+
 router.post('/decision', validate({ body: z.object({
   form_key: formKeySchema,
   ids: z.array(z.number().int().positive()).min(1).max(200),

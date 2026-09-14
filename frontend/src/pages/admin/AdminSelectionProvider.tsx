@@ -78,7 +78,7 @@ export default function AdminSelectionProvider({ children }: { children: ReactNo
       locked.current = false;
       setBusy(false);
       setRevision(value => value + 1);
-      const result = `${updated} ${status}.` + (failed ? ` ${ids.length - updated} remain selected; refresh or retry.` : '');
+      const result = (formKey === 'registration' ? `${updated} draft decisions saved as ${status}. Applicants still see their last released decision, or Under review. No emails sent.` : `${updated} ${status}.`) + (failed ? ` ${ids.length - updated} remain selected; refresh or retry.` : '');
       setNotice(result);
       showToast(result, failed ? 'error' : 'success');
     }

@@ -40,7 +40,7 @@ export default function InvitationActions({ registration, onRefresh, onSaved }: 
       <button disabled={saving} onClick={() => setChoice('declined')} className="min-h-11 rounded-lg border border-red5 px-4 font-poppins text-sm font-semibold text-red6 disabled:opacity-50">Decline invitation</button>
     </div>}
     {registration.invitation_response && <p className="font-poppins text-xs text-gray-500">
-      Response recorded: {registration.invitation_response}{registration.invitation_responded_at ? ` · ${new Date(registration.invitation_responded_at).toLocaleString()}` : ''}. Contact the organizers for corrections.
+      {registration.status === 'approved' ? 'Your response' : 'Your previous invitation response'}: {registration.invitation_response === 'accepted' ? 'Accepted' : 'Declined'}{registration.invitation_responded_at ? ` · ${new Date(registration.invitation_responded_at).toLocaleString()}` : ''}. Contact the organizers for corrections.
     </p>}
     {error && <p role="alert" className="font-poppins text-sm text-red6">{error}</p>}
     <ConfirmationDialog open={choice !== null} busy={saving}

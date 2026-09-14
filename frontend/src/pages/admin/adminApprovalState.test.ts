@@ -25,5 +25,5 @@ test('release preview uses refreshed decisions, skips pending and other forms, a
   assert.deepEqual(preview.decisions, [{ id: 1, expected_status: 'approved' }, { id: 4, expected_status: 'waitlisted' }]);
   assert.equal(preview.skipped, 3);
   assert.equal(preview.students[0].invitation_response, 'accepted');
-  assert.deepEqual(rows.map(releaseStateLabel), ['Released', 'Not released', 'Not released', 'Unpublished changes']);
+  assert.deepEqual(rows.map(releaseStateLabel), ['Released', 'Not released', 'Not released', 'Draft changes not released']);
 });

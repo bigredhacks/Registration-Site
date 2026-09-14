@@ -85,6 +85,50 @@ async function request(method, routePath, input = {}) {
   return res;
 }
 
+test('organizers can reverse either recorded response without changing decisions or other applicants', async () => {
+  for (const previous of ['accepted', 'declined']) {
+    const timestamp = '2026-09-14T12:00:00.000Z';
+    reset([student(1, 'registration', { released_status: 'approved', invitation_response: previous, invitation_responded_at: timestamp }), student(2)]);
+    const response = previous === 'accepted' ? 'declined' : 'accepted';
+    const res = await request('post', '/invitation-response', { id: 1, response, expected_response: previous, expected_responded_at: timestamp });
+    assert.equal(res.statusCode, 200);
+    assert.equal(records[0].invitation_response, response);
+    assert.notEqual(records[0].invitation_responded_at, timestamp);
+    assert.equal(records[0].status, 'pending');
+    assert.equal(records[0].released_status, 'approved');
+    assert.equal(records[1].invitation_response, undefined);
+    assert.equal(res.body.data.id, 1);
+  }
+});
+
+test('response corrections reject stale responses, stale timestamps, inactive invitations and other forms', async () => {
+  const timestamp = '2026-09-14T12:00:00.000Z';
+  for (const extra of [
+    { invitation_response: 'declined' },
+    { invitation_responded_at: '2026-09-14T13:00:00.000Z' },
+    { released_status: 'waitlisted' },
+    { released_status: null },
+    { form_key: 'workshop' },
+    { invitation_response: null, invitation_responded_at: null },
+  ]) {
+    reset([student(1, 'registration', { released_status: 'approved', invitation_response: 'accepted', invitation_responded_at: timestamp, ...extra })]);
+    const before = structuredClone(records);
+    const res = await request('post', '/invitation-response', { id: 1, response: 'declined', expected_response: 'accepted', expected_responded_at: timestamp });
+    assert.equal(res.statusCode, 409);
+    assert.deepEqual(records, before);
+  }
+});
+
+test('response correction validates input before querying', async () => {
+  const valid = { id: 1, response: 'declined', expected_response: 'accepted', expected_responded_at: '2026-09-14T12:00:00Z' };
+  for (const extra of [{ response: 'pending' }, { response: 'accepted' }, { id: -1 }, { expected_responded_at: 'invalid' }, { form_key: 'workshop' }]) {
+    reset([]);
+    const res = await request('post', '/invitation-response', { ...valid, ...extra });
+    assert.equal(res.statusCode, 400);
+    assert.equal(queryCount, 0);
+  }
+});
+
 test('bulk decisions update only selected ids in the requested form and report actual changed records', async () => {
   reset([student(1), student(2, 'workshop'), student(3)]);
   const res = await request('post', '/decision', { form_key: ' registration ', ids: [1, 1, 2, 999], status: 'approved' });

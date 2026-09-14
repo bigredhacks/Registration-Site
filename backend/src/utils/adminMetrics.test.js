@@ -55,3 +55,57 @@ test('validates dates, ranges and query value types', () => {
   }
   assert.equal(metricsQuerySchema.safeParse({ from: '2026-09-01', to: '2026-09-01' }).success, true);
 });
+
+test('invitation metrics separate drafts, current invitations, historical responses and other forms', () => {
+  const base = { ...rows[0], form_key: 'registration', released_status: null, invitation_response: null };
+  const applicants = [
+    base,
+    { ...base, released_status: 'approved', invitation_response: 'accepted' },
+    { ...base, released_status: 'approved', invitation_response: 'declined' },
+    { ...base, status: 'waitlisted', released_status: 'approved' },
+    { ...base, released_status: 'waitlisted', invitation_response: 'accepted' },
+    { ...base, released_status: 'rejected' },
+    { ...base, form_key: 'workshop' },
+  ];
+  const result = buildMetrics(applicants, {});
+  assert.equal(result.released_invitations, 3);
+  assert.deepEqual(result.invitation_counts, { accepted: 1, declined: 1, unanswered: 1 });
+  assert.equal(result.by_released_status.unreleased, 1);
+  assert.equal(result.by_released_status.waitlisted, 1);
+  assert.equal(result.by_released_status.rejected, 1);
+  assert.equal(result.by_released_status.not_applicable, 1);
+  assert.equal(result.by_release_state.changed, 3);
+  assert.equal(result.by_invitation_response.accepted, 2);
+  assert.equal(result.by_invitation_response.no_invitation, 2);
+  for (const dimension of ['released_status', 'release_state', 'invitation_response']) {
+    assert.equal(Object.values(result[`by_${dimension}`]).reduce((a, b) => a + b, 0), applicants.length);
+  }
+  assert.equal(buildMetrics(applicants, { invitation_response: 'unanswered' }).total, 1);
+  assert.equal(buildMetrics(applicants, { release_state: 'unreleased' }).total, 1);
+  const accepted = buildMetrics(applicants, { released_status: 'approved', invitation_response: 'accepted', school: 'Cornell', from: '2026-09-01', to: '2026-09-01' });
+  assert.equal(accepted.total, 1);
+  assert.equal(accepted.invitation_counts.accepted, 1);
+  assert.equal(buildMetrics(applicants, { form_key: 'workshop' }).released_invitations, 0);
+  assert.equal(buildMetrics(applicants, { from: '2026-09-02' }).released_invitations, 0);
+  applicants[1] = { ...applicants[1], invitation_response: 'declined' };
+  assert.deepEqual(buildMetrics(applicants, {}).invitation_counts, { accepted: 0, declined: 2, unanswered: 1 });
+});
+
+test('validates new metrics state filters', () => {
+  for (const query of [{ released_status: 'pending' }, { release_state: 'approved' }, { invitation_response: 'maybe' }]) {
+    assert.equal(metricsQuerySchema.safeParse(query).success, false);
+  }
+  assert.equal(metricsQuerySchema.safeParse({ released_status: 'approved', release_state: 'changed', invitation_response: 'unanswered' }).success, true);
+});
+
+
+test('state filter choices remain available with zero matching applicants', () => {
+  for (const source of [[], rows]) {
+    const result = buildMetrics(source, { invitation_response: 'accepted' });
+    assert.equal(result.total, 0);
+    assert.deepEqual(result.options.invitation_response, ['accepted', 'declined', 'unanswered', 'no_invitation', 'not_applicable']);
+    assert.deepEqual(result.options.released_status, ['approved', 'waitlisted', 'rejected', 'unreleased', 'not_applicable']);
+    assert.deepEqual(result.options.release_state, ['unreleased', 'changed', 'current', 'not_applicable']);
+    assert.equal(result.invitation_counts.accepted, 0);
+  }
+});

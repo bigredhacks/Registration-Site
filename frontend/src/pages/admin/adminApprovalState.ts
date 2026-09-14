@@ -30,7 +30,7 @@ export function buildReleasePreview(ids: number[], students: AdminStudent[]) {
 }
 
 export function releaseStateLabel(student: AdminStudent) {
-  return !student.released_status ? 'Not released' : student.released_status !== student.status ? 'Unpublished changes' : 'Released';
+  return !student.released_status ? 'Not released' : student.released_status !== student.status ? 'Draft changes not released' : 'Released';
 }
 
 export function studentName(student: AdminStudent): string {

@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api";
 import { extractSubmissionFeedback } from "@/lib/registrationUi";
 import { formatRegistrationDeadline, isRegistrationClosed } from "@/lib/registrationClosure";
 import { useRegistrationClock } from "@/lib/useRegistrationClock";
+import type { ApplicantInvitation } from '@/lib/invitations';
 
 interface ApplicationPanelProps {
   isOpen: boolean;
@@ -14,7 +15,7 @@ interface ApplicationPanelProps {
   onSubmitted: (registration: RegistrationResponse) => void;
 }
 
-export interface RegistrationResponse {
+export interface RegistrationResponse extends ApplicantInvitation {
   id: number | string;
   answers?: Record<string, unknown>;
   status?: string | null;
@@ -67,6 +68,7 @@ function registrationToFormValues(registration: RegistrationResponse): Record<st
 
 function formatStatusLabel(status?: string | null): string {
   if (!status) return "Draft";
+  if (status === 'pending' || status === 'submitted') return 'Under review';
   return `${status.charAt(0).toUpperCase()}${status.slice(1)}`;
 }
 

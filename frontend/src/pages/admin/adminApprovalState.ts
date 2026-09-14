@@ -5,8 +5,32 @@ export interface AdminStudent {
   first_name?: string | null;
   last_name?: string | null;
   status: string;
+  released_status?: 'approved' | 'waitlisted' | 'rejected' | null;
+  decision_released_at?: string | null;
+  invitation_response?: 'accepted' | 'declined' | null;
+  invitation_responded_at?: string | null;
   form_key?: string | null;
   team_name?: string | null;
+}
+
+export interface ReleaseDecision {
+  id: number;
+  expected_status: 'approved' | 'waitlisted' | 'rejected';
+}
+
+export function buildReleasePreview(ids: number[], students: AdminStudent[]) {
+  const selectedIds = new Set(ids);
+  const eligible = students.filter(student => selectedIds.has(student.id) && student.form_key === 'registration'
+    && ['approved', 'waitlisted', 'rejected'].includes(student.status));
+  return {
+    students: eligible,
+    decisions: eligible.map(student => ({ id: student.id, expected_status: student.status as ReleaseDecision['expected_status'] })),
+    skipped: selectedIds.size - eligible.length,
+  };
+}
+
+export function releaseStateLabel(student: AdminStudent) {
+  return !student.released_status ? 'Not released' : student.released_status !== student.status ? 'Unpublished changes' : 'Released';
 }
 
 export function studentName(student: AdminStudent): string {

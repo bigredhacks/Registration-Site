@@ -30,6 +30,40 @@ Also apply `supabase/migrations/20260905_unique_team_membership.sql` before depl
 
 Approvals and Team Matching share a selection per application form. Selection survives tab, search, and page changes during the current admin session; refreshing the browser resets it. Bulk actions update registration statuses without sending decision emails. Pasted lists match exact emails or full names and require resolving ambiguous names. Resume matching with Box is not connected yet.
 
+## Decision release and invitation responses
+
+For the main `registration` application, `registrations.status` is the organizer's draft decision. Applicants see **Under review** until an admin uses **Release selected decisions** in Approvals. A release copies the reviewed draft into `released_status` and sets `decision_released_at`. Later draft edits remain private until released again. Only approved, waitlisted, and rejected decisions can be released; pending/submitted selections are skipped. Other forms keep their existing status behavior.
+
+Released approvals offer **Accept invitation** and **Decline invitation** on the dashboard, even when registration has closed or the form is inactive. The final answer is stored in `invitation_response` (`accepted`, `declined`, or null) with a database-generated `invitation_responded_at`. Identical retries preserve the original answer and timestamp; an opposite answer is rejected. There is no automatic expiry. Releasing a waitlist/rejection stops new responses, but retains any previous answer. Reapproval also retains that answer; exceptional corrections require organizer intervention outside this UI.
+
+The approvals list distinguishes draft decisions, released decisions, and RSVP. Its release/response filters also apply to selection and CSV exports. Form-wide invitation totals count only **released approved** registrations, independently of current draft decisions or table filters. Accepted/declined filters include historical responses; combine them with the released-approved filter to view current invitations.
+
+For each wave:
+
+1. Filter/select applicants and save draft decisions with Approve, Waitlist, or Reject. These actions do not release decisions or send emails.
+2. Select the intended applicants again and choose **Release selected decisions**. Review the refreshed names and decisions, then confirm. Applicants can see/respond immediately after release.
+3. Send decision emails through the separate email workflow. Use `released_status`, not `status`, for the email's decision; an approval recipient must have `form_key = 'registration'` and `released_status = 'approved'`. CSV includes release and response timestamps. `decision_released_at` is the latest changed release, not email-delivery tracking or a historical wave ID. The email workflow owns delivery tracking and deduplication.
+4. Review accepted, declined, and unanswered counts before selecting another wave. Unanswered invitations remain valid; the site does not enforce capacity or automatically promote applicants.
+
+Admin release requests use `POST /api/admin/approval/release` with `{form_key: "registration", decisions: [{id, expected_status}]}`. Each request is atomic for up to 200 records. A stale decision/missing record rejects the whole request with 409. Larger selections use multiple batches; earlier successful batches remain released if a later batch fails. Refresh and review before retrying an uncertain release. Releasing an unchanged decision is a no-op and preserves its timestamp and RSVP.
+
+Applicant responses use authenticated `PUT /api/registrations/me/invitation-response` with `{response: "accepted" | "declined"}`. Ownership and main-form scope come from the verified account. Query parameters and additional body fields are rejected. Applicant registration responses expose the released decision through `status` and omit `released_status`; admin APIs expose both draft and released fields. All data access uses Express and a backend secret/service-role key, including the two service-only database functions.
+
+### Migration and rollout
+
+Apply `supabase/migrations/20260914000000_invitation_responses.sql` **before deploying this version**. It is a one-time additive migration; every existing decision starts unreleased. It locks registrations during the transaction, records their original values in a temporary table, adds four nullable columns and paired timestamp/value checks, installs the two functions and privileges, and checks every original registration value before committing. Any preservation mismatch rolls the entire migration back. It does not rewrite answers, decisions, owners, resume references, check-ins, or related tables.
+
+Production procedure:
+
+1. Confirm the deployment's Supabase project and that `SUPABASE_SECRET_KEY` or `SUPABASE_SERVICE_ROLE_KEY` is present on the backend. A publishable key no longer suffices. Verify the live schema, triggers, RLS, role memberships, grants, and any views/functions exposing registrations. The migration revokes direct `anon`/`authenticated` access to this table (including existing column grants); inherited privileges or another privileged view/function must not expose drafts. Verify no external client relies on direct browser access to registrations.
+2. Take a fresh private logical backup using a PostgreSQL client compatible with the server, with the connection explicitly verified before running it. For a configured libpq service/environment, use `pg_dump --format=custom --file=/secure/path/brh-before-invitations.dump`, then inspect `pg_restore --list /secure/path/brh-before-invitations.dump`. Confirm application schema/data, sequences, Auth data, and Storage metadata are covered; rehearse the recovery procedure in a restricted recovery environment. Never put dumps in Git, public artifacts, or ordinary beta seed data. Verify protection of legacy Storage object bytes separately: they are not included in database dumps. Current hosted backup coverage must be checked rather than inferred from this repository. See [Supabase backups](https://supabase.com/docs/guides/platform/backups).
+3. Rehearse this exact migration on an isolated copy of the current schema with synthetic data. The repository's older migrations are not a complete schema baseline. Do not run a remote reset or blindly push the unreconciled migration directory.
+4. During a short maintenance window, pause decision editing and applicant/API traffic, then apply the exact SQL in Supabase SQL Editor or with `psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/20260914000000_invitation_responses.sql` against the verified connection. Stop on any error; do not continue deploying after an unsuccessful migration. Capture registration totals grouped by form/status and related-table totals before and after. All four new fields must initially be null, with all old totals unchanged.
+5. Deploy the backend and frontend together and verify the new API paths before restoring traffic. The old backend returns raw drafts, so adding columns alone does not activate privacy. Check a synthetic test account: draft approval remains Under review, releasing it enables RSVP, and recording a response persists after login. Verify unauthenticated/non-admin release attempts and direct PostgREST reads/writes are denied. Then restore traffic and release the real first wave through the admin UI.
+6. Watch release/response errors and compare the admin counts with the released-approved cohort after the first wave. Email sending is a separate operation.
+
+For recovery, prefer a forward fix. If disabling the RSVP UI, retain the backend's released-decision masking, direct-client restrictions, columns, and collected data. An unmodified old backend would expose draft decisions. Do not drop the new columns or restore a pre-RSVP backup as an ordinary application rollback: that would discard responses collected after launch. A failed migration transaction itself leaves the old schema/data intact.
+
 ## Development
 
 ```bash
@@ -54,3 +88,13 @@ npm run build
 npm run lint
 npm test
 ```
+
+With native PostgreSQL tools (`initdb`, `pg_ctl`, `psql`) available, run:
+
+```bash
+node --test supabase/tests/invitations.test.js
+```
+
+This creates and removes its own disposable PostgreSQL cluster using a private Unix socket and synthetic records. It never uses the app's Supabase configuration. It tests migration preservation, role permissions despite permissive legacy RLS, release validation/atomicity, final/idempotent responses, and competing response/release transactions. No production connection is needed.
+
+The development admin preview includes synthetic draft/released decisions and RSVP counts. For browser acceptance, check desktop and mobile release confirmation/cancellation, stale-release errors, multi-batch failure reporting, and filters/CSV. With synthetic applicant API data, check unreleased, approved, accepted, declined, waitlisted/rejected, inactive/closed forms, failed saves, reload persistence, and keyboard confirmation dialogs.

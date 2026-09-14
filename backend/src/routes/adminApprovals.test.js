@@ -238,3 +238,49 @@ test('an inverted submitted range is rejected rather than answered with an empty
     assert.deepEqual(res.body.data.map((row) => row.id), [1]);
   }
 });
+
+test('released and RSVP cohorts agree across list, selection and CSV; totals ignore drafts and page filters', async () => {
+  reset([
+    student(1, 'registration', { status: 'waitlisted', released_status: 'approved', invitation_response: 'accepted' }),
+    student(2, 'registration', { status: 'approved', released_status: 'approved', invitation_response: 'declined' }),
+    student(3, 'registration', { status: 'rejected', released_status: 'approved', invitation_response: null }),
+    student(4, 'registration', { status: 'approved', released_status: null }),
+    student(5, 'registration', { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted' }),
+  ]);
+  const filters = { form_key: 'registration', released_status: 'approved', invitation_response: 'unanswered', release_state: 'changed' };
+  const list = await request('get', '/students', filters);
+  assert.deepEqual(list.body.data.map(row => row.id), [3]);
+  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 1, unanswered: 1 });
+  const selection = await request('get', '/selection', filters);
+  assert.deepEqual(selection.body.data, list.body.data);
+  const csv = await request('get', '/export.csv', filters);
+  assert.match(csv.body, /student3@example.com/);
+  assert.doesNotMatch(csv.body, /student[1245]@example.com/);
+  const unreleased = await request('get', '/students', { form_key: 'registration', release_state: 'unreleased' });
+  assert.deepEqual(unreleased.body.data.map(row => row.id), [4]);
+  await request('post', '/decision', { form_key: 'registration', ids: [1], status: 'rejected' });
+  assert.equal(records[0].released_status, 'approved');
+  assert.equal(records[0].invitation_response, 'accepted');
+});
+
+test('release validates main form, unique reviewed statuses and batch limits before the RPC', async () => {
+  let calls = [];
+  let failure = null;
+  supabase.rpc = async (name, args) => {
+    calls.push({ name, args });
+    return { data: [student(1, 'registration', { released_status: 'approved' })], error: failure };
+  };
+  const valid = { form_key: 'registration', decisions: [{ id: 1, expected_status: 'approved' }] };
+  for (const patch of [
+    { form_key: 'workshop' }, { decisions: [] }, { decisions: [{ id: 1, expected_status: 'pending' }] },
+    { decisions: [valid.decisions[0], valid.decisions[0]] },
+    { decisions: Array.from({ length: 201 }, (_, index) => ({ id: index + 1, expected_status: 'approved' })) },
+  ]) assert.equal((await request('post', '/release', { ...valid, ...patch })).statusCode, 400);
+  assert.deepEqual(calls, []);
+  assert.equal((await request('post', '/release', valid)).statusCode, 200);
+  assert.deepEqual(calls, [{ name: 'release_registration_decisions', args: { p_decisions: valid.decisions } }]);
+  failure = { code: 'PT409', message: 'Selected decisions changed.' };
+  const conflict = await request('post', '/release', valid);
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.error, failure.message);
+});

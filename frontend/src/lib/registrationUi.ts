@@ -77,7 +77,7 @@ export function buildApplicationCards(
         closed,
         closesAt: form.closes_at ?? null,
         closesTimezone: form.closes_timezone,
-        stateLabel: status ? titleCaseStatus(status) : closed ? "Closed" : "Not Started",
+        stateLabel: form.key === 'registration' && (status === 'pending' || status === 'submitted') ? 'Under review' : status ? titleCaseStatus(status) : closed ? "Closed" : "Not Started",
         started,
         primaryActionLabel: closed && !started ? "Registration closed" : form.key === "registration"
           ? started

@@ -34,7 +34,7 @@ supabase.from = (table) => {
       return { data: registration, error: null };
     },
     async single() { return { data: { ...registration, ...payload }, error: null }; },
-    then(resolve) { return Promise.resolve({ data: [], error: null }).then(resolve); },
+    then(resolve) { return Promise.resolve({ data: table === 'registrations' ? [registration] : [], error: null }).then(resolve); },
   };
   return builder;
 };
@@ -42,10 +42,10 @@ supabase.storage.from = () => ({
   async createSignedUploadUrl() { writes.push({ kind: 'upload-url' }); return { data: { signedUrl: 'unused' }, error: null }; },
 });
 
-async function request(method, routePath, body = {}) {
+async function request(method, routePath, body = {}, options = {}) {
   const layer = router.stack.find((entry) => entry.route?.path === routePath && entry.route.methods[method]);
   assert.ok(layer, `Route exists: ${method} ${routePath}`);
-  const req = { body, params: { id: '1' }, query: {}, user: { id: 'student', email: 'student@example.com' } };
+  const req = { body, params: { id: '1' }, query: {}, user: { id: 'student', email: 'student@example.com' }, ...options };
   const res = {
     statusCode: 200,
     status(code) { this.statusCode = code; return this; },
@@ -121,4 +121,68 @@ test('clearing a deadline reopens active student editing while inactive forms re
   writes = [];
   assert.equal((await request('put', '/me', { first_name: 'Updated' })).statusCode, 404);
   assert.deepEqual(writes, []);
+});
+
+test('all owner read and update responses hide draft decisions while preserving released status', async () => {
+  admin = false; active = true; closesAt = null;
+  Object.assign(registration, { status: 'approved', released_status: null, invitation_response: null });
+  for (const [method, route, body] of [
+    ['get', '/me', {}], ['get', '/:id', {}], ['get', '/me/all', {}],
+    ['put', '/me', { first_name: 'Student' }], ['put', '/:id', { first_name: 'Student' }],
+    ['post', '/me/resume', { resume_path: 'student/resume.pdf' }],
+  ]) {
+    const response = await request(method, route, body);
+    assert.equal(response.statusCode, 200, route);
+    const row = Array.isArray(response.body) ? response.body[0] : response.body;
+    assert.equal(row.status, 'pending', route);
+    assert.equal('released_status' in row, false, route);
+  }
+  registration.released_status = 'waitlisted';
+  assert.equal((await request('get', '/me')).body.status, 'waitlisted');
+  registration.form_key = 'workshop';
+  assert.equal((await request('get', '/me')).body.status, 'approved');
+  registration.form_key = 'registration';
+});
+
+test('answer and generic admin edits cannot overwrite release or RSVP fields', async () => {
+  active = true; closesAt = null; admin = false; writes = [];
+  await request('put', '/me', { first_name: 'Student', status: 'rejected', invitation_response: 'declined' });
+  assert.equal('status' in writes[0].payload, false);
+  assert.equal('invitation_response' in writes[0].payload, false);
+  admin = true; writes = [];
+  const response = await request('put', '/:id', {
+    checked_in: true, released_status: 'approved', decision_released_at: null,
+    invitation_response: 'accepted', invitation_responded_at: null,
+  });
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(writes[0].payload, { checked_in: true });
+});
+
+test('RSVP uses authenticated ownership, permits closed/inactive forms, and maps database outcomes', async () => {
+  admin = false; active = false; closesAt = '2020-01-01T00:00:00Z'; writes = [];
+  let calls = [];
+  let failure = null;
+  supabase.rpc = (name, args) => {
+    calls.push({ name, args });
+    return { async single() { return { data: { ...registration, released_status: 'approved', invitation_response: 'accepted' }, error: failure }; } };
+  };
+  const success = await request('put', '/me/invitation-response', { response: 'accepted' });
+  assert.equal(success.statusCode, 200);
+  assert.equal(success.body.status, 'approved');
+  assert.equal(success.body.invitation_response, 'accepted');
+  assert.equal('released_status' in success.body, false);
+  assert.deepEqual(calls, [{ name: 'respond_to_registration_invitation', args: { p_user_id: 'student', p_response: 'accepted' } }]);
+  assert.deepEqual(writes, []);
+  calls = [];
+  for (const body of [{}, { response: 'approved' }, { response: 'accepted', user_id: 'someone-else' }, { response: 'accepted', invitation_responded_at: '2000-01-01' }]) {
+    assert.equal((await request('put', '/me/invitation-response', body)).statusCode, 400);
+  }
+  assert.equal((await request('put', '/me/invitation-response', { response: 'accepted' }, { query: { form_key: 'workshop' } })).statusCode, 400);
+  assert.equal(calls.length, 0);
+  for (const [code, expected] of [['PT400', 400], ['PT404', 404], ['PT409', 409], ['XX000', 500]]) {
+    failure = { code, message: 'Database detail' };
+    const response = await request('put', '/me/invitation-response', { response: 'accepted' });
+    assert.equal(response.statusCode, expected);
+    if (expected === 500) assert.notEqual(response.body.error, failure.message);
+  }
 });

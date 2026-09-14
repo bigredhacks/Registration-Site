@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import { useToast } from '@/components/Toast/ToastContext';
 import { useAdminSelection } from './AdminSelectionContext';
-import { studentName, type AdminStudent } from './adminApprovalState';
+import { releaseStateLabel, studentName, type AdminStudent } from './adminApprovalState';
 import AdminApprovalFilters, { type ApprovalAnswerFilter, type ApprovalFilterField } from './AdminApprovalFilters';
 import AdminSelect from '@/components/AdminSelect';
 
@@ -48,6 +48,10 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [releasedStatus, setReleasedStatus] = useState('');
+  const [releaseState, setReleaseState] = useState('');
+  const [invitationResponse, setInvitationResponse] = useState('');
+  const [invitationCounts, setInvitationCounts] = useState({ accepted: 0, declined: 0, unanswered: 0 });
   const [checkedIn, setCheckedIn] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -73,7 +77,9 @@ export default function AdminUsers() {
   const detailPanel = useRef<HTMLDivElement>(null);
   const selectPage = useRef<HTMLInputElement>(null);
 
-  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status, checked_in: checkedIn, answers: JSON.stringify(answerFilters), sort: sort?.column ?? '', dir: sort?.dir ?? '', from, to }), [formKey, query, status, checkedIn, answerFilters, sort, from, to]);
+  const filters = useCallback(() => new URLSearchParams({ form_key: formKey, q: query, status,
+    released_status: formKey === 'registration' ? releasedStatus : '', release_state: formKey === 'registration' ? releaseState : '', invitation_response: formKey === 'registration' ? invitationResponse : '',
+    checked_in: checkedIn, answers: JSON.stringify(answerFilters), sort: sort?.column ?? '', dir: sort?.dir ?? '', from, to }), [formKey, query, status, releasedStatus, releaseState, invitationResponse, checkedIn, answerFilters, sort, from, to]);
   useEffect(() => {
     if (invalidDates) { setRows([]); setCount(0); setError(''); setLoading(false); return; }
     let current = true;
@@ -92,6 +98,7 @@ export default function AdminUsers() {
         return;
       }
       setFilterFields(body.fields ?? []);
+      setInvitationCounts(body.invitationCounts ?? { accepted: 0, declined: 0, unanswered: 0 });
       setRows(body.data ?? []); setCount(body.count ?? 0); sync(body.data ?? []);
       setPage(value => Math.min(value, Math.max(0, Math.ceil((body.count ?? 0) / pageSize) - 1)));
     }).catch(() => { if (current) { setRows([]); setError('Could not load students.'); } })
@@ -180,12 +187,17 @@ export default function AdminUsers() {
   };
 
   return <fieldset disabled={busy} className="admin-students-view">
+    {formKey === 'registration' && <section aria-label="Released invitation totals" className="mb-4 rounded-lg border border-gray-200 p-3">
+      <p className="admin-meta">Released approvals · All main applications</p>
+      <p className="mt-1">{loading || error ? 'Totals unavailable while loading applications.' : `${invitationCounts.accepted} accepted · ${invitationCounts.declined} declined · ${invitationCounts.unanswered} unanswered`}</p>
+      <p className="admin-meta mt-1">Unanswered invitations remain valid until their released decision changes.</p>
+    </section>}
     <div className="admin-toolbar">
       <form className="admin-search" onSubmit={event => { event.preventDefault(); setPage(0); setQuery(search.trim()); setRefreshKey(value => value + 1); }}>
         <input className="admin-input" aria-label="Search students" disabled={invalidDates} placeholder="Name, email, school…" value={search} onChange={event => setSearch(event.target.value)} />
         <button className="admin-button" type="submit" disabled={invalidDates}>Search</button>
       </form>
-      <AdminSelect aria-label="Filter by status" className="admin-input" disabled={invalidDates} value={status} placeholder="All statuses"
+      <AdminSelect aria-label={formKey === 'registration' ? 'Filter by draft decision' : 'Filter by status'} className="admin-input" disabled={invalidDates} value={status} placeholder={formKey === 'registration' ? 'All draft decisions' : 'All statuses'}
         options={STATUSES.map(value => ({ value, label: value }))} onChange={value => { setStatus(value); setPage(0); }} />
       <AdminSelect aria-label="Filter by attendance" className="admin-input" disabled={invalidDates} value={checkedIn} placeholder="All attendance"
         options={[{ value: 'true', label: 'Checked in' }, { value: 'false', label: 'Not checked in' }]} onChange={value => { setCheckedIn(value); setPage(0); }} />
@@ -196,6 +208,11 @@ export default function AdminUsers() {
         {(from || to) && <button type="button" className="admin-text-button" onClick={() => { setFrom(''); setTo(''); setPage(0); }}>Clear</button>}
       </div>
     </div>
+    {formKey === 'registration' && <div className="admin-toolbar mb-3">
+      <AdminSelect aria-label="Filter by released decision" className="admin-input" value={releasedStatus} placeholder="All released decisions" options={['approved', 'waitlisted', 'rejected'].map(value => ({ value, label: value }))} onChange={value => { setReleasedStatus(value); setPage(0); }} />
+      <AdminSelect aria-label="Filter by release state" className="admin-input" value={releaseState} placeholder="All release states" options={[{ value: 'unreleased', label: 'Not released' }, { value: 'changed', label: 'Unpublished changes' }, { value: 'current', label: 'Released' }]} onChange={value => { setReleaseState(value); setPage(0); }} />
+      <AdminSelect aria-label="Filter by invitation response" className="admin-input" value={invitationResponse} placeholder="All invitation responses" options={[{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }]} onChange={value => { setInvitationResponse(value); setPage(0); }} />
+    </div>}
     {invalidDates && <p role="alert" className="text-red6 mb-3">Start date must be on or before end date.</p>}
     <AdminApprovalFilters fields={filterFields} applied={answerFilters} draft={draftAnswerFilters} onChange={setDraftAnswerFilters} disabled={busy || loading || invalidDates} onApply={filters => { setAnswerFilters(filters); setPage(0); }} />
     <div className="admin-toolbar my-3"><div className="flex flex-wrap items-center gap-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} students`}</span>
@@ -209,6 +226,11 @@ export default function AdminUsers() {
       {detailLoading && <p className="admin-meta">Loading application…</p>}
       {detail && <>
         <div className="admin-toolbar"><div><h2>{studentName(detail)}</h2><p className="admin-meta break-all">{detail.email}</p></div><span className={`admin-status admin-status-${detail.status}`}>{detail.status}</span></div>
+        {formKey === 'registration' && <dl className="admin-answer-list mt-3">
+          <div><dt>Draft decision</dt><dd>{detail.status}</dd></div>
+          <div><dt>Released decision</dt><dd>{detail.released_status ?? 'Under review'} · {releaseStateLabel(detail)}{detail.decision_released_at ? ` · ${new Date(detail.decision_released_at).toLocaleString()}` : ''}</dd></div>
+          <div><dt>Invitation response</dt><dd>{detail.invitation_response ?? (detail.released_status === 'approved' ? 'Awaiting response' : 'No invitation response')}{detail.invitation_responded_at ? ` · ${new Date(detail.invitation_responded_at).toLocaleString()}` : ''}</dd></div>
+        </dl>}
         <div className="admin-toolbar my-4"><p className="admin-meta">{detail.checked_in ? `Checked in${detail.checked_in_at ? ` · ${new Date(detail.checked_in_at).toLocaleString()}` : ''}` : 'Not checked in'}</p>
           <div className="flex flex-wrap gap-2">
             {/* Only pre-Box registrations have a stored file; resumes now go to a shared
@@ -227,7 +249,7 @@ export default function AdminUsers() {
             const active = sort?.column === column;
             return <th key={column} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
               <button type="button" className="admin-sort-button" disabled={loading || invalidDates} onClick={() => toggleSort(column, defaultDir)}>
-                {label}<span aria-hidden="true" className={active ? '' : 'opacity-30'}>{active && sort.dir === 'desc' ? '↓' : '↑'}</span>
+                {column === 'status' && formKey === 'registration' ? 'Draft decision' : label}<span aria-hidden="true" className={active ? '' : 'opacity-30'}>{active && sort.dir === 'desc' ? '↓' : '↑'}</span>
               </button>
             </th>;
           })}
@@ -236,7 +258,9 @@ export default function AdminUsers() {
         <tbody>{loading ? <tr><td colSpan={6}>Loading…</td></tr> : rows.length === 0 ? <tr><td colSpan={6}>No students found.</td></tr> : rows.map(row => <tr key={row.id} className={selected.has(row.id) ? 'admin-row-selected' : ''}>
           <td data-label="Select"><input type="checkbox" aria-label={`Select ${studentName(row)}`} checked={selected.has(row.id)} onChange={() => toggle(row)} /></td>
           <td data-label="Student"><div><p>{studentName(row)}</p><p className="admin-meta break-all">{row.email}</p></div></td>
-          <td data-label="School">{row.school || '—'}</td><td data-label="Status"><span className={`admin-status admin-status-${row.status}`}>{row.status}</span></td>
+          <td data-label="School">{row.school || '—'}</td><td data-label={formKey === 'registration' ? 'Decisions & response' : 'Status'}><span className={`admin-status admin-status-${row.status}`}>{row.status}</span>
+            {formKey === 'registration' && <div className="admin-meta mt-2"><p>Released: {row.released_status ?? '—'}</p><p>{releaseStateLabel(row)}</p><p>RSVP: {row.invitation_response ?? (row.released_status === 'approved' ? 'Awaiting response' : '—')}</p></div>}
+          </td>
           <td data-label="Submitted">{row.created_at ? <time dateTime={row.created_at} title={`${new Date(row.created_at).toLocaleString(undefined, { timeZone: 'UTC' })} UTC`}>{new Date(row.created_at).toLocaleDateString(undefined, { timeZone: 'UTC' })}</time> : '—'}</td>
           <td data-label="Actions"><button className="admin-button" id={`review-${row.id}`} onClick={() => void loadDetail(row.id)}>Review</button></td>
         </tr>)}</tbody>

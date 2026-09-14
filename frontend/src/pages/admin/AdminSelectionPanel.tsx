@@ -3,6 +3,7 @@ import { apiFetch } from '@/lib/api';
 import { useAdminSelection } from './AdminSelectionContext';
 import { parseStudentList, studentName, type IdentityMatch } from './adminApprovalState';
 import AdminSelect from '@/components/AdminSelect';
+import AdminDecisionRelease from './AdminDecisionRelease';
 
 export default function AdminSelectionPanel() {
   const { selected, remove, clear, add, formKey, busy, notice, decide } = useAdminSelection();
@@ -72,5 +73,6 @@ export default function AdminSelectionPanel() {
         </div>}
       </div>
     </fieldset>
+    <AdminDecisionRelease key={formKey} />
   </aside>;
 }

@@ -3,15 +3,19 @@ import { z } from 'zod';
 import { supabase } from '../config/supabase';
 import { validate } from '../middleware/validate';
 import { RegistrationStatusSchema } from '../types/registration';
+import { invitationErrorStatus } from '../utils/invitations';
 import { approvalAnswerValue, approvalFilterFields, buildApprovalCsv, filterApprovalStudents, resolveApprovalIdentities, sortApprovalStudents, type ApprovalStudent } from '../utils/adminApprovals';
 
 // Mounted after requireAdmin in admin.ts.
 const router = Router();
-const columns = 'id,user_id,email,first_name,last_name,school,status,form_key,checked_in,checked_in_at,created_at,level_of_study,shirt_size';
+const columns = 'id,user_id,email,first_name,last_name,school,status,form_key,checked_in,checked_in_at,created_at,level_of_study,shirt_size,released_status,decision_released_at,invitation_response,invitation_responded_at';
 const formKeySchema = z.string().trim().min(1).max(100);
 const filtersSchema = z.object({
   form_key: formKeySchema,
   status: RegistrationStatusSchema.or(z.literal('')).optional(),
+  released_status: z.enum(['approved', 'waitlisted', 'rejected', '']).optional(),
+  release_state: z.enum(['unreleased', 'changed', 'current', '']).optional(),
+  invitation_response: z.enum(['accepted', 'declined', 'unanswered', '']).optional(),
   q: z.string().max(300).optional(),
   checked_in: z.enum(['true', 'false', '']).optional(),
   answers: z.string().max(30000).transform((value, ctx) => {
@@ -66,7 +70,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
   const parsed = filtersSchema.safeParse(req.query);
   if (!parsed.success) { res.status(400).json({ error: 'Invalid registration filters.' }); return; }
   try {
-    const { form_key, status, q, checked_in, offset, limit, answers, sort, dir, from, to } = parsed.data;
+    const { form_key, status, released_status, release_state, invitation_response, q, checked_in, offset, limit, answers, sort, dir, from, to } = parsed.data;
     const allRows = await loadStudents(form_key, req.path === '/export.csv');
     const { data: config, error: configError } = await supabase.from('form_configs').select('fields').eq('key', form_key).maybeSingle();
     if (configError) throw configError;
@@ -76,7 +80,7 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
     }
     // Sorting before the CSV/selection branch keeps the export and "add all filtered"
     // in the same order as the screen.
-    const rows = sortApprovalStudents(filterApprovalStudents(allRows, { status, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
+    const rows = sortApprovalStudents(filterApprovalStudents(allRows, { status, releasedStatus: released_status, releaseState: release_state, invitationResponse: invitation_response, search: q, checkedIn: checked_in, answers, from, to }), sort, dir);
     if (req.path === '/export.csv') {
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
       res.setHeader('Content-Disposition', 'attachment; filename="registrations.csv"');
@@ -84,7 +88,11 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
       return;
     }
     const data = (req.path === '/selection' ? rows : rows.slice(offset, offset + limit)).map(studentSummary);
-    res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields } : {}) });
+    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0 };
+    if (form_key === 'registration') for (const row of allRows) {
+      if (row.released_status === 'approved') invitationCounts[row.invitation_response ?? 'unanswered']++;
+    }
+    res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields, invitationCounts } : {}) });
   } catch {
     res.status(500).json({ error: 'Could not load registrations.' });
   }
@@ -99,6 +107,26 @@ router.post('/resolve', validate({ body: z.object({
     res.json({ matches });
   } catch {
     res.status(500).json({ error: 'Could not match students.' });
+  }
+});
+
+router.post('/release', validate({ body: z.object({
+  form_key: z.literal('registration'),
+  decisions: z.array(z.object({
+    id: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+    expected_status: z.enum(['approved', 'waitlisted', 'rejected']),
+  }).strict()).min(1).max(200).refine(rows => new Set(rows.map(row => row.id)).size === rows.length),
+}).strict() }), async (req, res) => {
+  try {
+    const { data, error } = await supabase.rpc('release_registration_decisions', { p_decisions: req.body.decisions });
+    if (error) {
+      const status = invitationErrorStatus(error.code);
+      res.status(status).json({ error: status === 500 ? 'Could not release decisions. Refresh and review before trying again.' : error.message });
+      return;
+    }
+    res.json({ data: (data ?? []).map(studentSummary) });
+  } catch {
+    res.status(500).json({ error: 'Could not release decisions. Refresh and review before trying again.' });
   }
 });
 

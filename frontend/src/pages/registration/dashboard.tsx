@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import InvitationActions from '../../components/registration/InvitationActions';
+import { invitationPresentation, type ApplicantInvitation } from '../../lib/invitations';
 import { useLocation, useNavigate } from "react-router-dom";
 import RegistrationLayout from "../../components/layouts/RegistrationLayout";
 import { useToast } from "../../components/Toast/ToastContext";
@@ -19,7 +21,7 @@ import { useRegistrationClock } from "@/lib/useRegistrationClock";
 
 const EVENT_DATE = new Date("2026-10-02T09:00:00-04:00");
 
-interface UserRegistrationSummary {
+interface UserRegistrationSummary extends ApplicantInvitation {
   id: number | string;
   form_key?: string | null;
   status?: string | null;
@@ -89,7 +91,7 @@ function CountdownUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-function getStatusTone(card: ApplicationCard | undefined) {
+function getStatusTone(card: Pick<ApplicationCard, 'status' | 'started'> | undefined) {
   if (!card) {
     return { dot: "bg-gray-300", badge: "bg-gray-100 text-gray-500" };
   }
@@ -166,12 +168,38 @@ const Dashboard = () => {
   const [profile, setProfile] = useState<Record<string, unknown> | null>(null);
   const [activeForms, setActiveForms] = useState<ActiveFormSummary[]>([]);
   const [registrations, setRegistrations] = useState<UserRegistrationSummary[]>([]);
+  const [registrationsLoading, setRegistrationsLoading] = useState(true);
+  const [registrationsError, setRegistrationsError] = useState('');
+  const registrationRequest = useRef(0);
+  const refreshRegistrations = useCallback(async () => {
+    const current = ++registrationRequest.current;
+    try {
+      const res = await apiFetch('/api/registrations/me/all');
+      if (!res.ok) throw new Error();
+      const rows = await res.json();
+      if (current !== registrationRequest.current) return;
+      setRegistrations(rows);
+      setRegistrationsError('');
+    } catch {
+      if (current === registrationRequest.current) setRegistrationsError('Could not load your application status. Please try again.');
+    } finally {
+      if (current === registrationRequest.current) setRegistrationsLoading(false);
+    }
+  }, []);
   const registrationNow = useRegistrationClock(activeForms[0]?.server_now);
   const { pct, missing } = computeCompletion(profile);
 
   const [emailVerified, setEmailVerified] = useState<boolean | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
+
+  useEffect(() => {
+    void refreshRegistrations();
+    const refresh = () => { if (document.visibilityState === 'visible') void refreshRegistrations(); };
+    document.addEventListener('visibilitychange', refresh);
+    const requests = registrationRequest;
+    return () => { requests.current++; document.removeEventListener('visibilitychange', refresh); };
+  }, [refreshRegistrations]);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -183,17 +211,13 @@ const Dashboard = () => {
     Promise.all([
       apiFetch("/api/profile"),
       apiFetch("/api/form-configs"),
-      apiFetch("/api/registrations/me/all"),
     ])
-      .then(async ([profileRes, formsRes, registrationsRes]) => {
+      .then(async ([profileRes, formsRes]) => {
         if (profileRes.ok) {
           setProfile(await profileRes.json());
         }
         if (formsRes.ok) {
           setActiveForms(await formsRes.json());
-        }
-        if (registrationsRes.ok) {
-          setRegistrations(await registrationsRes.json());
         }
       })
       .catch(() => undefined);
@@ -211,8 +235,10 @@ const Dashboard = () => {
   );
   const registrationCard = applicationCards.find((card) => card.key === "registration");
   const visibleCards = applicationCards.filter((card) => card.key !== "registration");
-  const registrationSummary = getApplicationSummary(registrationCard);
-  const registrationTone = getStatusTone(registrationCard);
+  const mainRegistration = registrations.find(row => row.form_key === 'registration');
+  const registrationSummary = registrationsLoading ? { headline: 'Loading…', body: 'Checking your application status.' }
+    : mainRegistration ? invitationPresentation(mainRegistration) : getApplicationSummary(registrationCard);
+  const registrationTone = getStatusTone(registrationCard ?? (mainRegistration ? { status: mainRegistration.status ?? null, started: true } : undefined));
 
   const handlePanelClose = () => {
     setPanelOpen(false);
@@ -260,13 +286,18 @@ const Dashboard = () => {
             <p className="text-sm leading-relaxed text-gray-500 font-poppins">
               {registrationSummary.body}
             </p>
-            <button
+            {registrationsError ? <p role="alert" className="text-sm font-poppins text-red6">{registrationsError} <button className="underline min-h-11" onClick={() => void refreshRegistrations()}>Retry</button></p>
+              : mainRegistration && <InvitationActions registration={mainRegistration} onRefresh={refreshRegistrations} onSaved={saved => {
+                registrationRequest.current++;
+                setRegistrations(previous => previous.map(row => row.form_key === 'registration' ? { ...row, ...saved } : row));
+              }} />}
+            {(!mainRegistration || registrationCard) && <button
               onClick={() => registrationCard && setPanelOpen(true)}
               disabled={!registrationCard}
               className="mt-auto w-full rounded-lg bg-red5 min-h-11 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {registrationCard?.primaryActionLabel ?? "Application Unavailable"}
-            </button>
+            </button>}
           </div>
 
           <div className="flex flex-col gap-3 rounded-xl border border-red7 bg-red7 p-4 sm:p-6 shadow-sm">
@@ -446,7 +477,7 @@ const Dashboard = () => {
             const next = prev.filter((row) => (row.form_key ?? "registration") !== "registration");
             return [
               {
-                id: registration.id,
+                ...registration,
                 form_key: registration.form_key ?? "registration",
                 status: registration.status ?? "pending",
               },

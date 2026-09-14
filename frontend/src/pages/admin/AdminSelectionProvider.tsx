@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { apiFetch } from '@/lib/api';
 import { useToast } from '@/components/Toast/ToastContext';
 import { AdminSelectionContext } from './AdminSelectionContext';
-import { addToSelection, type AdminStudent } from './adminApprovalState';
+import { addToSelection, type AdminStudent, type ReleaseDecision } from './adminApprovalState';
 
 export default function AdminSelectionProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
@@ -83,8 +83,45 @@ export default function AdminSelectionProvider({ children }: { children: ReactNo
     }
   };
 
+  const release = async (decisions: ReleaseDecision[]) => {
+    if (locked.current || formKey !== 'registration' || !decisions.length) return;
+    locked.current = true;
+    setBusy(true);
+    setNotice('');
+    let completed = 0;
+    let error = '';
+    try {
+      for (let offset = 0; offset < decisions.length; offset += 200) {
+        const batch = decisions.slice(offset, offset + 200);
+        const res = await apiFetch('/api/admin/approval/release', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ form_key: 'registration', decisions: batch }),
+        });
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.error || 'Could not release decisions.');
+        const ids = new Set((body.data as AdminStudent[]).map(student => student.id));
+        completed += ids.size;
+        setSelections(previous => {
+          const next = new Map(previous.registration);
+          ids.forEach(id => next.delete(id));
+          return { ...previous, registration: next };
+        });
+        if (ids.size !== batch.length) throw new Error('Some decisions could not be confirmed.');
+      }
+    } catch (cause) {
+      error = `${cause instanceof Error ? cause.message : 'Could not confirm release.'} Refresh and review remaining selections before releasing again.`;
+    } finally {
+      locked.current = false;
+      setBusy(false);
+      setRevision(value => value + 1);
+      const result = `${completed} decisions released. No emails sent.${error ? ` ${error}` : ''}`;
+      setNotice(result);
+      showToast(result, error ? 'error' : 'success');
+    }
+  };
+
   return <AdminSelectionContext.Provider value={{
-    selected, add, remove, toggle, sync, revision, formKey, forms, busy, notice, decide,
+    selected, add, remove, toggle, sync, revision, formKey, forms, busy, notice, decide, release,
     clear: () => edit(() => new Map()),
     setFormKey: key => { if (!locked.current) { setForm(key); setNotice(''); } },
   }}>{children}</AdminSelectionContext.Provider>;

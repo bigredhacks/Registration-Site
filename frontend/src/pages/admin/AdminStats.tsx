@@ -3,7 +3,10 @@ import { apiFetch } from "@/lib/api";
 import AdminSelect from "@/components/AdminSelect";
 
 const dimensions = [
-  { key: "status", label: "Status" },
+  { key: "status", label: "Draft decision" },
+  { key: "released_status", label: "Applicant sees" },
+  { key: "release_state", label: "Decision release" },
+  { key: "invitation_response", label: "Invitation response" },
   { key: "school", label: "School" },
   { key: "level_of_study", label: "Level of study" },
   { key: "form_key", label: "Registration form" },
@@ -15,11 +18,23 @@ type Metrics = {
   total: number;
   overall_total: number;
   approved_checked_in: number;
+  released_invitations: number;
+  invitation_counts: { accepted: number; declined: number; unanswered: number };
   options: Record<Dimension, string[]>;
 } & Record<`by_${Dimension}`, Record<string, number>>;
 
 const control = "w-full min-w-0 rounded-lg border border-red6/20 bg-white px-3 py-2.5 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-red5";
 const labelFor = (key: Dimension, value: string) => {
+  if (key === "released_status" || key === "release_state" || key === "invitation_response") {
+    const labels: Record<string, string> = {
+      approved: "Approved", waitlisted: "Waitlisted", rejected: "Not selected",
+      unreleased: key === "released_status" ? "Under review (not released)" : "No decision released yet",
+      changed: "Draft differs from released decision", current: "Draft matches released decision",
+      accepted: "Accepted invitation", declined: "Declined invitation", unanswered: "Invited — awaiting response",
+      no_invitation: "No invitation or recorded response", not_applicable: "Not applicable (other form)",
+    };
+    return labels[value] ?? value;
+  }
   if (!value) return "Not provided";
   if (key === "checked_in") return value === "true" ? "Checked in" : "Not checked in";
   if (key === "status") return value.charAt(0).toUpperCase() + value.slice(1);
@@ -117,6 +132,7 @@ export default function AdminStats() {
             ))}
           </div>
         </div>
+        <p className="mt-3 text-xs font-normal text-gray-500">Invitation response filters and breakdowns include previously recorded responses. Choose Applicant sees → Approved to limit them to current invitations. Dates filter when applications were submitted.</p>
         {invalidDates && <p role="alert" className="mt-3 text-sm text-red6">Start date must be on or before end date.</p>}
       </section>
 
@@ -129,11 +145,22 @@ export default function AdminStats() {
         ) : !ready ? <p role="status" className="py-8 text-sm text-gray-500">Loading statistics…</p> : (
           <div className="grid gap-3 md:grid-cols-3">
             <Summary label="Submitted" value={metrics.total.toLocaleString()} detail={`${percentage(metrics.total, metrics.overall_total)} of ${metrics.overall_total.toLocaleString()} total`} primary />
-            <Summary label="Approved" value={(metrics.by_status.approved ?? 0).toLocaleString()} detail={`${percentage(metrics.by_status.approved ?? 0, metrics.total)} of submitted`} />
-            <Summary label="Approved & checked in" value={metrics.approved_checked_in.toLocaleString()} detail={`${percentage(metrics.approved_checked_in, metrics.by_status.approved ?? 0)} of approved`} />
+            <Summary label="Draft approved" value={(metrics.by_status.approved ?? 0).toLocaleString()} detail={`${percentage(metrics.by_status.approved ?? 0, metrics.total)} of submitted`} />
+            <Summary label="Draft approved & checked in" value={metrics.approved_checked_in.toLocaleString()} detail={`${percentage(metrics.approved_checked_in, metrics.by_status.approved ?? 0)} of draft approved`} />
           </div>
         )}
       </div>
+
+      {ready && <section aria-label="Invitation statistics">
+        <h3 className="mb-2 font-semibold text-red6">Released invitations</h3>
+        <p className="mb-3 text-xs text-gray-500">These totals use the active filters and only main applications whose released decision is Approved. Draft approvals and responses to withdrawn invitations are excluded.</p>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Summary label="Invitations released" value={metrics.released_invitations.toLocaleString()} detail="Currently visible as Approved" />
+          <Summary label="Accepted invitation" value={metrics.invitation_counts.accepted.toLocaleString()} detail={`${percentage(metrics.invitation_counts.accepted, metrics.released_invitations)} of matching invitations`} />
+          <Summary label="Declined invitation" value={metrics.invitation_counts.declined.toLocaleString()} detail={`${percentage(metrics.invitation_counts.declined, metrics.released_invitations)} of matching invitations`} />
+          <Summary label="Awaiting response" value={metrics.invitation_counts.unanswered.toLocaleString()} detail={`${percentage(metrics.invitation_counts.unanswered, metrics.released_invitations)} of matching invitations`} />
+        </div>
+      </section>}
 
       <section aria-label="Statistics breakdown" className="overflow-hidden rounded-xl border border-red6/20 bg-white">
         <div className="flex flex-wrap items-end gap-4 border-b border-red6/10 p-3 sm:p-5">

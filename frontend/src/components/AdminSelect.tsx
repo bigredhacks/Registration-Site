@@ -209,7 +209,7 @@ export default function AdminSelect({
           {hidden > 0 && <p className="admin-select-message admin-select-hint">
             {hidden.toLocaleString()} more — keep typing to narrow
           </p>}
-        </div>, document.body,
+        </div>, trigger.current?.closest('dialog') ?? document.body,
       )}
     </span>
   );

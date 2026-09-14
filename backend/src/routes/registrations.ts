@@ -1,4 +1,6 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
+import { applicantDecision, invitationErrorStatus, protectedInvitationFields, type InvitationFields } from '../utils/invitations';
 import { supabase } from '../config/supabase';
 import {
   RegistrationParamsSchema,
@@ -15,7 +17,7 @@ import {
 
 const router = Router();
 
-type RegistrationRow = {
+type RegistrationRow = InvitationFields & {
   id: number | string;
   user_id: string;
   email: string | null;
@@ -111,7 +113,7 @@ function toRegistrationResponse(row: RegistrationRow) {
       : {};
 
   return {
-    ...row,
+    ...applicantDecision(row),
     form_key: row.form_key ?? 'registration',
     form_version: row.form_version ?? 1,
     answers: {
@@ -165,11 +167,29 @@ async function parseAnswersFromBody(
   };
 }
 
-/**
- * POST /api/registrations/me/resume-upload-url
- * Issues a signed upload URL so the browser can PUT the resume directly to Storage.
- * Body: { filename: string }  (basename only; the user_id is enforced server-side)
- */
+router.put('/me/invitation-response', validate({ body: z.object({
+  response: z.enum(['accepted', 'declined']),
+}).strict() }), async (req: Request, res: Response) => {
+  try {
+    if (Object.keys(req.query).length) {
+      res.status(400).json({ error: 'Invitation responses apply to the main application only.' });
+      return;
+    }
+    const { data, error } = await supabase.rpc('respond_to_registration_invitation', {
+      p_user_id: req.user!.id, p_response: req.body.response,
+    }).single();
+    if (error) {
+      const status = invitationErrorStatus(error.code);
+      res.status(status).json({ error: status === 500 ? 'Could not save your response. Please try again.' : error.message });
+      return;
+    }
+    res.json(toRegistrationResponse(data as RegistrationRow));
+  } catch {
+    res.status(500).json({ error: 'Could not save your response. Please try again.' });
+  }
+});
+
+/** Issues a resume upload URL within the authenticated user's folder. */
 router.post('/me/resume-upload-url', async (req: Request, res: Response) => {
   try {
     if (!await ensureRegistrationWritable(req, res, getFormKey(req))) return;
@@ -220,7 +240,7 @@ router.post('/me/resume', async (req: Request, res: Response) => {
       return;
     }
 
-    res.json(data);
+    res.json(toRegistrationResponse(data as RegistrationRow));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -273,7 +293,7 @@ router.get('/me/all', async (req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('registrations')
-      .select('id, form_key, form_version, status, created_at, resume_path')
+      .select('id, form_key, form_version, status, created_at, resume_path, released_status, decision_released_at, invitation_response, invitation_responded_at')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
 
@@ -282,7 +302,7 @@ router.get('/me/all', async (req: Request, res: Response) => {
       return;
     }
 
-    res.json(data ?? []);
+    res.json((data ?? []).map(applicantDecision));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }
@@ -393,7 +413,7 @@ router.put('/me', async (req: Request<{}, {}, Record<string, unknown>>, res: Res
 
     const { data: existing, error: fetchError } = await supabase
       .from('registrations')
-      .select('id, status')
+      .select('id')
       .eq('user_id', req.user!.id)
       .eq('form_key', formKey)
       .maybeSingle();
@@ -413,7 +433,6 @@ router.put('/me', async (req: Request<{}, {}, Record<string, unknown>>, res: Res
       form_version: parsed.formConfig.version,
       ...projected,
       email: req.user!.email ?? null,
-      status: existing.status ?? 'pending',
     };
 
     const { data, error } = await supabase
@@ -526,6 +545,7 @@ router.put(
       }
 
       delete updates.email;
+      for (const field of protectedInvitationFields) delete updates[field];
 
       const { data, error } = await supabase
         .from('registrations')

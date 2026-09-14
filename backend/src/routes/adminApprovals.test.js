@@ -85,6 +85,50 @@ async function request(method, routePath, input = {}) {
   return res;
 }
 
+test('organizers can reverse either recorded response without changing decisions or other applicants', async () => {
+  for (const previous of ['accepted', 'declined']) {
+    const timestamp = '2026-09-14T12:00:00.000Z';
+    reset([student(1, 'registration', { released_status: 'approved', invitation_response: previous, invitation_responded_at: timestamp }), student(2)]);
+    const response = previous === 'accepted' ? 'declined' : 'accepted';
+    const res = await request('post', '/invitation-response', { id: 1, response, expected_response: previous, expected_responded_at: timestamp });
+    assert.equal(res.statusCode, 200);
+    assert.equal(records[0].invitation_response, response);
+    assert.notEqual(records[0].invitation_responded_at, timestamp);
+    assert.equal(records[0].status, 'pending');
+    assert.equal(records[0].released_status, 'approved');
+    assert.equal(records[1].invitation_response, undefined);
+    assert.equal(res.body.data.id, 1);
+  }
+});
+
+test('response corrections reject stale responses, stale timestamps, inactive invitations and other forms', async () => {
+  const timestamp = '2026-09-14T12:00:00.000Z';
+  for (const extra of [
+    { invitation_response: 'declined' },
+    { invitation_responded_at: '2026-09-14T13:00:00.000Z' },
+    { released_status: 'waitlisted' },
+    { released_status: null },
+    { form_key: 'workshop' },
+    { invitation_response: null, invitation_responded_at: null },
+  ]) {
+    reset([student(1, 'registration', { released_status: 'approved', invitation_response: 'accepted', invitation_responded_at: timestamp, ...extra })]);
+    const before = structuredClone(records);
+    const res = await request('post', '/invitation-response', { id: 1, response: 'declined', expected_response: 'accepted', expected_responded_at: timestamp });
+    assert.equal(res.statusCode, 409);
+    assert.deepEqual(records, before);
+  }
+});
+
+test('response correction validates input before querying', async () => {
+  const valid = { id: 1, response: 'declined', expected_response: 'accepted', expected_responded_at: '2026-09-14T12:00:00Z' };
+  for (const extra of [{ response: 'pending' }, { response: 'accepted' }, { id: -1 }, { expected_responded_at: 'invalid' }, { form_key: 'workshop' }]) {
+    reset([]);
+    const res = await request('post', '/invitation-response', { ...valid, ...extra });
+    assert.equal(res.statusCode, 400);
+    assert.equal(queryCount, 0);
+  }
+});
+
 test('bulk decisions update only selected ids in the requested form and report actual changed records', async () => {
   reset([student(1), student(2, 'workshop'), student(3)]);
   const res = await request('post', '/decision', { form_key: ' registration ', ids: [1, 1, 2, 999], status: 'approved' });
@@ -239,6 +283,52 @@ test('an inverted submitted range is rejected rather than answered with an empty
   }
 });
 
+test('released and RSVP cohorts agree across list, selection and CSV; totals ignore drafts and page filters', async () => {
+  reset([
+    student(1, 'registration', { status: 'waitlisted', released_status: 'approved', invitation_response: 'accepted' }),
+    student(2, 'registration', { status: 'approved', released_status: 'approved', invitation_response: 'declined' }),
+    student(3, 'registration', { status: 'rejected', released_status: 'approved', invitation_response: null }),
+    student(4, 'registration', { status: 'approved', released_status: null }),
+    student(5, 'registration', { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted' }),
+  ]);
+  const filters = { form_key: 'registration', released_status: 'approved', invitation_response: 'unanswered', release_state: 'changed' };
+  const list = await request('get', '/students', filters);
+  assert.deepEqual(list.body.data.map(row => row.id), [3]);
+  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 1, unanswered: 1 });
+  const selection = await request('get', '/selection', filters);
+  assert.deepEqual(selection.body.data, list.body.data);
+  const csv = await request('get', '/export.csv', filters);
+  assert.match(csv.body, /student3@example.com/);
+  assert.doesNotMatch(csv.body, /student[1245]@example.com/);
+  const unreleased = await request('get', '/students', { form_key: 'registration', release_state: 'unreleased' });
+  assert.deepEqual(unreleased.body.data.map(row => row.id), [4]);
+  await request('post', '/decision', { form_key: 'registration', ids: [1], status: 'rejected' });
+  assert.equal(records[0].released_status, 'approved');
+  assert.equal(records[0].invitation_response, 'accepted');
+});
+
+test('release validates main form, unique reviewed statuses and batch limits before the RPC', async () => {
+  let calls = [];
+  let failure = null;
+  supabase.rpc = async (name, args) => {
+    calls.push({ name, args });
+    return { data: [student(1, 'registration', { released_status: 'approved' })], error: failure };
+  };
+  const valid = { form_key: 'registration', decisions: [{ id: 1, expected_status: 'approved' }] };
+  for (const patch of [
+    { form_key: 'workshop' }, { decisions: [] }, { decisions: [{ id: 1, expected_status: 'pending' }] },
+    { decisions: [valid.decisions[0], valid.decisions[0]] },
+    { decisions: Array.from({ length: 201 }, (_, index) => ({ id: index + 1, expected_status: 'approved' })) },
+  ]) assert.equal((await request('post', '/release', { ...valid, ...patch })).statusCode, 400);
+  assert.deepEqual(calls, []);
+  assert.equal((await request('post', '/release', valid)).statusCode, 200);
+  assert.deepEqual(calls, [{ name: 'release_registration_decisions', args: { p_decisions: valid.decisions } }]);
+  failure = { code: 'PT409', message: 'Selected decisions changed.' };
+  const conflict = await request('post', '/release', valid);
+  assert.equal(conflict.statusCode, 409);
+  assert.equal(conflict.body.error, failure.message);
+});
+
 test('selection limits apply after filtering and time sorting across database batches', async () => {
   reset([
     ...Array.from({ length: 2400 }, (_, index) => student(index + 1, 'registration', {
@@ -303,4 +393,65 @@ test('invalid selection limits reject before any database reads', async () => {
     assert.equal(res.statusCode, 400, JSON.stringify(selection_limit));
   }
   assert.equal(queryCount, 0);
+});
+
+test('selection limits follow invitation filters without limiting invitation totals or exports', async () => {
+  reset([
+    student(1, 'registration', { status: 'waitlisted', released_status: 'approved', created_at: '2026-08-01T00:00:00Z' }),
+    student(2, 'registration', { status: 'approved', released_status: 'approved', created_at: '2026-08-02T00:00:00Z' }),
+    student(3, 'registration', { status: 'rejected', released_status: 'approved', created_at: '2026-08-03T00:00:00Z' }),
+    student(4, 'registration', { status: 'rejected', released_status: 'approved', invitation_response: 'accepted', created_at: '2026-07-01T00:00:00Z' }),
+    student(5, 'registration', { status: 'approved', released_status: null, created_at: '2026-07-01T00:00:00Z' }),
+  ]);
+  const query = {
+    form_key: 'registration', released_status: 'approved', release_state: 'changed',
+    invitation_response: 'unanswered', sort: 'created_at', dir: 'asc', selection_limit: '1',
+  };
+  const selection = await request('get', '/selection', query);
+  assert.equal(selection.statusCode, 200);
+  assert.equal(selection.body.count, 2);
+  assert.deepEqual(selection.body.data.map(row => row.id), [1]);
+  const list = await request('get', '/students', query);
+  assert.deepEqual(list.body.data.map(row => row.id), [1, 3]);
+  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 0, unanswered: 3 });
+  const csv = await request('get', '/export.csv', query);
+  assert.equal(csv.body.split('\r\n').length, 3);
+  assert.match(csv.body, /student1@example.com/);
+  assert.match(csv.body, /student3@example.com/);
+  assert.deepEqual(writes, []);
+});
+
+test('task views share full matching IDs, counts, ordered selection and CSV cohorts', async () => {
+  reset([
+    student(1, 'registration', { status: 'approved' }),
+    student(2, 'registration', { status: 'waitlisted' }),
+    student(3, 'registration', { status: 'rejected' }),
+    student(4, 'registration', { status: 'approved', released_status: 'approved', invitation_response: 'accepted' }),
+    student(5, 'registration', { status: 'rejected', released_status: 'approved', invitation_response: 'declined' }),
+    student(6, 'registration', { status: 'pending', released_status: 'approved' }),
+    student(7, 'registration', { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted' }),
+    student(8, 'registration', { status: 'pending' }),
+    student(9, 'workshop', { status: 'approved' }),
+  ]);
+  for (const [view, ids] of [['all', [8, 7, 6, 5, 4, 3, 2, 1]], ['ready', [7, 5, 3, 2, 1]], ['invitations', [6, 5, 4]]]) {
+    const query = { form_key: 'registration', view, selection_limit: '2', limit: '1' };
+    const list = await request('get', '/students', query);
+    assert.equal(list.body.count, ids.length);
+    assert.deepEqual(list.body.matchingIds, ids);
+    assert.deepEqual(list.body.data.map(row => row.id), ids.slice(0, 1));
+    const selection = await request('get', '/selection', query);
+    assert.deepEqual(selection.body.data.map(row => row.id), ids.slice(0, 2));
+    const csv = await request('get', '/export.csv', query);
+    assert.equal(csv.body.split('\r\n').length, ids.length + 1);
+    for (const id of ids) assert.ok(csv.body.includes(`student${id}@example.com`));
+  }
+  for (const [invitation_response, id] of [['accepted', 4], ['declined', 5], ['unanswered', 6]]) {
+    const list = await request('get', '/students', { form_key: 'registration', view: 'invitations', invitation_response });
+    assert.deepEqual(list.body.matchingIds, [id]);
+  }
+  const omitted = await request('get', '/students', { form_key: 'registration' });
+  assert.equal(omitted.body.count, 8);
+  const invalid = await request('get', '/students', { form_key: 'registration', view: 'invalid' });
+  assert.equal(invalid.statusCode, 400);
+  assert.deepEqual(writes, []);
 });

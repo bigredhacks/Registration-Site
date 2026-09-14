@@ -6,7 +6,7 @@ import AdminSelectionProvider from './pages/admin/AdminSelectionProvider';
 import AdminFormEditor from './pages/admin/AdminFormEditor';
 import AdminFormList from './pages/admin/AdminFormList';
 import type { ApprovalAnswerFilter, ApprovalFilterField } from './pages/admin/AdminApprovalFilters';
-import type { AdminStudent } from './pages/admin/adminApprovalState';
+import type { AdminStudent, ReleaseDecision } from './pages/admin/adminApprovalState';
 import type { FormField } from './lib/formConfig';
 import type { MatcherTeam, ParticipantSummary, TeamOverview } from './pages/admin/adminTeamMatchingState';
 import './index.css';
@@ -29,6 +29,8 @@ interface Draft { team_number: number; members: { participant_id: string }[] }
 interface Payload extends Partial<PreviewForm> {
   form_key?: string; ids?: number[]; status?: string; checked_in?: boolean;
   entries?: string[]; teams?: Draft[]; pool_id?: string;
+  decisions?: ReleaseDecision[];
+  id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
 const fullName = (student: Student) => `${student.first_name} ${student.last_name}`;
@@ -45,12 +47,19 @@ const students: Student[] = Array.from({ length: 66 }, (_, index) => {
     id, user_id: `sample-user-${id}`, first_name, last_name, email, form_key: 'registration',
     school: schools[index % schools.length],
     status: index < 4 ? 'approved' : ['pending', 'approved', 'pending', 'waitlisted', 'pending', 'rejected'][index % 6],
+    released_status: index < 4 ? 'approved' : null,
+    decision_released_at: index < 4 ? '2026-09-14T12:00:00Z' : null,
+    invitation_response: index === 0 ? 'accepted' : index === 1 ? 'declined' : null,
+    invitation_responded_at: index < 2 ? '2026-09-14T13:00:00Z' : null,
     checked_in: index < 2, checked_in_at: index < 2 ? '2026-09-05T14:00:00Z' : null,
     created_at: `2026-08-${String(index % 28 + 1).padStart(2, '0')}T14:00:00Z`,
     answers: { first_name, last_name, email, school: schools[index % schools.length], age: ['Under 18', '18–20', '21–24', '25–30', '31+'][index % 5], level_of_study: ['Freshman', 'Sophomore', 'Junior', 'Senior'][index % 4], major: ['Computer Science', 'Physics', 'Mathematics'][index % 3], shirt_size: ['S', 'M', 'L'][index % 3], why_hack: 'Build a useful project with a team and learn something new.', dietary_restrictions: index % 3 ? ['None'] : ['Vegetarian', 'Gluten-Free'], first_time_hacker: index % 2 === 0, technical_skills: { Frontend: index % 2 ? 'Beginner' : 'Advanced' }, mlh_code_of_conduct: true },
   };
 });
-students.push(...students.slice(0, 8).map(student => ({ ...student, id: student.id + 100, form_key: 'workshop', status: 'pending', checked_in: false, checked_in_at: null })));
+Object.assign(students[4], { status: 'rejected', released_status: 'approved' });
+Object.assign(students[5], { status: 'approved', released_status: 'waitlisted', invitation_response: 'accepted', invitation_responded_at: '2026-09-14T13:00:00Z' });
+Object.assign(students[6], { status: 'pending', released_status: 'waitlisted' });
+students.push(...students.slice(0, 8).map(student => ({ ...student, id: student.id + 100, form_key: 'workshop', status: 'pending', checked_in: false, checked_in_at: null, released_status: null, decision_released_at: null, invitation_response: null, invitation_responded_at: null })));
 const fields: FormField[] = [
   { id: 'first_name', label: 'First name', type: 'text', required: true },
   { id: 'last_name', label: 'Last name', type: 'text', required: true },
@@ -154,8 +163,13 @@ function filtered(params: URLSearchParams) {
   const from = params.get('from') ?? '';
   const to = params.get('to') ?? '';
   const rows = students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
+    && (params.get('view') !== 'ready' || (['approved', 'waitlisted', 'rejected'].includes(student.status) && student.status !== student.released_status))
+    && (params.get('view') !== 'invitations' || student.released_status === 'approved')
     && answerFilters.every(filter => sampleMatches(student, filter))
     && (!params.get('status') || student.status === params.get('status'))
+    && (!params.get('released_status') || student.released_status === params.get('released_status'))
+    && (!params.get('release_state') || params.get('release_state') === (!student.released_status ? 'unreleased' : student.status === student.released_status ? 'current' : 'changed'))
+    && (!params.get('invitation_response') || (params.get('invitation_response') === 'unanswered' ? student.released_status === 'approved' && !student.invitation_response : student.invitation_response === params.get('invitation_response')))
     && (!params.get('checked_in') || String(student.checked_in) === params.get('checked_in'))
     && (!from || student.created_at.slice(0, 10) >= from)
     && (!to || student.created_at.slice(0, 10) <= to)
@@ -192,13 +206,15 @@ window.fetch = async (input, init) => {
   if (method === 'GET' && ['/api/admin/approval/students', '/api/admin/approval/selection'].includes(path)) {
     const rows = filtered(url.searchParams);
     const offset = Number(url.searchParams.get('offset') ?? 0);
+    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0 };
+    for (const student of students) if (student.form_key === formKey && student.released_status === 'approved') invitationCounts[student.invitation_response ?? 'unanswered']++;
     const selectionLimit = url.searchParams.has('selection_limit') ? Number(url.searchParams.get('selection_limit')) : undefined;
     if (selectionLimit !== undefined && (!Number.isSafeInteger(selectionLimit) || selectionLimit < 1)) return json({ error: 'Invalid registration filters.' }, 400);
-    return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, fields: sampleFilterFields(formKey) });
+    return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, matchingIds: rows.map(row => row.id), fields: sampleFilterFields(formKey), invitationCounts });
   }
   if (method === 'GET' && (path.endsWith('/export.csv') || path.endsWith('/export'))) {
     const rows = filtered(url.searchParams);
-    const keys = ['id', 'first_name', 'last_name', 'email', 'school', 'status', 'checked_in', 'form_key', 'answers'] as const;
+    const keys = ['id', 'first_name', 'last_name', 'email', 'school', 'status', 'released_status', 'decision_released_at', 'invitation_response', 'invitation_responded_at', 'checked_in', 'form_key', 'answers'] as const;
     const escape = (value: unknown) => `"${String(typeof value === 'object' ? JSON.stringify(value) : value ?? '').replace(/"/g, '""')}"`;
     return new Response([keys.join(','), ...rows.map(row => keys.map(key => escape(row[key])).join(','))].join('\r\n'), { headers: { 'Content-Type': 'text/csv' } });
   }
@@ -209,9 +225,29 @@ window.fetch = async (input, init) => {
       return { input, duplicate, matches: students.filter(student => student.form_key === formKey && normalize(identity.includes('@') ? student.email : fullName(student)) === identity) };
     }) });
   }
+  if (path === '/api/admin/approval/invitation-response' && method === 'POST') {
+    const student = students.find(student => student.id === payload.id && student.form_key === 'registration'
+      && student.released_status === 'approved' && student.invitation_response === payload.expected_response
+      && student.invitation_responded_at === payload.expected_responded_at);
+    if (!student) return json({ error: 'The invitation or response has changed. Reopen this applicant’s Review page before trying again.' }, 409);
+    if (!payload.response || payload.response === payload.expected_response) return json({ error: 'Choose a different response.' }, 400);
+    student.invitation_response = payload.response;
+    student.invitation_responded_at = new Date().toISOString();
+    return json({ data: student });
+  }
   if (path === '/api/admin/approval/decision' && method === 'POST') {
     const changed = students.filter(student => student.form_key === formKey && payload.ids?.includes(student.id));
     changed.forEach(student => { student.status = payload.status ?? student.status; });
+    return json({ data: changed });
+  }
+  if (path === '/api/admin/approval/release' && method === 'POST') {
+    const decisions = payload.decisions ?? [];
+    const changed = decisions.map(decision => students.find(student => student.id === decision.id && student.form_key === 'registration' && student.status === decision.expected_status));
+    if (formKey !== 'registration' || !decisions.length || changed.some(student => !student)) return json({ error: 'Selected decisions changed. Refresh and review before releasing.' }, 409);
+    for (const student of changed) if (student && student.status !== student.released_status) {
+      student.released_status = student.status as Student['released_status'];
+      student.decision_released_at = new Date().toISOString();
+    }
     return json({ data: changed });
   }
   const detail = path.match(/^\/api\/admin\/registrations\/(\d+)(\/check-in)?$/);

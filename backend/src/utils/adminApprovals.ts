@@ -1,4 +1,6 @@
-export interface ApprovalStudent {
+import type { InvitationFields } from './invitations';
+
+export interface ApprovalStudent extends InvitationFields {
   id: number;
   user_id: string;
   email: string;
@@ -104,12 +106,22 @@ export function normalizeIdentity(value: string): string {
 }
 
 export function filterApprovalStudents<T extends ApprovalStudent>(rows: T[], filters: {
+  view?: 'all' | 'ready' | 'invitations';
   status?: string; search?: string; checkedIn?: string; answers?: ApprovalAnswerFilter[];
+  releasedStatus?: string; releaseState?: string; invitationResponse?: string;
   from?: string; to?: string;
 }): T[] {
   const search = normalizeIdentity(filters.search ?? '');
   return rows.filter(row => {
+    if (filters.view === 'ready' && (!['approved', 'waitlisted', 'rejected'].includes(row.status) || row.status === row.released_status)) return false;
+    if (filters.view === 'invitations' && row.released_status !== 'approved') return false;
     if (filters.status && row.status !== filters.status) return false;
+    if (filters.releasedStatus && row.released_status !== filters.releasedStatus) return false;
+    const releaseState = row.released_status == null ? 'unreleased' : row.released_status === row.status ? 'current' : 'changed';
+    if (filters.releaseState && releaseState !== filters.releaseState) return false;
+    if (filters.invitationResponse === 'unanswered') {
+      if (row.released_status !== 'approved' || row.invitation_response != null) return false;
+    } else if (filters.invitationResponse && row.invitation_response !== filters.invitationResponse) return false;
     if (filters.checkedIn === 'true' && row.checked_in !== true) return false;
     if (filters.checkedIn === 'false' && row.checked_in === true) return false;
     if (filters.from || filters.to) {

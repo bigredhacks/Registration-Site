@@ -4,8 +4,9 @@ import { useAdminSelection } from './AdminSelectionContext';
 import { parseStudentList, studentName, type IdentityMatch } from './adminApprovalState';
 import AdminSelect from '@/components/AdminSelect';
 
-export default function AdminSelectionPanel() {
-  const { selected, remove, clear, add, formKey, busy, notice, decide } = useAdminSelection();
+
+export default function AdminSelectionPanel({ mode }: { mode: 'paste' | 'review' }) {
+  const { selected, remove, clear, add, formKey, busy } = useAdminSelection();
   const [text, setText] = useState('');
   const [matches, setMatches] = useState<IdentityMatch[]>([]);
   const [choices, setChoices] = useState<Record<number, number>>({});
@@ -37,9 +38,9 @@ export default function AdminSelectionPanel() {
   const unique = [...new Map(candidates.filter(student => !selected.has(student.id)).map(student => [student.id, student])).values()];
 
   return <aside className="admin-selection-panel" aria-label="Selected students" id="admin-selected-panel" tabIndex={-1}>
-    <button className="admin-text-button admin-selection-return" onClick={() => document.getElementById('admin-browse-list')?.scrollIntoView({ block: 'start' })}>↑ Back to list</button>
+
     <fieldset disabled={busy}>
-      <div className="admin-toolbar"><h2>Selected students <span className="admin-count">{selected.size}</span></h2><button className="admin-text-button" onClick={clear} disabled={!selected.size}>Clear</button></div>
+      {mode === 'review' && <><div className="admin-toolbar"><h2>Selected applicants <span className="admin-count">{selected.size}</span></h2><button className="admin-text-button" onClick={clear} disabled={!selected.size}>Clear</button></div>
       <ul className="admin-selected-list">
         {[...selected.values()].map(student => <li key={student.id}>
           <div className="min-w-0"><p>{studentName(student)}</p><p className="admin-meta break-all">{student.email}</p><p className="admin-meta">{student.team_name ? `${student.team_name} · ` : ''}{student.status}</p></div>
@@ -47,15 +48,9 @@ export default function AdminSelectionPanel() {
         </li>)}
         {!selected.size && <li className="admin-meta">No students selected</li>}
       </ul>
-      <div className="admin-selection-actions">
-        <button className="admin-button admin-button-primary" disabled={!selected.size} onClick={() => void decide('approved')}>{busy ? 'Updating…' : 'Approve'}</button>
-        <button className="admin-button" disabled={!selected.size} onClick={() => void decide('rejected')}>Reject</button>
-        <AdminSelect aria-label="Other approval actions" value="" disabled={!selected.size} className="admin-input" placeholder="More…"
-          options={[{ value: 'waitlisted', label: 'Waitlist' }, { value: 'pending', label: 'Set pending' }]}
-          onChange={value => { if (value) void decide(value); }} />
-      </div>
-      {notice && <p className="admin-meta mt-3" role="status">{notice}</p>}
-      <div className="admin-paste-panel">
+      </>}
+      {mode === 'paste' && <div className="admin-paste-panel">
+        <h3>Add from a list</h3>
         <label htmlFor="admin-paste-students">Add emails or full names</label>
         <textarea id="admin-paste-students" className="admin-input" rows={4} value={text} maxLength={50000} placeholder={'student@cornell.edu\nFirst Last'} onChange={event => { setText(event.target.value); request.current++; setResolving(false); setMatches([]); setChoices({}); setError(''); }} />
         <button className="admin-button" disabled={resolving || !text.trim()} onClick={() => void lookup()}>{resolving ? 'Finding…' : 'Find students'}</button>
@@ -70,7 +65,7 @@ export default function AdminSelectionPanel() {
           </div>)}
           <button className="admin-button" disabled={!unique.length} onClick={() => { add(unique); setMatches([]); setText(''); setChoices({}); }}>Add {unique.length} matched students</button>
         </div>}
-      </div>
+      </div>}
     </fieldset>
   </aside>;
 }

@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { AdminStudent } from './adminApprovalState';
+import type { AdminStudent, ReleaseDecision } from './adminApprovalState';
 
 export interface AdminSelection {
   selected: Map<number, AdminStudent>;
@@ -16,6 +16,7 @@ export interface AdminSelection {
   busy: boolean;
   notice: string;
   decide: (status: string) => Promise<void>;
+  release: (decisions: ReleaseDecision[]) => Promise<void>;
 }
 
 export const AdminSelectionContext = createContext<AdminSelection | null>(null);

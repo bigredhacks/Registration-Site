@@ -512,7 +512,7 @@ router.get('/metrics', async (req: Request, res: Response) => {
     let total = 0;
     do {
       const { data, error, count } = await supabase.from('registrations')
-        .select('status, school, level_of_study, form_key, checked_in, created_at', { count: 'exact' })
+        .select('status, school, level_of_study, form_key, checked_in, created_at, released_status, invitation_response', { count: 'exact' })
         .order('id', { ascending: true })
         .range(rows.length, rows.length + pageSize - 1);
       if (error) {

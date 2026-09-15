@@ -1,5 +1,5 @@
 export const EMAIL_TEMPLATE_VERSION = '2026-09-15-v2';
-export type EmailKind = 'confirmation' | 'approved' | 'rejected';
+export type EmailKind = 'confirmation' | 'approved' | 'rejected' | 'waitlisted';
 export interface EmailPayload { from: string; to: string; subject: string; html: string; text: string }
 export interface EmailTemplate { subject: string; body: string; button_label: string; version: number; html?: string }
 export const SAMPLE_INVITATION_DEADLINE = '2026-09-21T04:00:00.000Z';
@@ -17,6 +17,11 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<EmailKind, EmailTemplate> = {
     subject: 'You’re invited to BigRed//Hacks!',
     body: 'Congratulations! Your application to BigRed//Hacks Fall 2026 has been approved.\n\nPlease visit your dashboard to accept or decline your invitation.',
     button_label: 'Respond to invitation', version: 0,
+  },
+  waitlisted: {
+    subject: 'You’re on the BigRed//Hacks waitlist',
+    body: 'Thank you for applying to BigRed//Hacks. Your application is on our waitlist.\n\nWe’ll email you if a place becomes available. No action is needed right now.',
+    button_label: 'View application', version: 0,
   },
   rejected: {
     subject: 'Your BigRed//Hacks application',

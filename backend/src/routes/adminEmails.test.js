@@ -7,12 +7,13 @@ process.env.RESEND_API_KEY = 'test-only-key';
 require('ts-node').register({ project: path.resolve(__dirname, '../../tsconfig.json'), transpileOnly: true });
 const emails = require('./adminEmails.ts').default;
 const teams = require('./adminTeams.ts').default;
+const releases = require('./adminReleaseEmails.ts').default;
 const { defaultTemplateHtml } = require('../utils/emailTemplates.ts');
 const { supabase } = require('../config/supabase.ts');
 const id = '00000000-0000-4000-8000-000000000001';
 let records, writes, reads, rpc, savedDraft, uploads, storedRevision, uploadError, downloadError;
 const invitationSettings = { deadline: new Date(Date.now()+86400000).toISOString(), time_zone: 'America/New_York', version: 2 };
-const row = (n, overrides) => ({ id: n, form_key: 'registration', first_name: 'Alex', last_name: 'Test', email: `alex${n}@example.com`, released_status: 'approved', decision_released_at: '2026-09-15T00:00:00Z', ...overrides });
+const row = (n, overrides) => ({ id: n, form_key: 'registration', status: 'approved', first_name: 'Alex', last_name: 'Test', email: `alex${n}@example.com`, released_status: 'approved', decision_released_at: '2026-09-15T00:00:00Z', ...overrides });
 test.beforeEach(() => {
   records = [row(1), row(2, { released_status: null }), row(3, { released_status: 'rejected' }), row(4, { email: '' }), row(5, { form_key: 'workshop' })];
   writes = []; reads = []; rpc = []; savedDraft = null; uploads = []; storedRevision = null; uploadError = false; downloadError = false;
@@ -24,7 +25,7 @@ test.beforeEach(() => {
   supabase.from = table => {
     const filters = []; reads.push(table);
     let payload;
-    const result = () => ({ data: table === 'registrations' ? records.filter(row => filters.every(fn => fn(row))) : table === 'email_batches' ? savedDraft : table === 'email_template_files' ? storedRevision : table === 'invitation_settings' ? invitationSettings : [], error: null, count: table === 'registrations' ? records.filter(row => filters.every(fn => fn(row))).length : 0 });
+    const result = () => ({ data: table === 'registrations' ? records.filter(row => filters.every(fn => fn(row))) : (table === 'email_batches' || table === 'email_decision_releases') ? savedDraft : table === 'email_template_files' ? storedRevision : table === 'invitation_settings' ? invitationSettings : [], error: null, count: table === 'registrations' ? records.filter(row => filters.every(fn => fn(row))).length : 0 });
     const builder = {
       abortSignal() { return builder; }, select() { return builder; }, order() { return builder; }, range() { return builder; }, ilike() { return builder; },
       eq(key, value) { filters.push(row => row[key] === value); return builder; },
@@ -121,4 +122,49 @@ test('failed uploads never activate incomplete files; approval HTML requires dea
   assert.equal((await request(emails, 'put', '/templates/:kind', body, { params: { kind: 'approved' } })).statusCode, 500);
   assert.equal(rpc.length, 0);
   assert.equal((await request(emails, 'put', '/templates/:kind', { ...body, html: '<p>No deadline</p>' }, { params: { kind: 'approved' } })).statusCode, 400);
+});
+
+test('release previews use draft decisions and pair selected groups with one template load per kind', async () => {
+  records=[row(1),row(2,{status:'rejected'}),row(3,{status:'waitlisted'}),row(4)];
+  const decisions=records.map(row=>({id:row.id,expected_status:row.status}));
+  const response=await request(releases,'post','/',{decisions,email_kinds:['approved','waitlisted']});
+  assert.equal(response.statusCode,201);
+  assert.deepEqual(response.body.recipients.map(r=>[r.id,r.kind]),[[1,'approved'],[3,'waitlisted'],[4,'approved']]);
+  assert.equal(reads.filter(table=>table==='email_template_files').length,2);
+  assert.equal(writes[0].table,'email_decision_releases');
+  assert.equal(writes[0].value.messages[1].payload.to,'alex3@example.com');
+  assert.match(writes[0].value.messages[1].payload.text,/waitlist/);
+  assert.doesNotMatch(writes[0].value.messages[1].payload.text,/Please accept by|accept or decline/);
+  assert.equal(rpc.length,0,'review does not release or send');
+  const preview=await request(releases,'get','/:id/preview',{}, {query:{registration_id:'3'}});
+  assert.equal(preview.body.to,'alex3@example.com');
+});
+test('dashboard-only release previews work without Resend or template files',async()=>{
+  delete process.env.EMAIL_DELIVERY_ENABLED; downloadError=true; storedRevision={storage_path:'bad',version:1};
+  const response=await request(releases,'post','/',{decisions:[{id:1,expected_status:'approved'}],email_kinds:[]});
+  assert.equal(response.statusCode,201); assert.equal(response.body.enabled,false);
+  assert.deepEqual(response.body.recipients,[]); assert.equal(reads.includes('email_template_files'),false);
+  const confirm=await request(releases,'post','/:id/confirm');
+  assert.equal(confirm.statusCode,200);
+  assert.deepEqual(rpc[0],{name:'release_decisions_with_emails',args:{p_release_id:id,p_admin_id:'admin-id',p_delivery_enabled:false}});
+});
+test('release previews reject stale decisions, invalid recipients and untrusted content',async()=>{
+  for(const body of [
+    {decisions:[{id:1,expected_status:'approved'}],email_kinds:['approved'],payload:'forged'},
+    {decisions:[{id:1,expected_status:'pending'}],email_kinds:[]},
+    {decisions:[{id:1,expected_status:'approved'},{id:1,expected_status:'approved'}],email_kinds:[]},
+  ]) assert.equal((await request(releases,'post','/',body)).statusCode,400);
+  assert.equal((await request(releases,'post','/',{decisions:[{id:1,expected_status:'rejected'}],email_kinds:[]})).statusCode,409);
+  assert.equal((await request(releases,'post','/',{decisions:[{id:4,expected_status:'approved'}],email_kinds:['approved']})).statusCode,409);
+  assert.equal(writes.length,0);
+});
+test('release test emails use saved messages and only the signed-in admin address',async()=>{
+  await request(releases,'post','/',{decisions:[{id:1,expected_status:'approved'}],email_kinds:['approved']});
+  assert.equal((await request(releases,'post','/:id/test',{kind:'approved',to:'someone@example.com'})).statusCode,400);
+  assert.equal((await request(releases,'post','/:id/test',{kind:'approved'})).statusCode,202);
+  assert.equal(writes[1].value.request_payload.to,'admin@example.com');
+  assert.equal(writes[1].options.ignoreDuplicates,true);
+  assert.equal((await request(releases,'post','/:id/test',{kind:'waitlisted'})).statusCode,404);
+  delete process.env.EMAIL_DELIVERY_ENABLED;
+  assert.equal((await request(releases,'post','/:id/test',{kind:'approved'})).statusCode,503);
 });

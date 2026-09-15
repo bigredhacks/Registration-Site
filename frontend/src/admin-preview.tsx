@@ -33,7 +33,8 @@ interface Payload extends Partial<PreviewForm> {
   entries?: string[]; teams?: Draft[]; pool_id?: string;
   decisions?: ReleaseDecision[];
   scope?: 'released'; html?: string; subject?: string; body?: string; button_label?: string; expected_version?: number; deadline?: string | null; time_zone?: string;
-  kind?: 'approved' | 'rejected'; expected_name?: string; expected_members?: string[];
+  email_kinds?: Array<'approved' | 'rejected' | 'waitlisted'>;
+  kind?: 'approved' | 'rejected' | 'waitlisted'; expected_name?: string; expected_members?: string[];
   id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -182,7 +183,9 @@ function filtered(params: URLSearchParams) {
   return sampleSorted(rows, params.get('sort') ?? '', params.get('dir') ?? '');
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const emailDrafts = new Map<string, { kind: 'approved' | 'rejected'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
+const emailDrafts = new Map<string, { kind: 'approved' | 'rejected' | 'waitlisted'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
+const releaseDrafts = new Map<string, { decisions: ReleaseDecision[]; messages: Array<{ id: number; kind: 'approved' | 'rejected' | 'waitlisted'; recipient: string; name: string; subject: string; html: string; text: string; to: string }>; deadline_version: number; result?: { data: { id: number }[]; queued: number; skipped: number } }>();
+const releasedEmailKeys = new Set<string>();
 const emailTemplates: Record<EmailKind, EmailTemplate> = Object.fromEntries(Object.entries(DEFAULT_EMAIL_TEMPLATES).map(([kind, template]) => [kind, { ...template, html: defaultTemplateHtml(kind as EmailKind) }])) as Record<EmailKind, EmailTemplate>;
 let invitationSettings = { deadline: SAMPLE_INVITATION_DEADLINE as string | null, time_zone: 'America/New_York', version: 1 };
 function expireSampleInvitations() {
@@ -231,6 +234,39 @@ window.fetch = async (input, init) => {
     const jobs = emailJobs.filter(job => (!url.searchParams.get('state') || job.state === url.searchParams.get('state')) && job.recipient.includes(url.searchParams.get('q') ?? ''));
     const offset = Number(url.searchParams.get('offset') ?? 0);
     return json({ data: jobs.slice(offset, offset + 50), count: jobs.length, enabled: true });
+  }
+  if (path === '/api/admin/emails/releases/config') return json({ enabled: true });
+  if (path === '/api/admin/emails/releases' && method === 'POST') {
+    const decisions = payload.decisions ?? [];
+    const rows = decisions.map(decision => students.find(student => student.id === decision.id && student.form_key === 'registration' && student.status === decision.expected_status));
+    if (rows.some(row => !row)) return json({ error: 'Selected decisions changed. Review the selection again.' }, 409);
+    if (payload.email_kinds?.includes('approved') && decisions.some(d => d.expected_status === 'approved') && (!invitationSettings.deadline || Date.parse(invitationSettings.deadline) <= Date.now())) return json({ error: 'Set a future deadline in Invitations before sending approval emails.' }, 409);
+    const messages = (rows as Student[]).filter(row => payload.email_kinds?.includes(row.status as 'approved' | 'rejected' | 'waitlisted')).map(row => ({ id: row.id, kind: row.status as 'approved' | 'rejected' | 'waitlisted', recipient: row.email, name: fullName(row), ...sampleEmail(row.status as EmailKind, row) }));
+    const id = crypto.randomUUID(); releaseDrafts.set(id, { decisions, messages, deadline_version: invitationSettings.version });
+    return json({ id, enabled: true, recipients: messages.map(({ id, kind, recipient, name, subject }) => ({ id, kind, recipient, name, subject })) }, 201);
+  }
+  if (path.startsWith('/api/admin/emails/releases/')) {
+    const parts = path.split('/'); const draft = releaseDrafts.get(parts[5]);
+    if (!draft) return json({ error: 'Release preview not found.' }, 404);
+    if (parts[6] === 'preview') return json(draft.messages.find(message => message.id === Number(url.searchParams.get('registration_id'))));
+    if (parts[6] === 'test') return json({ message: 'Sample test queued to admin@example.com. No real email was sent.' }, 202);
+    if (parts[6] === 'confirm') {
+      if (draft.result) return json(draft.result);
+      const rows = draft.decisions.map(decision => students.find(row => row.id === decision.id && row.status === decision.expected_status));
+      if (rows.some(row => !row)) return json({ error: 'Selected decisions changed. Review again.' }, 409);
+      if (draft.messages.some(message => message.kind === 'approved') && draft.deadline_version !== invitationSettings.version) return json({ error: 'The deadline changed. Review again.' }, 409);
+      let queued = 0, skipped = 0;
+      for (const row of rows as Student[]) {
+        if (row.released_status !== row.status) { row.released_status = row.status as Student['released_status']; row.decision_released_at = new Date().toISOString(); }
+        const message = draft.messages.find(message => message.id === row.id);
+        if (message) {
+          const key = `${row.id}/${row.released_status}/${row.decision_released_at}/${message.kind === 'approved' ? invitationSettings.version : ''}`;
+          if (releasedEmailKeys.has(key)) skipped++;
+          else { releasedEmailKeys.add(key); queued++; emailJobs.unshift({ id: crypto.randomUUID(), kind: message.kind, recipient: message.recipient, state: 'queued', attempts: 0, created_at: new Date().toISOString(), can_retry: false }); }
+        }
+      }
+      draft.result = { data: draft.decisions.map(({ id }) => ({ id })), queued, skipped }; return json(draft.result);
+    }
   }
   if (path === '/api/admin/emails/drafts' && method === 'POST') {
     if (payload.kind === 'approved' && (!invitationSettings.deadline || Date.parse(invitationSettings.deadline) <= Date.now())) return json({ error: 'Set a future deadline in Invitations before sending approval emails.' }, 409);

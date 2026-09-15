@@ -38,7 +38,7 @@ export default function AdminEmailEditor() {
   };
   return <div className="space-y-4">
     <div className="admin-toolbar"><AdminSelect aria-label="Email template" className="admin-input" value={kind} disabled={dirty || saving} onChange={value => setKind(value as EmailKind)}
-      options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }]} />
+      options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }, { value: 'waitlisted', label: 'Waitlisted' }]} />
       {draft && !editing && <button className="admin-button" onClick={() => setEditing(true)}>Edit email</button>}
     </div>
     {error && <p role="alert" className="text-sm text-red6">{error} <button className="admin-text-button" disabled={saving} onClick={() => setReload(reload + 1)}>Reload</button></p>}

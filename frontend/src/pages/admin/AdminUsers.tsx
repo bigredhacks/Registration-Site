@@ -278,7 +278,7 @@ export default function AdminUsers() {
       <AdminSelectionPanel mode="paste" />
     </AdminTaskDialog>}
     {error && <p role="alert" className="text-red6 mb-3">{error} <button className="admin-text-button" onClick={() => setRefreshKey(value => value + 1)}>Retry</button></p>}
-    <AdminSelectionActions outside={loading || error ? undefined : [...selected.keys()].filter(id => !matchingIds.includes(id)).length} onReady={() => switchView('ready')} />
+    <AdminSelectionActions hideRelease={view === 'invitations'} outside={loading || error ? undefined : [...selected.keys()].filter(id => !matchingIds.includes(id)).length} onReady={() => switchView('ready')} />
     {detailId !== null ? <section ref={detailPanel} tabIndex={-1} className="admin-detail" aria-label="Application review">
       <div className="admin-toolbar mb-4"><button className="admin-text-button" onClick={closeDetail}>← Back to students</button>{detail && <button className="admin-button" onClick={() => toggle(detail)}>{selected.has(detail.id) ? 'Remove from selected' : 'Add to selected'}</button>}</div>
       {detailLoading && <p className="admin-meta">Loading application…</p>}

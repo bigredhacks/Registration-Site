@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { apiFetch } from '@/lib/api';
 import { useToast } from '@/components/Toast/ToastContext';
 import { AdminSelectionContext } from './AdminSelectionContext';
-import { addToSelection, type AdminStudent, type ReleaseDecision } from './adminApprovalState';
+import { addToSelection, type AdminStudent } from './adminApprovalState';
 
 export default function AdminSelectionProvider({ children }: { children: ReactNode }) {
   const { showToast } = useToast();
@@ -84,40 +84,30 @@ export default function AdminSelectionProvider({ children }: { children: ReactNo
     }
   };
 
-  const release = async (decisions: ReleaseDecision[]) => {
-    if (locked.current || formKey !== 'registration' || !decisions.length) return;
-    locked.current = true;
-    setBusy(true);
-    setNotice('');
-    let completed = 0;
-    let error = '';
+  const release = async (previewId: string): Promise<boolean> => {
+    if (locked.current || formKey !== 'registration') return false;
+    locked.current = true; setBusy(true); setNotice('');
     try {
-      for (let offset = 0; offset < decisions.length; offset += 200) {
-        const batch = decisions.slice(offset, offset + 200);
-        const res = await apiFetch('/api/admin/approval/release', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ form_key: 'registration', decisions: batch }),
-        });
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.error || 'Could not release decisions.');
-        const ids = new Set((body.data as AdminStudent[]).map(student => student.id));
-        completed += ids.size;
-        setSelections(previous => {
-          const next = new Map(previous.registration);
-          ids.forEach(id => next.delete(id));
-          return { ...previous, registration: next };
-        });
-        if (ids.size !== batch.length) throw new Error('Some decisions could not be confirmed.');
-      }
+      const response = await apiFetch(`/api/admin/emails/releases/${previewId}/confirm`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Could not confirm release. Retry this same preview.');
+      const ids = new Set<number>(body.data.map((student: { id: number }) => student.id));
+      setSelections(previous => {
+        const next = new Map(previous.registration);
+        ids.forEach(id => next.delete(id));
+        return { ...previous, registration: next };
+      });
+      const result = `${ids.size} decisions released. ${body.queued} emails queued.${body.skipped ? ` ${body.skipped} emails already queued.` : ''}`;
+      setNotice(result); showToast(result, 'success');
+      return true;
     } catch (cause) {
-      error = `${cause instanceof Error ? cause.message : 'Could not confirm release.'} Refresh and review remaining selections before releasing again.`;
+      const message = cause instanceof Error ? cause.message : 'Could not confirm release. Retry this same preview.';
+      setNotice(message); showToast(message, 'error');
+      throw new Error(message);
     } finally {
-      locked.current = false;
-      setBusy(false);
-      setRevision(value => value + 1);
-      const result = `${completed} decisions released. No emails sent.${error ? ` ${error}` : ''}`;
-      setNotice(result);
-      showToast(result, error ? 'error' : 'success');
+      locked.current = false; setBusy(false); setRevision(value => value + 1);
     }
   };
 

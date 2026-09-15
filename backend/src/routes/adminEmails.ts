@@ -1,3 +1,4 @@
+import releaseEmails from './adminReleaseEmails';
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabase } from '../config/supabase';
@@ -8,13 +9,14 @@ import { deliveryEnabled, emailPayload, emailSiteUrl, renderEmail, validEmail, E
 
 // Mounted after requireAuth + requireAdmin.
 const router = Router();
-const kind = z.enum(['approved', 'rejected']);
+router.use('/releases', releaseEmails);
+const kind = z.enum(['approved', 'rejected', 'waitlisted']);
 const draftId = z.object({ id: z.uuid() });
 const rpcStatus = (code: string) => code === 'PT409' ? 409 : code === 'PT404' ? 404 : code === 'PT403' ? 403 : 500;
 interface DecisionRow { id: number; email: string | null; first_name: string | null; last_name: string | null; released_status: string | null; decision_released_at: string | null }
 interface DraftMessage { id: number; recipient: string; name: string; released_at: string; template_version: string; payload: EmailPayload }
 
-const templateParams = z.object({ kind: z.enum(['confirmation', 'approved', 'rejected']) });
+const templateParams = z.object({ kind: z.enum(['confirmation', 'approved', 'rejected', 'waitlisted']) });
 const templateBody = z.object({ subject: z.string().trim().min(1).max(200).refine(value => !/[\r\n]/.test(value), 'Use one line for the subject.'),
   body: z.string().trim().min(1).max(10000), button_label: z.string().trim().max(80), html: z.string().trim().min(1).max(50000) });
 router.get('/templates/:kind', validate({ params: templateParams }), async (req, res) => {

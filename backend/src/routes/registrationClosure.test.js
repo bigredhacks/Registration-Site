@@ -186,3 +186,27 @@ test('RSVP uses authenticated ownership, permits closed/inactive forms, and maps
     if (expected === 500) assert.notEqual(response.body.error, failure.message);
   }
 });
+
+ test('new submissions keep first names required and atomically request a confirmation', async () => {
+  active = true; closesAt = null; admin = false; writes = [];
+  const originalFrom = supabase.from;
+  supabase.from = table => {
+    const query = originalFrom(table);
+    if (table === 'registrations') query.maybeSingle = async () => ({ data: null, error: null });
+    return query;
+  };
+  const calls = [];
+  supabase.rpc = (name, args) => {
+    calls.push({ name, args });
+    return { async single() { return { data: { ...registration, ...args.p_registration }, error: null }; } };
+  };
+  try {
+    for (const body of [{}, { first_name: '' }, { first_name: '  ' }]) assert.equal((await request('post', '/', body)).statusCode, 400);
+    assert.equal(calls.length, 0);
+    assert.equal((await request('post', '/', { first_name: ' Alex ', email: 'forged@example.com' })).statusCode, 201);
+    assert.equal(calls[0].name, 'create_registration_with_email');
+    assert.equal(calls[0].args.p_registration.first_name, 'Alex');
+    assert.equal(calls[0].args.p_registration.email, 'student@example.com');
+    assert.equal(writes.length, 0, 'no separate application write');
+  } finally { supabase.from = originalFrom; }
+});

@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { applicantDecision, invitationErrorStatus, protectedInvitationFields, type InvitationFields } from '../utils/invitations';
+import { getInvitationSettings, expireInvitations } from '../utils/emailSettings';
 import { supabase } from '../config/supabase';
 import {
   RegistrationParamsSchema,
 } from '../types/registration';
 import { validate } from '../middleware/validate';
 import { isAdmin, resolveOwnerOrAdmin } from '../middleware/requireAdmin';
-import { sendRegistrationConfirmation } from '../utils/email';
 import { isRegistrationClosed, registrationClosedError } from '../utils/registrationClosure';
 import {
   buildAnswersSchema,
@@ -167,6 +167,11 @@ async function parseAnswersFromBody(
   };
 }
 
+router.get('/me/invitation-settings', async (_req, res) => {
+  try { const expired_count = await expireInvitations(); res.json({ ...await getInvitationSettings(), expired_count, server_now: new Date().toISOString() }); }
+  catch { res.status(500).json({ error: 'Could not load the invitation deadline.' }); }
+});
+
 router.put('/me/invitation-response', validate({ body: z.object({
   response: z.enum(['accepted', 'declined']),
 }).strict() }), async (req: Request, res: Response) => {
@@ -293,7 +298,7 @@ router.get('/me/all', async (req: Request, res: Response) => {
   try {
     const { data, error } = await supabase
       .from('registrations')
-      .select('id, form_key, form_version, status, created_at, resume_path, released_status, decision_released_at, invitation_response, invitation_responded_at')
+      .select('id, form_key, form_version, status, created_at, resume_path, released_status, decision_released_at, invitation_response, invitation_responded_at, invitation_expired_at')
       .eq('user_id', req.user!.id)
       .order('created_at', { ascending: false });
 
@@ -376,21 +381,13 @@ router.post('/', async (req: Request<{}, {}, Record<string, unknown>>, res: Resp
       email: req.user!.email ?? null,
     };
 
-    const { data, error } = await supabase
-      .from('registrations')
-      .insert(payload)
-      .select()
-      .single();
+    const { data, error } = await supabase.rpc('create_registration_with_email', { p_registration: payload }).single();
 
     if (error) {
-      res.status(500).json({ error: error.message });
+      res.status(error.code === '23505' || error.code === 'PT409' ? 409 : error.code === 'PT403' ? 403 : error.code === 'PT404' ? 404 : 500)
+        .json({ error: error.code === '23505' ? 'An application already exists for this account. Refresh your dashboard.' : error.message });
       return;
     }
-
-    sendRegistrationConfirmation({
-      to: data.email,
-      firstName: data.first_name,
-    }).catch((e) => console.error('[email] confirmation failed:', e));
 
     res.status(201).json(toRegistrationResponse(data as RegistrationRow));
   } catch (err) {

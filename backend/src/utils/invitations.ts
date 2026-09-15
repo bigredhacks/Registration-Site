@@ -4,6 +4,7 @@ export interface InvitationFields {
   released_status?: string | null;
   decision_released_at?: string | null;
   invitation_response?: 'accepted' | 'declined' | null;
+  invitation_expired_at?: string | null;
   invitation_responded_at?: string | null;
 }
 
@@ -16,7 +17,7 @@ export function applicantDecision<T extends InvitationFields>(row: T) {
 }
 
 export const protectedInvitationFields = [
-  'released_status', 'decision_released_at', 'invitation_response', 'invitation_responded_at',
+  'released_status', 'decision_released_at', 'invitation_response', 'invitation_responded_at', 'invitation_expired_at',
 ] as const;
 
 export function invitationErrorStatus(code?: string) {

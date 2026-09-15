@@ -4,10 +4,12 @@ export interface ApplicantInvitation {
   status?: string | null;
   decision_released_at?: string | null;
   invitation_response?: InvitationResponse | null;
+  invitation_expired_at?: string | null;
   invitation_responded_at?: string | null;
 }
 
 export function invitationPresentation(registration: ApplicantInvitation) {
+  if (registration.invitation_expired_at) return { headline: 'Invitation expired', body: 'The acceptance deadline passed, so your invitation was declined.', canRespond: false };
   if (registration.status === 'approved') {
     if (registration.invitation_response === 'accepted') return {
       headline: 'Invitation accepted', body: "You're confirmed for BigRed//Hacks. We look forward to seeing you!", canRespond: false,

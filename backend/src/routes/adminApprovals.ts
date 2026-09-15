@@ -8,7 +8,7 @@ import { approvalAnswerValue, approvalFilterFields, buildApprovalCsv, filterAppr
 
 // Mounted after requireAdmin in admin.ts.
 const router = Router();
-const columns = 'id,user_id,email,first_name,last_name,school,status,form_key,checked_in,checked_in_at,created_at,level_of_study,shirt_size,released_status,decision_released_at,invitation_response,invitation_responded_at';
+const columns = 'id,user_id,email,first_name,last_name,school,status,form_key,checked_in,checked_in_at,created_at,level_of_study,shirt_size,released_status,decision_released_at,invitation_response,invitation_responded_at,invitation_expired_at';
 const formKeySchema = z.string().trim().min(1).max(100);
 const filtersSchema = z.object({
   form_key: formKeySchema,
@@ -16,7 +16,7 @@ const filtersSchema = z.object({
   status: RegistrationStatusSchema.or(z.literal('')).optional(),
   released_status: z.enum(['approved', 'waitlisted', 'rejected', '']).optional(),
   release_state: z.enum(['unreleased', 'changed', 'current', '']).optional(),
-  invitation_response: z.enum(['accepted', 'declined', 'unanswered', '']).optional(),
+  invitation_response: z.enum(['accepted', 'declined', 'unanswered', 'expired', '']).optional(),
   q: z.string().max(300).optional(),
   checked_in: z.enum(['true', 'false', '']).optional(),
   answers: z.string().max(30000).transform((value, ctx) => {
@@ -89,9 +89,10 @@ router.get(['/students', '/selection', '/export.csv'], async (req, res) => {
       return;
     }
     const data = (req.path === '/selection' ? rows.slice(0, selection_limit) : rows.slice(offset, offset + limit)).map(studentSummary);
-    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0 };
+    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0, expired: 0 };
     if (form_key === 'registration') for (const row of allRows) {
-      if (row.released_status === 'approved') invitationCounts[row.invitation_response ?? 'unanswered']++;
+      if (row.invitation_expired_at) invitationCounts.expired++;
+      else if (row.released_status === 'approved') invitationCounts[row.invitation_response ?? 'unanswered']++;
     }
     res.json({ data, count: rows.length, ...(req.path === '/students' ? { fields, invitationCounts, matchingIds: rows.map(row => row.id) } : {}) });
   } catch {

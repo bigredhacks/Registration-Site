@@ -8,6 +8,7 @@ export interface AdminStudent {
   released_status?: 'approved' | 'waitlisted' | 'rejected' | null;
   decision_released_at?: string | null;
   invitation_response?: 'accepted' | 'declined' | null;
+  invitation_expired_at?: string | null;
   invitation_responded_at?: string | null;
   form_key?: string | null;
   team_name?: string | null;

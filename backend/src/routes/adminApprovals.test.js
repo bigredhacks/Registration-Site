@@ -294,7 +294,7 @@ test('released and RSVP cohorts agree across list, selection and CSV; totals ign
   const filters = { form_key: 'registration', released_status: 'approved', invitation_response: 'unanswered', release_state: 'changed' };
   const list = await request('get', '/students', filters);
   assert.deepEqual(list.body.data.map(row => row.id), [3]);
-  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 1, unanswered: 1 });
+  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 1, unanswered: 1, expired: 0 });
   const selection = await request('get', '/selection', filters);
   assert.deepEqual(selection.body.data, list.body.data);
   const csv = await request('get', '/export.csv', filters);
@@ -413,7 +413,7 @@ test('selection limits follow invitation filters without limiting invitation tot
   assert.deepEqual(selection.body.data.map(row => row.id), [1]);
   const list = await request('get', '/students', query);
   assert.deepEqual(list.body.data.map(row => row.id), [1, 3]);
-  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 0, unanswered: 3 });
+  assert.deepEqual(list.body.invitationCounts, { accepted: 1, declined: 0, unanswered: 3, expired: 0 });
   const csv = await request('get', '/export.csv', query);
   assert.equal(csv.body.split('\r\n').length, 3);
   assert.match(csv.body, /student1@example.com/);

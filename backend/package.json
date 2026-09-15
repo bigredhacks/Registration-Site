@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon --exec ts-node src/server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "email:worker": "ts-node src/emailWorker.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",

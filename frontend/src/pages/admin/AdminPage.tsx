@@ -5,6 +5,7 @@ import RegistrationLayout from "@/components/layouts/RegistrationLayout";
 import { useAdmin } from "@/lib/useAdmin";
 import AdminUsers from "./AdminUsers";
 import AdminStats from "./AdminStats";
+import AdminEmails from "./AdminEmails";
 import AdminFormEditor from "./AdminFormEditor";
 import AdminFormList from "./AdminFormList";
 import AdminTeamMatching from "./AdminTeamMatching";
@@ -13,13 +14,14 @@ import AdminSelectionActions from "./AdminSelectionActions";
 import { useAdminSelection } from "./AdminSelectionContext";
 import AdminSelect from "@/components/AdminSelect";
 
-type Tab = "editor" | "stats" | "users" | "teams";
+type Tab = "editor" | "stats" | "users" | "teams" | "emails";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "users", label: "Approvals" },
   { id: "teams", label: "Team Matching" },
   { id: "editor", label: "Application Editor" },
   { id: "stats", label: "Stats" },
+  { id: "emails", label: "Emails" },
 ];
 
 export default function AdminPage() {
@@ -90,6 +92,7 @@ export default function AdminPage() {
             <ApprovalWorkspace tab={tab} />
           </div>
           {tab === "stats" && <AdminStats />}
+          {tab === "emails" && <AdminEmails />}
           {tab === "editor" && (
             editingKey
               ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} />

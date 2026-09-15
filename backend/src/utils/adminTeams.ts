@@ -41,11 +41,13 @@ export function buildTeamOverview(input: {
   profiles: ProfileRow[];
   savedTeams: SavedTeamRow[];
   savedMembers: SavedMemberRow[];
+  accountEmails?: Array<{ user_id: string; email: string | null }>;
 }) {
   const teamById = new Map(input.teams.map((team) => [team.id, team]));
   const membershipByUser = new Map(input.memberships.map((member) => [member.user_id, member]));
   const registrationByUser = new Map(input.registrations.map((registration) => [registration.user_id, registration]));
   const profileByUser = new Map(input.profiles.map((profile) => [profile.id, profile]));
+  const accountEmailByUser = new Map((input.accountEmails ?? []).map(account => [account.user_id, account.email]));
   const registrationFor = (userId: string): TeamRegistration | null => {
     const registration = registrationByUser.get(userId);
     if (!registration) return null;
@@ -60,7 +62,7 @@ export function buildTeamOverview(input: {
         user_id: member.user_id,
         full_name: [registration?.first_name, registration?.last_name].filter(Boolean).join(' ')
           || profile?.full_name || [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || 'Unnamed student',
-        email: registration?.email ?? '',
+        email: registration?.email || accountEmailByUser.get(member.user_id) || '',
         registration,
       };
     });

@@ -4,6 +4,7 @@ import ConfirmationDialog from '@/components/ConfirmationDialog';
 import AdminTaskDialog from './AdminTaskDialog';
 import AdminSelectionPanel from './AdminSelectionPanel';
 import AdminDecisionRelease from './AdminDecisionRelease';
+import AdminDecisionEmails from './AdminDecisionEmails';
 import { useAdminSelection } from './AdminSelectionContext';
 
 import { decisionOptions } from './adminApprovalState';
@@ -22,6 +23,7 @@ export default function AdminSelectionActions({ outside, onReady }: { outside?: 
       <button className="admin-button" disabled={busy} onClick={() => setReview(true)}>Review selection</button>
       <button className="admin-button" disabled={busy} onClick={() => setSaving(true)}>Save decision…</button>
       <AdminDecisionRelease />
+      <AdminDecisionEmails />
       <button className="admin-text-button" disabled={busy} onClick={clear}>Clear</button>
     </div>}
     {review && <AdminTaskDialog title="Review selection" busy={busy} onClose={() => setReview(false)}><AdminSelectionPanel mode="review" /></AdminTaskDialog>}

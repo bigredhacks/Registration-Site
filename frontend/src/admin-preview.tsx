@@ -5,10 +5,12 @@ import { ApprovalWorkspace } from './pages/admin/AdminPage';
 import AdminSelectionProvider from './pages/admin/AdminSelectionProvider';
 import AdminFormEditor from './pages/admin/AdminFormEditor';
 import AdminFormList from './pages/admin/AdminFormList';
+import AdminEmails from './pages/admin/AdminEmails';
 import type { ApprovalAnswerFilter, ApprovalFilterField } from './pages/admin/AdminApprovalFilters';
 import type { AdminStudent, ReleaseDecision } from './pages/admin/adminApprovalState';
 import type { FormField } from './lib/formConfig';
 import type { MatcherTeam, ParticipantSummary, TeamOverview } from './pages/admin/adminTeamMatchingState';
+import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, defaultTemplateHtml, SAMPLE_INVITATION_DEADLINE, type EmailTemplate, type EmailKind } from '../../backend/src/utils/emailTemplates';
 import './index.css';
 
 // Standalone Vite development entry. No production route, auth override, or
@@ -30,6 +32,8 @@ interface Payload extends Partial<PreviewForm> {
   form_key?: string; ids?: number[]; status?: string; checked_in?: boolean;
   entries?: string[]; teams?: Draft[]; pool_id?: string;
   decisions?: ReleaseDecision[];
+  scope?: 'released'; html?: string; subject?: string; body?: string; button_label?: string; expected_version?: number; deadline?: string | null; time_zone?: string;
+  kind?: 'approved' | 'rejected'; expected_name?: string; expected_members?: string[];
   id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -164,12 +168,12 @@ function filtered(params: URLSearchParams) {
   const to = params.get('to') ?? '';
   const rows = students.filter(student => student.form_key === (params.get('form_key') ?? 'registration')
     && (params.get('view') !== 'ready' || (['approved', 'waitlisted', 'rejected'].includes(student.status) && student.status !== student.released_status))
-    && (params.get('view') !== 'invitations' || student.released_status === 'approved')
+    && (params.get('view') !== 'invitations' || student.released_status === 'approved' || student.invitation_expired_at)
     && answerFilters.every(filter => sampleMatches(student, filter))
     && (!params.get('status') || student.status === params.get('status'))
     && (!params.get('released_status') || student.released_status === params.get('released_status'))
     && (!params.get('release_state') || params.get('release_state') === (!student.released_status ? 'unreleased' : student.status === student.released_status ? 'current' : 'changed'))
-    && (!params.get('invitation_response') || (params.get('invitation_response') === 'unanswered' ? student.released_status === 'approved' && !student.invitation_response : student.invitation_response === params.get('invitation_response')))
+    && (!params.get('invitation_response') || (params.get('invitation_response') === 'expired' ? !!student.invitation_expired_at : params.get('invitation_response') === 'unanswered' ? student.released_status === 'approved' && !student.invitation_response : !student.invitation_expired_at && student.invitation_response === params.get('invitation_response')))
     && (!params.get('checked_in') || String(student.checked_in) === params.get('checked_in'))
     && (!from || student.created_at.slice(0, 10) >= from)
     && (!to || student.created_at.slice(0, 10) <= to)
@@ -178,6 +182,19 @@ function filtered(params: URLSearchParams) {
   return sampleSorted(rows, params.get('sort') ?? '', params.get('dir') ?? '');
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+const emailDrafts = new Map<string, { kind: 'approved' | 'rejected'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
+const emailTemplates: Record<EmailKind, EmailTemplate> = Object.fromEntries(Object.entries(DEFAULT_EMAIL_TEMPLATES).map(([kind, template]) => [kind, { ...template, html: defaultTemplateHtml(kind as EmailKind) }])) as Record<EmailKind, EmailTemplate>;
+let invitationSettings = { deadline: SAMPLE_INVITATION_DEADLINE as string | null, time_zone: 'America/New_York', version: 1 };
+function expireSampleInvitations() {
+  if (!invitationSettings.deadline || Date.parse(invitationSettings.deadline) > Date.now()) return 0;
+  let count = 0;
+  for (const student of students) if (student.form_key === 'registration' && student.released_status === 'approved' && !student.invitation_response) {
+    Object.assign(student, { status: 'rejected', released_status: 'rejected', invitation_response: 'declined', invitation_responded_at: new Date().toISOString(), invitation_expired_at: invitationSettings.deadline, decision_released_at: new Date().toISOString() }); count++;
+  }
+  return count;
+}
+const emailJobs: Array<{ id: string; kind: string; recipient: string; state: string; attempts: number; created_at: string; can_retry: boolean }> = [];
+const sampleEmail = (kind: EmailKind, student?: Student) => ({ ...renderEmailTemplate(kind, student?.first_name ?? 'Alex', undefined, undefined, emailTemplates[kind], invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE, invitationSettings.time_zone), to: student?.email ?? 'alex@example.com' });
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
@@ -188,6 +205,63 @@ window.fetch = async (input, init) => {
   const formKey = payload.form_key ?? url.searchParams.get('form_key') ?? 'registration';
   const pool = payload.pool_id ?? url.searchParams.get('pool_id') ?? 'default';
 
+  if (path === '/api/admin/invitations/deadline') {
+    let expired_count = expireSampleInvitations();
+    if (method === 'PUT') {
+      if (payload.expected_version !== invitationSettings.version) return json({ error: 'The deadline changed. Reload it before saving.' }, 409);
+      if (payload.deadline !== invitationSettings.deadline || payload.time_zone !== invitationSettings.time_zone) {
+        invitationSettings = { deadline: payload.deadline ?? null, time_zone: payload.time_zone ?? 'America/New_York', version: invitationSettings.version + 1 };
+        expired_count += expireSampleInvitations();
+        emailJobs.filter(job => job.kind === 'approved' && job.state === 'queued').forEach(job => { job.state = 'cancelled'; });
+      }
+    }
+    return json({ ...invitationSettings, expired_count, server_now: new Date().toISOString() });
+  }
+  if (path.startsWith('/api/admin/emails/templates/')) {
+    const kind = path.split('/').pop() as EmailKind;
+    if (method === 'PUT') {
+      if (payload.expected_version !== emailTemplates[kind].version) return json({ error: 'This template changed. Reload it before saving.' }, 409);
+      emailTemplates[kind] = { html: payload.html, subject: payload.subject ?? '', body: payload.body ?? '', button_label: payload.button_label ?? '', version: emailTemplates[kind].version + 1 };
+      return json({ template: emailTemplates[kind] });
+    }
+    return json({ ...sampleEmail(kind), template: emailTemplates[kind], site_url: 'https://brh-registration-portal.netlify.app', deadline: invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE,
+      time_zone: invitationSettings.time_zone, sample_deadline: !invitationSettings.deadline, enabled: true });
+  }
+  if (path === '/api/admin/emails/jobs') {
+    const jobs = emailJobs.filter(job => (!url.searchParams.get('state') || job.state === url.searchParams.get('state')) && job.recipient.includes(url.searchParams.get('q') ?? ''));
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    return json({ data: jobs.slice(offset, offset + 50), count: jobs.length, enabled: true });
+  }
+  if (path === '/api/admin/emails/drafts' && method === 'POST') {
+    if (payload.kind === 'approved' && (!invitationSettings.deadline || Date.parse(invitationSettings.deadline) <= Date.now())) return json({ error: 'Set a future deadline in Invitations before sending approval emails.' }, 409);
+    const recipients = students.filter(row => row.form_key === 'registration' && (payload.scope === 'released' || payload.ids?.includes(row.id)) && row.released_status === payload.kind && row.decision_released_at);
+    const skipped = (payload.ids ?? []).filter(id => !recipients.some(row => row.id === id)).map(id => ({ id, reason: 'Released decision does not match this email.' }));
+    if (!recipients.length) return json({ error: 'No selected applicants have a matching released decision and valid email.' }, 400);
+    const id = crypto.randomUUID(), kind = payload.kind ?? 'approved';
+    emailDrafts.set(id, { kind, recipients, messages: recipients.map(row => ({ id: row.id, ...sampleEmail(kind, row) })), queued: false, deadline_version: invitationSettings.version });
+    return json({ id, kind, enabled: true, preview: sampleEmail(kind, recipients[0]), recipients: recipients.map(row => ({ id: row.id, name: fullName(row), recipient: row.email })), skipped }, 201);
+  }
+  if (path.startsWith('/api/admin/emails/drafts/')) {
+    const parts = path.split('/');
+    const draft = emailDrafts.get(parts[5]);
+    if (!draft) return json({ error: 'Draft not found.' }, 404);
+    if (parts[6] === 'preview') return json(draft.messages.find(row => row.id === Number(url.searchParams.get('registration_id'))));
+    if (parts[6] === 'test') return json({ message: 'Sample test queued to admin@example.com. No real email was sent.' }, 202);
+    if (parts[6] === 'send') {
+      if (draft.kind === 'approved' && draft.deadline_version !== invitationSettings.version) return json({ error: 'The invitation deadline changed. Create a new preview.' }, 409);
+      if (draft.queued) return json({ queued: draft.recipients.length, skipped: 0 }, 202);
+      draft.queued = true;
+      draft.recipients.forEach(row => emailJobs.unshift({ id: crypto.randomUUID(), kind: draft.kind, recipient: row.email, state: 'queued', attempts: 0, created_at: new Date().toISOString(), can_retry: false }));
+      return json({ queued: draft.recipients.length, skipped: 0 }, 202);
+    }
+  }
+  if (path.startsWith('/api/teams/admin/') && method === 'DELETE') {
+    const team = teams.find(row => row.id === path.split('/').pop());
+    if (!team) return json({ error: 'Team no longer exists.' }, 404);
+    if (team.name !== payload.expected_name || JSON.stringify([...team.members.map(id => `sample-user-${id}`)].sort()) !== JSON.stringify([...(payload.expected_members ?? [])].sort())) return json({ error: 'This team changed. Refresh before deleting.' }, 409);
+    teams.splice(teams.indexOf(team), 1);
+    return json({ removed_members: team.members.length });
+  }
   if (path === '/api/admin/form-configs') {
     if (method === 'GET') return json(forms.map(form => ({ ...form, fields_count: form.fields.length, server_now: new Date().toISOString() })));
     if (method === 'POST' && payload.key && !forms.some(form => form.key === payload.key)) {
@@ -206,8 +280,8 @@ window.fetch = async (input, init) => {
   if (method === 'GET' && ['/api/admin/approval/students', '/api/admin/approval/selection'].includes(path)) {
     const rows = filtered(url.searchParams);
     const offset = Number(url.searchParams.get('offset') ?? 0);
-    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0 };
-    for (const student of students) if (student.form_key === formKey && student.released_status === 'approved') invitationCounts[student.invitation_response ?? 'unanswered']++;
+    const invitationCounts = { accepted: 0, declined: 0, unanswered: 0, expired: 0 };
+    for (const student of students) if (student.form_key === formKey) { if (student.invitation_expired_at) invitationCounts.expired++; else if (student.released_status === 'approved') invitationCounts[student.invitation_response ?? 'unanswered']++; }
     const selectionLimit = url.searchParams.has('selection_limit') ? Number(url.searchParams.get('selection_limit')) : undefined;
     if (selectionLimit !== undefined && (!Number.isSafeInteger(selectionLimit) || selectionLimit < 1)) return json({ error: 'Invalid registration filters.' }, 400);
     return json({ data: path.endsWith('/selection') ? rows.slice(0, selectionLimit) : rows.slice(offset, offset + Number(url.searchParams.get('limit') ?? 50)), count: rows.length, matchingIds: rows.map(row => row.id), fields: sampleFilterFields(formKey), invitationCounts });
@@ -279,15 +353,18 @@ window.fetch = async (input, init) => {
 };
 
 export function Preview() {
-  const [tab, setTab] = useState<'users' | 'teams' | 'editor'>('users');
+  const [tab, setTab] = useState<'users' | 'teams' | 'editor' | 'emails'>('users');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   return <main className="admin-surface mx-auto min-h-screen max-w-[1600px] bg-red7 px-4 py-6 font-poppins sm:px-8">
     <div className="admin-toolbar mb-5"><h1 className="text-3xl font-semibold text-red6">Admin</h1><span className="text-xs text-red6">Sample data preview</span></div>
     <nav aria-label="Admin sections" className="mb-5 flex flex-wrap gap-2">
-      {([['users', 'Approvals'], ['teams', 'Team Matching'], ['editor', 'Application Editor']] as const).map(([key, label]) => <button key={key} aria-pressed={tab === key} className={`admin-button ${tab === key ? 'admin-button-primary' : ''}`} onClick={() => setTab(key)}>{label}</button>)}
+      {([['users', 'Approvals'], ['teams', 'Team Matching'], ['emails', 'Emails'], ['editor', 'Application Editor']] as const).map(([key, label]) => <button key={key} aria-pressed={tab === key} className={`admin-button ${tab === key ? 'admin-button-primary' : ''}`} onClick={() => setTab(key)}>{label}</button>)}
     </nav>
-    <div hidden={tab === 'editor'}><ApprovalWorkspace tab={tab} /></div>
+    <div hidden={tab === 'editor' || tab === 'emails'}><ApprovalWorkspace tab={tab} /></div>
+    {tab === 'emails' && <AdminEmails />}
     {tab === 'editor' && (editingKey ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} /> : <AdminFormList onSelect={setEditingKey} />)}
   </main>;
 }
-createRoot(document.getElementById('root')!).render(<ToastProvider><AdminSelectionProvider><Preview /></AdminSelectionProvider></ToastProvider>);
+const previewRoot = createRoot(document.getElementById('root')!);
+previewRoot.render(<ToastProvider><AdminSelectionProvider><Preview /></AdminSelectionProvider></ToastProvider>);
+if (import.meta.hot) import.meta.hot.dispose(() => { previewRoot.unmount(); window.fetch = originalFetch; });

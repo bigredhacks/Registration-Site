@@ -25,5 +25,8 @@ jobs:
 
       - run: npm test
 
+      - name: Database migration tests (isolated PostgreSQL)
+        run: npm run test:database
+
       - name: Build (frontend + backend)
         run: npm run build

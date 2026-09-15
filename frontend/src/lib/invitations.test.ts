@@ -15,3 +15,10 @@ test('only a released approval with no recorded response offers RSVP', () => {
   }
   assert.equal(invitationPresentation({ status: 'pending' }).headline, 'Under review');
 });
+
+test('automatic expiry is shown separately from an applicant decline', () => {
+  const view = invitationPresentation({ status: 'rejected', invitation_response: 'declined', invitation_expired_at: '2026-09-21T04:00:00Z' });
+  assert.equal(view.headline, 'Invitation expired');
+  assert.equal(view.canRespond, false);
+  assert.match(view.body, /deadline/);
+});

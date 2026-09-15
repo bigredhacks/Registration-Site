@@ -154,3 +154,23 @@
 }
 
 .admin-students-view > .admin-selection-bar { top: 12px; bottom: auto; margin: 16px 0; }
+.admin-email-review { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; }
+.admin-email-preview { min-width:0; overflow:hidden; border:1px solid #e7d9d6; border-radius:10px; background:white; }
+.admin-email-preview iframe { display:block; width:100%; height:650px; border:0; background:#f7efec; }
+.admin-email-envelope { padding:14px 18px; font-size:12px; line-height:1.7; border-bottom:1px solid #e7d9d6; overflow-wrap:anywhere; }
+.admin-email-envelope span { color:#85716b; margin-right:8px; }
+.admin-email-count { font-size:32px; font-weight:600; margin-bottom:8px; }
+.admin-email-count span { font-size:14px; font-weight:400; color:#786460; }
+.admin-email-warning { padding:14px 18px; border:1px solid #f1d19d; background:#fff8ea; color:#775519; border-radius:8px; font-size:13px; }
+.admin-email-template-picker { border:1px solid #e7d9d6; background:#fff; border-radius:10px; padding:18px; }
+.admin-email-jobs { border:1px solid #e7d9d6; border-radius:10px; overflow:hidden; background:white; }
+.admin-email-job { display:flex; justify-content:space-between; gap:16px; padding:16px; flex-wrap:wrap; }
+.admin-email-job + .admin-email-job { border-top:1px solid #eee4e2; }
+.admin-email-state { font-size:11px; padding:4px 8px; border-radius:4px; background:#f2efee; color:#64534f; }
+.admin-email-state-sent { background:#e8f4ec; color:#236543; }
+.admin-email-state-failed, .admin-email-state-needs_review { background:#fff0dd; color:#945919; }
+@media(min-width:900px) { .admin-email-review { grid-template-columns:minmax(200px,0.7fr) minmax(0,1.3fr); } }
+
+.admin-email-edit-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.admin-email-simple-preview { max-width: 620px; margin: 0 auto; }
+@media (min-width: 1050px) { .admin-email-edit-layout { grid-template-columns: minmax(240px, .8fr) minmax(0, 1.2fr); } }

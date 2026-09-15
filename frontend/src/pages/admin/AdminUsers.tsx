@@ -6,6 +6,7 @@ import { studentName, decisionOptions, type AdminStudent } from './adminApproval
 import AdminApprovalFilters, { type ApprovalAnswerFilter, type ApprovalFilterField } from './AdminApprovalFilters';
 import AdminSelect from '@/components/AdminSelect';
 import AdminInvitationStatus from './AdminInvitationStatus';
+import AdminInvitationDeadline from './AdminInvitationDeadline';
 import AdminInvitationResponse from './AdminInvitationResponse';
 import AdminTaskDialog from './AdminTaskDialog';
 import AdminSelectionPanel from './AdminSelectionPanel';
@@ -60,7 +61,7 @@ export default function AdminUsers() {
   const [releasedStatus, setReleasedStatus] = useState('');
   const [releaseState, setReleaseState] = useState('');
   const [invitationResponse, setInvitationResponse] = useState('');
-  const [invitationCounts, setInvitationCounts] = useState({ accepted: 0, declined: 0, unanswered: 0 });
+  const [invitationCounts, setInvitationCounts] = useState({ accepted: 0, declined: 0, unanswered: 0, expired: 0 });
   const [checkedIn, setCheckedIn] = useState('');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
@@ -114,7 +115,7 @@ export default function AdminUsers() {
       }
       setMatchingIds(body.matchingIds ?? []);
       setFilterFields(body.fields ?? []);
-      setInvitationCounts(body.invitationCounts ?? { accepted: 0, declined: 0, unanswered: 0 });
+      setInvitationCounts(body.invitationCounts ?? { accepted: 0, declined: 0, unanswered: 0, expired: 0 });
       setRows(body.data ?? []); setCount(body.count ?? 0); sync(body.data ?? []);
       setPage(value => Math.min(value, Math.max(0, Math.ceil((body.count ?? 0) / pageSize) - 1)));
     }).catch(() => { if (current) { setRows([]); setError('Could not load students.'); } })
@@ -158,13 +159,13 @@ export default function AdminUsers() {
   }, [revision]);
   useEffect(() => () => { detailRequest.current++; }, []);
 
-  const selectFiltered = async () => {
-    if (invalidLimit) return;
+  const selectFiltered = async (all = false) => {
+    if (!all && invalidLimit) return;
     const current = ++cohortRequest.current;
     setSelecting(true);
     try {
       const params = filters();
-      if (limit !== undefined) params.set('selection_limit', String(limit));
+      if (!all && limit !== undefined) params.set('selection_limit', String(limit));
       const res = await apiFetch(`/api/admin/approval/selection?${params}`);
       if (!res.ok) throw new Error();
       const body = await res.json();
@@ -209,7 +210,8 @@ export default function AdminUsers() {
     {formKey === 'registration' && <div className="admin-task-views" role="group" aria-label="Applicant views">
       {([['all', 'All applicants'], ['ready', 'Ready to release'], ['invitations', 'Invitations']] as const).map(([value, label]) => <button key={value} className={`admin-button ${view === value ? 'admin-button-primary' : ''}`} aria-pressed={view === value} onClick={() => switchView(value)}>{label}</button>)}
     </div>}
-    {formKey === 'registration' && view === 'invitations' && <p className="admin-meta mb-4" aria-label="Released invitation totals">Application-wide totals (unaffected by filters): {loading || error ? 'Loading…' : `${invitationCounts.accepted} accepted · ${invitationCounts.declined} declined · ${invitationCounts.unanswered} awaiting response`}</p>}
+    {formKey === 'registration' && view === 'invitations' && <AdminInvitationDeadline onSaved={() => setRefreshKey(value => value + 1)} />}
+    {formKey === 'registration' && view === 'invitations' && <p className="admin-meta mb-4" aria-label="Released invitation totals">{loading || error ? 'Loading…' : `${invitationCounts.accepted} accepted · ${invitationCounts.declined} declined · ${invitationCounts.unanswered} awaiting response · ${invitationCounts.expired ?? 0} expired`}</p>}
     <div className="admin-toolbar admin-applicant-toolbar">
       <form className="admin-search" onSubmit={event => { event.preventDefault(); setPage(0); setQuery(search.trim()); }}>
         <input className="admin-input" aria-label="Search applicants" placeholder="Search applicants…" value={search} onChange={event => setSearch(event.target.value)} />
@@ -217,7 +219,7 @@ export default function AdminUsers() {
       </form>
       <label className="admin-meta admin-primary-filter">{view === 'invitations' ? 'Response' : view === 'ready' ? 'Decision to release' : 'Application status'}
         <AdminSelect aria-label={view === 'invitations' ? 'Response' : view === 'ready' ? 'Decision to release' : 'Application status'} fullWidth className="admin-input" value={view === 'invitations' ? invitationResponse : status} placeholder="Any"
-          options={view === 'invitations' ? [{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }] : decisionOptions.filter(option => view !== 'ready' || option.value !== 'pending')}
+          options={view === 'invitations' ? [{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }, { value: 'expired', label: 'Expired' }] : decisionOptions.filter(option => view !== 'ready' || option.value !== 'pending')}
           onChange={value => { if (view === 'invitations') setInvitationResponse(value); else setStatus(value); setPage(0); }} />
       </label>
       <button className="admin-button" onClick={() => { setDraftAnswerFilters(answerFilters); setFilterDraft({ status, releasedStatus, releaseState, invitationResponse, checkedIn, from, to }); }}>More filters</button>
@@ -248,14 +250,15 @@ export default function AdminUsers() {
         <label>Application status<AdminSelect aria-label="Application status" fullWidth className="admin-input" value={filterDraft.status} placeholder="Any" options={decisionOptions.filter(option => view !== 'ready' || option.value !== 'pending')} onChange={value => setFilterDraft({ ...filterDraft, status: value })} /></label>
         {view !== 'invitations' && <label>Applicant sees<AdminSelect aria-label="Applicant sees" fullWidth className="admin-input" value={filterDraft.releasedStatus} placeholder="Any applicant-visible decision" options={decisionOptions.filter(option => option.value !== 'pending')} onChange={value => setFilterDraft({ ...filterDraft, releasedStatus: value })} /></label>}
         <label>Decision release<AdminSelect aria-label="Decision release" fullWidth className="admin-input" value={filterDraft.releaseState} placeholder="Any release state" options={[...(view === 'invitations' ? [] : [{ value: 'unreleased', label: 'No decision released yet' }]), { value: 'changed', label: 'Saved decision differs from released decision' }, ...(view === 'ready' ? [] : [{ value: 'current', label: 'Saved decision matches released decision' }])]} onChange={value => setFilterDraft({ ...filterDraft, releaseState: value })} /></label>
-        {view !== 'invitations' && <label>Invitation response<AdminSelect aria-label="Invitation response" fullWidth className="admin-input" value={filterDraft.invitationResponse} placeholder="Any response or no invitation" options={[{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }]} onChange={value => setFilterDraft({ ...filterDraft, invitationResponse: value })} /><span className="admin-meta">Accepted and declined include previous responses.</span></label>}
+        {view !== 'invitations' && <label>Invitation response<AdminSelect aria-label="Invitation response" fullWidth className="admin-input" value={filterDraft.invitationResponse} placeholder="Any response or no invitation" options={[{ value: 'accepted', label: 'Accepted' }, { value: 'declined', label: 'Declined' }, { value: 'unanswered', label: 'Awaiting response' }, { value: 'expired', label: 'Expired' }]} onChange={value => setFilterDraft({ ...filterDraft, invitationResponse: value })} /><span className="admin-meta">Accepted and declined include previous responses.</span></label>}
       </div></>}
       <div className="admin-toolbar mt-4"><button className="admin-button" onClick={() => setFilterDraft(null)}>Cancel</button><button className="admin-button admin-button-primary" disabled={!validDraft || Boolean(filterDraft.from && filterDraft.to && filterDraft.from > filterDraft.to)} onClick={() => {
         setStatus(filterDraft.status); setReleasedStatus(filterDraft.releasedStatus); setReleaseState(filterDraft.releaseState); setInvitationResponse(filterDraft.invitationResponse); setCheckedIn(filterDraft.checkedIn); setFrom(filterDraft.from); setTo(filterDraft.to); setAnswerFilters(draftAnswerFilters); setPage(0); setFilterDraft(null);
       }}>Apply filters</button></div>
     </AdminTaskDialog>}
     <div className="admin-toolbar my-3"><span className="admin-meta">{loading ? 'Loading…' : `${count} applicants`}</span><div className="flex gap-2">
-      <button className="admin-button" onClick={() => setSelectionOpen(true)}>Select applicants</button>
+      <button className="admin-button" disabled={loading || selecting || invalidDates || !!error || !count} onClick={() => void selectFiltered(true)}>{selecting ? 'Selecting…' : `Select all ${count}`}</button>
+      <button className="admin-button" onClick={() => setSelectionOpen(true)}>Select by list or limit</button>
       <button className="admin-button" disabled={loading || !!error} onClick={() => void exportCsv()}>Export CSV</button>
     </div></div>
     {selectionOpen && <AdminTaskDialog title="Select applicants" onClose={() => { cohortRequest.current++; setSelecting(false); setSelectionOpen(false); }}>

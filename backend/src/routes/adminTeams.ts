@@ -1,4 +1,5 @@
 import { Router, Request } from 'express';
+import { z } from 'zod';
 import { supabase } from '../config/supabase';
 import { validate } from '../middleware/validate';
 import { SaveTeamsSchema } from '../types/team';
@@ -11,6 +12,23 @@ import {
 } from '../utils/adminTeams';
 
 const router = Router();
+
+router.delete('/admin/:id', validate({ params: z.object({ id: z.uuid() }), body: z.object({
+  expected_name: z.string(), expected_members: z.array(z.uuid()).max(1000),
+}).strict() }), async (req, res) => {
+  try {
+    const { data, error } = await supabase.rpc('admin_delete_user_team', {
+      p_team_id: req.params.id, p_expected_name: req.body.expected_name,
+      p_expected_members: req.body.expected_members, p_admin_id: req.user!.id,
+    });
+    if (error) {
+      res.status(error.code === 'PT409' ? 409 : error.code === 'PT404' ? 404 : error.code === 'PT403' ? 403 : 500)
+        .json({ error: error.code.startsWith('PT') ? error.message : 'Could not delete this team.' });
+      return;
+    }
+    res.json(data);
+  } catch { res.status(500).json({ error: 'Could not confirm team deletion. Refresh to check its current state.' }); }
+});
 const busyPools = new Set<string>();
 const poolFor = (req: Request) => String(req.body?.pool_id || req.query.pool_id || 'default');
 const formFor = (req: Request) => String(req.query.form_key || 'registration');
@@ -41,8 +59,16 @@ async function overview(pool: string, formKey: string) {
       .select('id,full_name,first_name,last_name').order('id').range(from, to)),
     savedDrafts(pool),
   ]);
+  const applicationUsers = new Set(registrations.filter(row => row.email).map(row => row.user_id));
+  const missingUsers = [...new Set(members.filter(row => !applicationUsers.has(row.user_id)).map(row => row.user_id))];
+  const accountEmails: Array<{ user_id: string; email: string | null }> = [];
+  for (let offset = 0; offset < missingUsers.length; offset += 200) {
+    const { data, error } = await supabase.rpc('admin_team_account_emails', { p_user_ids: missingUsers.slice(offset, offset + 200) });
+    if (error) throw new Error('Could not load team account emails. Check the team update migration.');
+    accountEmails.push(...(data ?? []));
+  }
   return buildTeamOverview({ teams, memberships: members, participants: people, registrations,
-    profiles, savedTeams: saved.teams, savedMembers: saved.members });
+    profiles, savedTeams: saved.teams, savedMembers: saved.members, accountEmails });
 }
 
 router.get('/admin', async (req, res) => {

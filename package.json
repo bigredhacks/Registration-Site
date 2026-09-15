@@ -15,12 +15,14 @@
     "dev": "concurrently --kill-others --names frontend,backend \"npm run dev -w frontend\" \"npm run dev -w backend -- --exitcrash\"",
     "build": "npm run build:frontend && npm run build:backend",
     "lint": "npm run lint -w frontend",
-    "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\""
+    "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\"",
+    "test:database": "node --test supabase/tests/emailQueue.test.js supabase/tests/emailDeadline.test.js supabase/tests/emailTemplateStorage.test.js"
   },
   "dependencies": {
     "serverless-http": "^3.2.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@netlify/functions": "^2.8.2",
     "concurrently": "^9.2.4"
   }

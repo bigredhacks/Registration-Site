@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 import AdminSelect from "@/components/AdminSelect";
+import ConfirmationDialog from "@/components/ConfirmationDialog";
 import { useToast } from "@/components/Toast/ToastContext";
 import { useAdminSelection } from "./AdminSelectionContext";
 import type { AdminStudent } from "./adminApprovalState";
@@ -31,6 +32,9 @@ export default function AdminTeamMatching() {
   const [busy, setBusy] = useState<"generate" | "save" | "publish" | null>(null);
   const requestId = useRef(0);
   const draftEpoch = useRef(0);
+  const [deleteTeam, setDeleteTeam] = useState<ExistingTeam | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const deleteLock = useRef(false);
 
   const refresh = useCallback(async () => {
     const id = ++requestId.current;
@@ -111,6 +115,30 @@ export default function AdminTeamMatching() {
     else add(students);
   };
 
+  const confirmDeleteTeam = async () => {
+    if (!deleteTeam || deleteLock.current) return;
+    deleteLock.current = true;
+    setDeleting(true);
+    try {
+      const response = await apiFetch(`/api/teams/admin/${deleteTeam.id}`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expected_name: deleteTeam.name, expected_members: deleteTeam.members.map(member => member.user_id) }),
+      });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Could not delete the team.');
+      showToast(`Deleted ${deleteTeam.name}. ${body.removed_members} members can now join another team.`, 'success');
+      setDraft(null);
+      draftEpoch.current += 1;
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : 'Could not confirm deletion. Refresh to check the team.', 'error');
+    } finally {
+      setDeleteTeam(null);
+      await refresh();
+      setDeleting(false);
+      deleteLock.current = false;
+    }
+  };
+
   return (
     <div className="flex min-w-0 flex-col gap-4 font-poppins">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -146,6 +174,9 @@ export default function AdminTeamMatching() {
           </div>
           {tab === 'teams' ? (
             <div className="flex flex-col gap-3">
+              {data.teams.some(team => team.status === 'missing_application') && <p className="text-xs leading-relaxed text-gray-600">
+                Missing application means this member has no submitted application for the selected form. People can create or join teams before applying. Names come from profiles; emails fall back to the account address.
+              </p>}
               {!filteredTeams.length && <Empty>No teams found.</Empty>}
               {filteredTeams.map((team) => {
                 const students = uniqueTeamStudents(team.members.map((member) => member.registration), formKey);
@@ -160,6 +191,8 @@ export default function AdminTeamMatching() {
                       <h2 className="min-w-0 flex-1 break-words text-sm font-semibold text-gray-900">{team.name}</h2>
                       <span className="text-xs tabular-nums text-gray-500">{team.members.length}/4 members · {approvedCount} approved</span>
                       <Status value={team.status} />
+                      <button type="button" className={`${button} text-red6`} disabled={!!busy || deleting}
+                        aria-label={`Delete team ${team.name}`} onClick={() => setDeleteTeam(team)}>Delete team</button>
                     </div>
                     <div className="divide-y divide-gray-100">
                       {team.members.map((member) => <StudentRow key={member.user_id} name={member.full_name} email={member.email} registration={member.registration}
@@ -212,6 +245,12 @@ export default function AdminTeamMatching() {
           </section>
         </>
       )}
+      <ConfirmationDialog open={!!deleteTeam} title={`Delete ${deleteTeam?.name ?? 'team'}?`} busy={deleting}
+        confirmLabel="Delete team" onConfirm={() => void confirmDeleteTeam()} onClose={() => setDeleteTeam(null)}>
+        <p>This permanently deletes the team and its invite code and removes all {deleteTeam?.members.length ?? 0} members from it.</p>
+        <p className="mt-3">Their accounts, applications, invitation responses, and matching submissions will be kept. They can create or join another team.</p>
+        <ul className="mt-3 list-inside list-disc">{deleteTeam?.members.map(member => <li key={member.user_id}>{member.full_name}</li>)}</ul>
+      </ConfirmationDialog>
     </div>
   );
 }

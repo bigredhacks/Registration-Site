@@ -12,6 +12,18 @@ test('team admission is derived from every member, including missing application
   assert.equal(deriveTeamStatus([]), 'missing_application');
 });
 
+test('a profile and account email can identify a team member without inventing an application', () => {
+  const overview = buildTeamOverview({
+    teams: [{ id: 'team', name: 'Sample team', invite_code: 'SAMPLE' }],
+    memberships: [{ team_id: 'team', user_id: 'missing' }],
+    participants: [], registrations: [], savedTeams: [], savedMembers: [],
+    profiles: [{ id: 'missing', full_name: 'Alex Test', first_name: 'Alex', last_name: 'Test' }],
+    accountEmails: [{ user_id: 'missing', email: 'account@example.com' }],
+  });
+  assert.deepEqual(overview.teams[0].members[0], { user_id: 'missing', full_name: 'Alex Test', email: 'account@example.com', registration: null });
+  assert.equal(overview.teams[0].status, 'missing_application');
+});
+
 test('looking excludes assigned users even when their matching submission remains', () => {
   const overview = buildTeamOverview({
     teams: [{ id: 'team', name: 'Existing', invite_code: 'ABCDEF' }],

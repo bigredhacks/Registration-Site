@@ -1,6 +1,7 @@
 import { releaseStateLabel, type AdminStudent } from './adminApprovalState';
 
 export default function AdminInvitationStatus({ student, showDates = false }: { student: AdminStudent; showDates?: boolean }) {
+  if (student.invitation_expired_at) return <p className="admin-meta">Invitation expired{showDates ? ` · ${new Date(student.invitation_expired_at).toLocaleString()}` : ''}</p>;
   const decision = student.released_status === 'approved' ? 'Approved'
     : student.released_status === 'waitlisted' ? 'Waitlisted'
     : student.released_status === 'rejected' ? 'Not selected' : 'Under review';

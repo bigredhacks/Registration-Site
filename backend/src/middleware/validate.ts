@@ -7,7 +7,7 @@ import { ZodType, ZodError } from 'zod';
  * @param schema.body - Schema to validate req.body
  * @param schema.params - Schema to validate req.params
  */
-export function validate(schema: { body?: ZodType; params?: ZodType }) {
+export function validate(schema: { body?: ZodType; params?: ZodType; query?: ZodType }) {
   return (req: Request, res: Response, next: NextFunction) => {
     const errors: { field: string; message: string }[] = [];
 
@@ -27,6 +27,12 @@ export function validate(schema: { body?: ZodType; params?: ZodType }) {
       } else {
         req.body = result.data;
       }
+    }
+
+    if (schema.query) {
+      const result = schema.query.safeParse(req.query);
+      if (!result.success) errors.push(...formatErrors(result.error));
+      else req.query = result.data as Request['query'];
     }
 
     if (errors.length > 0) {

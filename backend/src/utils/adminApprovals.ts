@@ -114,14 +114,16 @@ export function filterApprovalStudents<T extends ApprovalStudent>(rows: T[], fil
   const search = normalizeIdentity(filters.search ?? '');
   return rows.filter(row => {
     if (filters.view === 'ready' && (!['approved', 'waitlisted', 'rejected'].includes(row.status) || row.status === row.released_status)) return false;
-    if (filters.view === 'invitations' && row.released_status !== 'approved') return false;
+    if (filters.view === 'invitations' && row.released_status !== 'approved' && !row.invitation_expired_at) return false;
     if (filters.status && row.status !== filters.status) return false;
     if (filters.releasedStatus && row.released_status !== filters.releasedStatus) return false;
     const releaseState = row.released_status == null ? 'unreleased' : row.released_status === row.status ? 'current' : 'changed';
     if (filters.releaseState && releaseState !== filters.releaseState) return false;
     if (filters.invitationResponse === 'unanswered') {
       if (row.released_status !== 'approved' || row.invitation_response != null) return false;
-    } else if (filters.invitationResponse && row.invitation_response !== filters.invitationResponse) return false;
+    } else if (filters.invitationResponse === 'expired') {
+      if (!row.invitation_expired_at) return false;
+    } else if (filters.invitationResponse && (row.invitation_expired_at || row.invitation_response !== filters.invitationResponse)) return false;
     if (filters.checkedIn === 'true' && row.checked_in !== true) return false;
     if (filters.checkedIn === 'false' && row.checked_in === true) return false;
     if (filters.from || filters.to) {

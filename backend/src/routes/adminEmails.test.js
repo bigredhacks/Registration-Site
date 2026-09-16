@@ -168,3 +168,37 @@ test('release test emails use saved messages and only the signed-in admin addres
   delete process.env.EMAIL_DELIVERY_ENABLED;
   assert.equal((await request(releases,'post','/:id/test',{kind:'approved'})).statusCode,503);
 });
+
+test('template tests support all email kinds and queue only the entered recipient without changing applicants',async()=>{
+  const original=structuredClone(records);
+  for(const kind of ['confirmation','approved','rejected','waitlisted']) {
+    const response=await request(emails,'post','/test',{kind,to:' tester@example.com ',request_id:id});
+    assert.equal(response.statusCode,202);
+    const job=writes.at(-1);
+    assert.equal(job.table,'email_outbox'); assert.equal(job.value.kind,'test');
+    assert.equal(job.value.recipient,'tester@example.com'); assert.equal(job.value.request_payload.to,'tester@example.com');
+    assert.equal(job.value.created_by,'admin-id'); assert.match(job.value.request_payload.subject,/^\[TEST\] /);
+    assert.match(job.value.request_payload.html,/Hi Alex,/); assert.equal(job.value.registration_id,undefined);
+  }
+  assert.deepEqual(records,original); assert.equal(rpc.length,0);
+});
+test('template tests validate one recipient and reject paused delivery before loading templates or writing jobs',async()=>{
+  for(const patch of [{to:'bad'}, {to:'one@example.com,two@example.com'}, {to:'good@example.com\nBcc: other@example.com'}, {kind:'pending'}, {request_id:'bad'}, {html:'untrusted'}]) {
+    assert.equal((await request(emails,'post','/test',{kind:'approved',to:'tester@example.com',request_id:id,...patch})).statusCode,400);
+  }
+  delete process.env.EMAIL_DELIVERY_ENABLED;
+  assert.equal((await request(emails,'post','/test',{kind:'approved',to:'tester@example.com',request_id:id})).statusCode,503);
+  assert.equal(reads.length,0); assert.equal(writes.length,0);
+});
+test('retrying a template test preserves the queue key and payload; missing saved files cannot queue a fallback',async()=>{
+  const body={kind:'approved',to:'tester@example.com',request_id:id};
+  await request(emails,'post','/test',body);
+  const first=structuredClone(writes[0]);
+  await request(emails,'post','/test',body);
+  assert.equal(writes[1].value.dedupe_key,first.value.dedupe_key);
+  assert.deepEqual(writes[1].options,{onConflict:'dedupe_key',ignoreDuplicates:true});
+  assert.deepEqual(writes[1].value.request_payload,first.value.request_payload);
+  storedRevision={storage_path:'approved/missing',version:2}; downloadError=true;
+  assert.equal((await request(emails,'post','/test',body)).statusCode,500);
+  assert.equal(writes.length,2);
+});

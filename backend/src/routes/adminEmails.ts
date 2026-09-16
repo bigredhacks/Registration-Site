@@ -19,6 +19,25 @@ interface DraftMessage { id: number; recipient: string; name: string; released_a
 const templateParams = z.object({ kind: z.enum(['confirmation', 'approved', 'rejected', 'waitlisted']) });
 const templateBody = z.object({ subject: z.string().trim().min(1).max(200).refine(value => !/[\r\n]/.test(value), 'Use one line for the subject.'),
   body: z.string().trim().min(1).max(10000), button_label: z.string().trim().max(80), html: z.string().trim().min(1).max(50000) });
+router.post('/test', validate({ body: z.object({
+  kind: templateParams.shape.kind, to: z.string().trim().max(254).pipe(z.email()), request_id: z.uuid(),
+}).strict() }), async (req, res) => {
+  if (!deliveryEnabled()) { res.status(503).json({ error: 'Email delivery is paused. Configure Resend and enable delivery in Netlify, then redeploy.' }); return; }
+  try {
+    const [template, settings] = await Promise.all([getEmailTemplate(req.body.kind), getInvitationSettings()]);
+    const payload = emailPayload(req.body.kind, req.body.to, 'Alex', undefined, template,
+      settings.deadline ?? SAMPLE_INVITATION_DEADLINE, settings.time_zone);
+    const { error } = await supabase.from('email_outbox').upsert({
+      dedupe_key: `template-test/${req.user!.id}/${req.body.request_id}/${req.body.kind}/${req.body.to}`,
+      kind: 'test', recipient: req.body.to, created_by: req.user!.id,
+      template_version: `${EMAIL_TEMPLATE_VERSION}/${template.version}`,
+      request_payload: { ...payload, subject: `[TEST] ${payload.subject}` },
+    }, { onConflict: 'dedupe_key', ignoreDuplicates: true });
+    if (error) throw error;
+    res.status(202).json({ message: `Test email queued for ${req.body.to}. Check History for its status.` });
+  } catch { res.status(500).json({ error: 'Could not confirm the test email. Retry to check or queue the same test.' }); }
+});
+
 router.get('/templates/:kind', validate({ params: templateParams }), async (req, res) => {
   try {
     const emailKind = req.params.kind as EmailKind;

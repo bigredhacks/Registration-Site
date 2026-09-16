@@ -199,7 +199,7 @@ function expireSampleInvitations() {
   return count;
 }
 const emailJobs: Array<{ id: string; kind: string; recipient: string; state: string; attempts: number; created_at: string; can_retry: boolean }> = [];
-const sampleEmail = (kind: EmailKind, student?: Student) => ({ ...renderEmailTemplate(kind, student?.first_name ?? 'Alex', undefined, undefined, emailTemplates[kind], invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE, invitationSettings.time_zone), to: student?.email ?? 'alex@example.com' });
+const sampleEmail = (kind: EmailKind, student?: Student) => ({ ...renderEmailTemplate(kind, student?.first_name ?? 'Alex', undefined, location.origin, emailTemplates[kind], invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE, invitationSettings.time_zone), to: student?.email ?? 'alex@example.com' });
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
@@ -238,7 +238,7 @@ window.fetch = async (input, init) => {
       emailTemplates[kind] = { html: payload.html, subject: payload.subject ?? '', body: payload.body ?? '', button_label: payload.button_label ?? '', version: emailTemplates[kind].version + 1 };
       return json({ template: emailTemplates[kind] });
     }
-    return json({ ...sampleEmail(kind), template: emailTemplates[kind], site_url: 'https://brh-registration-portal.netlify.app', deadline: invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE,
+    return json({ ...sampleEmail(kind), template: emailTemplates[kind], site_url: location.origin, deadline: invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE,
       time_zone: invitationSettings.time_zone, sample_deadline: !invitationSettings.deadline, enabled: true });
   }
   if (path === '/api/admin/emails/jobs') {

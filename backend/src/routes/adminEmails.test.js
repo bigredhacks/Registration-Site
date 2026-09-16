@@ -202,3 +202,22 @@ test('retrying a template test preserves the queue key and payload; missing save
   assert.equal((await request(emails,'post','/test',body)).statusCode,500);
   assert.equal(writes.length,2);
 });
+
+test('template tests personalize sample names and form titles without changing application records',async()=>{
+  const original=structuredClone(records);
+  const response=await request(emails,'post','/test',{kind:'confirmation',to:'tester@example.com',request_id:id,
+    first_name:'  Jamie <Test> ',form_title:'Sample & Event',expected_version:0});
+  assert.equal(response.statusCode,202);
+  const payload=writes[0].value.request_payload;
+  assert.match(payload.html,/Hi Jamie &lt;Test&gt;,/);
+  assert.match(payload.html,/Sample &amp; Event/);
+  assert.match(payload.text,/Jamie <Test>/);
+  assert.deepEqual(records,original);
+});
+test('test personalization rejects blank or oversized values and stale template versions',async()=>{
+  for (const patch of [{first_name:''},{first_name:' '.repeat(4)},{first_name:'x'.repeat(101)}, {form_title:'x'.repeat(201)}, {form_title:'Event\nInjected'}]) {
+    assert.equal((await request(emails,'post','/test',{kind:'confirmation',to:'tester@example.com',request_id:id,...patch})).statusCode,400);
+  }
+  assert.equal((await request(emails,'post','/test',{kind:'confirmation',to:'tester@example.com',request_id:id,expected_version:3})).statusCode,409);
+  assert.equal(writes.length,0);
+});

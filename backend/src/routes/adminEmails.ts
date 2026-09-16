@@ -21,11 +21,17 @@ const templateBody = z.object({ subject: z.string().trim().min(1).max(200).refin
   body: z.string().trim().min(1).max(10000), button_label: z.string().trim().max(80), html: z.string().trim().min(1).max(50000) });
 router.post('/test', validate({ body: z.object({
   kind: templateParams.shape.kind, to: z.string().trim().max(254).pipe(z.email()), request_id: z.uuid(),
+  first_name: z.string().trim().min(1).max(100).refine(value => !/[\r\n]/.test(value)).default('Alex'),
+  form_title: z.string().trim().min(1).max(200).refine(value => !/[\r\n]/.test(value)).default('BigRed//Hacks Fall 2026'),
+  expected_version: z.number().int().min(0).optional(),
 }).strict() }), async (req, res) => {
   if (!deliveryEnabled()) { res.status(503).json({ error: 'Email delivery is paused. Configure Resend and enable delivery in Netlify, then redeploy.' }); return; }
   try {
     const [template, settings] = await Promise.all([getEmailTemplate(req.body.kind), getInvitationSettings()]);
-    const payload = emailPayload(req.body.kind, req.body.to, 'Alex', undefined, template,
+    if (req.body.expected_version !== undefined && req.body.expected_version !== template.version) {
+      res.status(409).json({ error: 'The template changed. Close and reopen the test form to load the latest version.' }); return;
+    }
+    const payload = emailPayload(req.body.kind, req.body.to, req.body.first_name, req.body.form_title, template,
       settings.deadline ?? SAMPLE_INVITATION_DEADLINE, settings.time_zone);
     const { error } = await supabase.from('email_outbox').upsert({
       dedupe_key: `template-test/${req.user!.id}/${req.body.request_id}/${req.body.kind}/${req.body.to}`,

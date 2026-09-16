@@ -1,4 +1,4 @@
-export const EMAIL_TEMPLATE_VERSION = '2026-09-15-v2';
+export const EMAIL_TEMPLATE_VERSION = '2026-09-15-v3';
 export type EmailKind = 'confirmation' | 'approved' | 'rejected' | 'waitlisted';
 export interface EmailPayload { from: string; to: string; subject: string; html: string; text: string }
 export interface EmailTemplate { subject: string; body: string; button_label: string; version: number; html?: string }
@@ -30,6 +30,21 @@ export const DEFAULT_EMAIL_TEMPLATES: Record<EmailKind, EmailTemplate> = {
   },
 };
 
+/** Upgrade the existing email layout without replacing edited message text or styles. */
+export function addEmailBranding(html: string): string {
+  if (!html.includes('data-brh-branding')) {
+    html = html.replace(/<p\b[^>]*>BigRed\/\/Hacks<\/p>/, `<table data-brh-branding="true" role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 26px"><tr><td width="44" valign="middle" style="padding-right:12px"><img src="{{logo_url}}" width="44" height="44" alt="" style="display:block;width:44px;height:44px;border:0"></td><td valign="middle"><p style="margin:0;font-size:22px;font-weight:600;color:#B31B1B">BigRed//Hacks</p></td></tr></table>`);
+  }
+  if (!html.includes('mailto:bigredhacks@cornell.edu')) {
+    const contact = '<p style="margin:24px 0 0;padding-top:18px;border-top:1px solid #eeeeee;font-size:13px;line-height:1.7;color:#666666">Contact us at <a href="mailto:bigredhacks@cornell.edu" style="color:#8B1515;text-decoration:underline">bigredhacks@cornell.edu</a></p>';
+    const signoff = /<p\b[^>]*>The BigRed\/\/Hacks team<\/p>/;
+    if (signoff.test(html)) html = html.replace(signoff, match => match + contact);
+    else if (/<\/body>/i.test(html)) html = html.replace(/<\/body>/i, contact + '</body>');
+    else html += contact;
+  }
+  return html;
+}
+
 /** Render midnight as the end of the preceding day, with an explicit date/time. */
 export function formatInvitationDeadline(deadline: string, timeZone = 'America/New_York') {
   const date = new Date(deadline);
@@ -52,7 +67,7 @@ export function renderEmailTemplate(kind: EmailKind, firstName?: string | null,
   timeZone = 'America/New_York') {
   const name = firstName?.trim() || 'hacker';
   const dashboard = `${siteUrl}/dashboard`;
-  const values: Record<string, string> = { first_name: name, form_title: formTitle, dashboard_url: dashboard,
+  const values: Record<string, string> = { first_name: name, form_title: formTitle, dashboard_url: dashboard, logo_url: `${siteUrl}/email-assets/brh-logo-red.png`,
     deadline: deadline ? formatInvitationDeadline(deadline, timeZone) : 'Deadline not set' };
   const fill = (value: string) => value.replace(/\{\{\s*(first_name|form_title|dashboard_url|deadline)\s*\}\}/g, (_, key: string) => values[key]);
   const subject = fill(template.subject).replace(/[\r\n]/g, ' ');
@@ -66,9 +81,9 @@ export function renderEmailTemplate(kind: EmailKind, firstName?: string | null,
   const htmlValues: Record<string, string> = { ...values, subject, button_label: button,
     message_html: body.split(/\n\s*\n/).map(text => `<p style="${paragraphStyle}">${escapeHtml(text).replace(/\n/g, '<br>')}</p>`).join(''),
     deadline_sentence: deadlineText };
-  const html = template.html ? template.html.replace(/\{\{\s*(first_name|form_title|dashboard_url|deadline|subject|button_label|message_html|deadline_sentence)\s*\}\}/g,
-    (_, key: string) => key === 'message_html' ? htmlValues[key] : escapeHtml(htmlValues[key])) : defaultHtml;
-  const text = template.html ? htmlToPlainText(html) : [`Hi ${name},`, body, ...(deadlineText ? [deadlineText] : []), ...(button ? [`${button}: ${dashboard}`] : []), 'The BigRed//Hacks team'].join('\n\n');
+  const html = addEmailBranding(template.html || defaultHtml).replace(/\{\{\s*(first_name|form_title|dashboard_url|logo_url|deadline|subject|button_label|message_html|deadline_sentence)\s*\}\}/g,
+    (_, key: string) => key === 'message_html' ? htmlValues[key] : escapeHtml(htmlValues[key]));
+  const text = template.html ? htmlToPlainText(html) : [`Hi ${name},`, body, ...(deadlineText ? [deadlineText] : []), ...(button ? [`${button}: ${dashboard}`] : []), 'The BigRed//Hacks team', 'Contact us at bigredhacks@cornell.edu'].join('\n\n');
   return { subject, html, text };
 }
 
@@ -92,6 +107,7 @@ export function defaultTemplateHtml(kind: EmailKind): string {
     { ...template, subject: 'BRH_SUBJECT', body: 'BRH_MESSAGE', button_label: 'BRH_BUTTON' }).html;
   html = html.replace('BRH_SUBJECT', '{{subject}}').replace('BRH_FIRST_NAME', '{{first_name}}')
     .replace(/https:\/\/brh-dashboard-placeholder\.example\/dashboard/g, '{{dashboard_url}}')
+    .replace(/https:\/\/brh-dashboard-placeholder\.example\/email-assets\/brh-logo-red\.png/g, '{{logo_url}}')
     .replace(/<p style="[^"]*">BRH_MESSAGE<\/p>/, '{{message_html}}').replace('BRH_BUTTON', '{{button_label}}');
   if (kind === 'approved') html = html.replace(`Please accept by ${formatInvitationDeadline(SAMPLE_INVITATION_DEADLINE)}.`, '{{deadline_sentence}}');
   return html.replace(/></g, '>\n<');

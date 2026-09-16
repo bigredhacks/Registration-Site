@@ -14,7 +14,7 @@ const frozen = emailPayload('approved', 'alex@example.com', 'Alex');
 test('confirmation persists the full payload before sending; send receipt is stored afterward', async () => {
   const actions = [];
   const store = { async save(_job, changes) { actions.push(changes); } };
-  await processEmailJob(job(), store, async (payload, key) => { assert.deepEqual(actions[0].request_payload, payload); assert.match(actions[0].template_version, /2026-09-15-v2/); assert.equal(key, 'brh-email/job-1'); return 'resend-1'; }, () => 1000);
+  await processEmailJob(job(), store, async (payload, key) => { assert.deepEqual(actions[0].request_payload, payload); assert.match(actions[0].template_version, /2026-09-15-v3/); assert.equal(key, 'brh-email/job-1'); return 'resend-1'; }, () => 1000);
   assert.equal(actions[1].state, 'sent'); assert.equal(actions[1].resend_id, 'resend-1'); assert.equal(actions[1].lease_token, null);
 });
 test('failed payload persistence sends nothing; interrupted success write retries identical content and key', async () => {
@@ -55,7 +55,7 @@ test('templates escape user input, have inline styling and plain text, and only 
   assert.match(approved.html, /style="/); assert.match(approved.html, /https:\/\/example.com\/dashboard/);
   assert.match(approved.text, /accept or decline/);
   const denied = renderEmail('rejected', 'Alex');
-  assert.match(denied.text, /apply again next year/); assert.doesNotMatch(denied.html, /href=/);
+  assert.match(denied.text, /apply again next year/); assert.doesNotMatch(denied.html, /href="https:\/\/example.com\/dashboard/); assert.match(denied.html, /href="mailto:bigredhacks@cornell.edu"/);
   const confirmation = renderEmail('confirmation', 'Alex', '<Custom form>');
   assert.match(confirmation.html, /&lt;Custom form&gt;/); assert.match(confirmation.text, /<Custom form>/);
 });

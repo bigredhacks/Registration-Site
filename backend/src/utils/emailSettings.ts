@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { supabase } from '../config/supabase';
-import { DEFAULT_EMAIL_TEMPLATES, defaultTemplateHtml, type EmailKind, type EmailTemplate } from './emailTemplates';
+import { DEFAULT_EMAIL_TEMPLATES, defaultTemplateHtml, addEmailBranding, type EmailKind, type EmailTemplate } from './emailTemplates';
 
 export interface InvitationSettings { deadline: string | null; time_zone: string; version: number }
 export async function getInvitationSettings(): Promise<InvitationSettings> {
@@ -26,7 +26,7 @@ export async function getEmailTemplate(kind: EmailKind): Promise<EmailTemplate> 
   const htmlText = await html.data.text();
   if (typeof content.subject !== 'string' || typeof content.body !== 'string' || typeof content.button_label !== 'string') throw new Error('Invalid email template settings.');
   if (!htmlText.trim() || (kind === 'approved' && (!htmlText.includes('{{deadline_sentence}}') || !htmlText.includes('{{dashboard_url}}')))) throw new Error('Invalid email template HTML.');
-  return { subject: content.subject, body: content.body, button_label: content.button_label, html: htmlText, version: data.version };
+  return { subject: content.subject, body: content.body, button_label: content.button_label, html: addEmailBranding(htmlText), version: data.version };
 }
 export async function saveEmailTemplate(kind: EmailKind, template: EmailTemplate, expectedVersion: number, adminId: string) {
   const storagePath = `${kind}/${randomUUID()}`;

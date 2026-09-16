@@ -41,7 +41,7 @@ The approvals list distinguishes draft decisions, released decisions, and RSVP. 
 For each wave:
 
 1. Filter/select applicants and save draft decisions with Approve, Waitlist, or Reject. These actions do not release decisions or send emails.
-2. Select the intended applicants again and choose **Release decisions…**. Choose release without emails, or enable approved, denied, and waitlisted emails separately. Review the grouped recipients and personalized messages, then confirm. The app releases decisions and queues the chosen emails together.
+2. Select the intended applicants again and choose **Release decisions…**. Choose release without emails, or enable approved, denied, and waitlisted emails separately. Review the grouped recipients and email choices, then confirm. Preview templates and send personalized tests from Emails. The app releases decisions and queues the chosen emails together.
 3. Edit templates and track delivery in **Emails**. Recipients receive the template matching their released decision. The Invitations view manages deadlines and responses; it does not repeat the release action. CSV includes release and response timestamps. `decision_released_at` identifies the latest changed release; delivery tracking and deduplication live in the email outbox.
 4. Review accepted, declined, unanswered and expired counts before selecting another wave. Unanswered invitations remain valid until the shared deadline; the site does not enforce capacity or automatically promote applicants.
 

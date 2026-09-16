@@ -4,6 +4,7 @@ import AdminSelect from '@/components/AdminSelect';
 import { useToast } from '@/components/Toast/ToastContext';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import AdminEmailEditor from './AdminEmailEditor';
+import AdminTestEmail from './AdminTestEmail';
 
 interface Job { id: string; kind: string; recipient: string; state: string; attempts: number; last_error: string | null; created_at: string; sent_at: string | null; resend_id: string | null; can_retry: boolean }
 const states = [{ value: 'queued', label: 'Queued' }, { value: 'sending', label: 'Sending' }, { value: 'sent', label: 'Sent' }, { value: 'failed', label: 'Failed' }, { value: 'needs_review', label: 'Needs review' }, { value: 'cancelled', label: 'Cancelled' }];
@@ -52,7 +53,7 @@ export default function AdminEmails() {
     <div className="admin-toolbar"><div className="flex gap-2" role="group" aria-label="Email views">
       <button className={`admin-button ${tab === 'templates' ? 'admin-button-primary' : ''}`} onClick={() => setTab('templates')}>Templates</button>
       <button className={`admin-button ${tab === 'history' ? 'admin-button-primary' : ''}`} onClick={() => setTab('history')}>History</button>
-    </div></div>
+    </div><AdminTestEmail onQueued={() => { void load(); }} /></div>
     {!loading && !error && !enabled && <p className="admin-meta">Email delivery is paused.</p>}
     <div hidden={tab !== 'templates'}><AdminEmailEditor /></div>
     <div hidden={tab !== 'history'} className="space-y-4">

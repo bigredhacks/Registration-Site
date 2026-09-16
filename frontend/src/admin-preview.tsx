@@ -29,12 +29,13 @@ interface PreviewForm {
 }
 interface Draft { team_number: number; members: { participant_id: string }[] }
 interface Payload extends Partial<PreviewForm> {
+  to?: string; request_id?: string;
   form_key?: string; ids?: number[]; status?: string; checked_in?: boolean;
   entries?: string[]; teams?: Draft[]; pool_id?: string;
   decisions?: ReleaseDecision[];
   scope?: 'released'; html?: string; subject?: string; body?: string; button_label?: string; expected_version?: number; deadline?: string | null; time_zone?: string;
   email_kinds?: Array<'approved' | 'rejected' | 'waitlisted'>;
-  kind?: 'approved' | 'rejected' | 'waitlisted'; expected_name?: string; expected_members?: string[];
+  kind?: 'confirmation' | 'approved' | 'rejected' | 'waitlisted'; expected_name?: string; expected_members?: string[];
   id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -186,6 +187,7 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const emailDrafts = new Map<string, { kind: 'approved' | 'rejected' | 'waitlisted'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
 const releaseDrafts = new Map<string, { decisions: ReleaseDecision[]; messages: Array<{ id: number; kind: 'approved' | 'rejected' | 'waitlisted'; recipient: string; name: string; subject: string; html: string; text: string; to: string }>; deadline_version: number; result?: { data: { id: number }[]; queued: number; skipped: number } }>();
 const releasedEmailKeys = new Set<string>();
+const testEmailKeys = new Set<string>();
 const emailTemplates: Record<EmailKind, EmailTemplate> = Object.fromEntries(Object.entries(DEFAULT_EMAIL_TEMPLATES).map(([kind, template]) => [kind, { ...template, html: defaultTemplateHtml(kind as EmailKind) }])) as Record<EmailKind, EmailTemplate>;
 let invitationSettings = { deadline: SAMPLE_INVITATION_DEADLINE as string | null, time_zone: 'America/New_York', version: 1 };
 function expireSampleInvitations() {
@@ -219,6 +221,15 @@ window.fetch = async (input, init) => {
       }
     }
     return json({ ...invitationSettings, expired_count, server_now: new Date().toISOString() });
+  }
+  if (path === '/api/admin/emails/test' && method === 'POST') {
+    if (!payload.to || !payload.kind || !payload.request_id) return json({ error: 'Choose a template and email address.' }, 400);
+    const key = `${payload.request_id}/${payload.kind}/${payload.to}`;
+    if (!testEmailKeys.has(key)) {
+      testEmailKeys.add(key);
+      emailJobs.unshift({ id: crypto.randomUUID(), kind: 'test', recipient: payload.to, state: 'queued', attempts: 0, created_at: new Date().toISOString(), can_retry: false });
+    }
+    return json({ message: `Sample test queued for ${payload.to}. No real email was sent.` }, 202);
   }
   if (path.startsWith('/api/admin/emails/templates/')) {
     const kind = path.split('/').pop() as EmailKind;
@@ -273,7 +284,7 @@ window.fetch = async (input, init) => {
     const recipients = students.filter(row => row.form_key === 'registration' && (payload.scope === 'released' || payload.ids?.includes(row.id)) && row.released_status === payload.kind && row.decision_released_at);
     const skipped = (payload.ids ?? []).filter(id => !recipients.some(row => row.id === id)).map(id => ({ id, reason: 'Released decision does not match this email.' }));
     if (!recipients.length) return json({ error: 'No selected applicants have a matching released decision and valid email.' }, 400);
-    const id = crypto.randomUUID(), kind = payload.kind ?? 'approved';
+    const id = crypto.randomUUID(), kind = payload.kind === 'confirmation' ? 'approved' : payload.kind ?? 'approved';
     emailDrafts.set(id, { kind, recipients, messages: recipients.map(row => ({ id: row.id, ...sampleEmail(kind, row) })), queued: false, deadline_version: invitationSettings.version });
     return json({ id, kind, enabled: true, preview: sampleEmail(kind, recipients[0]), recipients: recipients.map(row => ({ id: row.id, name: fullName(row), recipient: row.email })), skipped }, 201);
   }

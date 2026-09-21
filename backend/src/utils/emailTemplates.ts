@@ -1,5 +1,5 @@
 export const EMAIL_TEMPLATE_VERSION = '2026-09-15-v3';
-export type EmailKind = 'confirmation' | 'approved' | 'rejected' | 'waitlisted';
+export type EmailKind = 'confirmation' | 'approved' | 'rejected' | 'waitlisted' | 'announcement';
 export interface EmailPayload { from: string; to: string; subject: string; html: string; text: string }
 export interface EmailTemplate { subject: string; body: string; button_label: string; version: number; html?: string }
 export const SAMPLE_INVITATION_DEADLINE = '2026-09-21T04:00:00.000Z';
@@ -8,6 +8,11 @@ export const escapeHtml = (value: string) => value.replace(/[&<>"']/g, character
 }[character]!));
 
 export const DEFAULT_EMAIL_TEMPLATES: Record<EmailKind, EmailTemplate> = {
+  announcement: {
+    subject: 'An update from BigRed//Hacks',
+    body: 'We have an update for {{form_title}}.\n\nAdd your announcement here.',
+    button_label: '', version: 0,
+  },
   confirmation: {
     subject: 'We received your BigRed//Hacks application',
     body: 'Thanks for applying to {{form_title}}! We received your application and will email you when a decision is ready.',
@@ -74,7 +79,7 @@ export function renderEmailTemplate(kind: EmailKind, firstName?: string | null,
   const body = fill(template.body);
   const deadlineText = kind === 'approved' && deadline
     ? `Please accept by ${values.deadline}.` : '';
-  const button = kind === 'rejected' ? '' : fill(template.button_label || DEFAULT_EMAIL_TEMPLATES[kind].button_label);
+  const button = kind === 'rejected' || kind === 'announcement' ? '' : fill(template.button_label || DEFAULT_EMAIL_TEMPLATES[kind].button_label);
   const font = "'Poppins',Arial,Helvetica,sans-serif";
   const paragraphStyle = 'margin:0 0 18px;font-size:15px;line-height:1.7;color:#343434';
   const defaultHtml = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(subject)}</title></head><body style="margin:0;background:#FDECEA;font-family:${font}"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#FDECEA"><tr><td align="center" style="padding:24px 16px"><table role="presentation" width="560" cellspacing="0" cellpadding="0" style="width:100%;max-width:560px;background:#ffffff;border-radius:8px"><tr><td style="padding:28px;font-family:${font}"><p style="margin:0 0 26px;font-size:22px;font-weight:600;color:#B31B1B">BigRed//Hacks</p><p style="${paragraphStyle}">Hi ${escapeHtml(name)},</p>${body.split(/\n\s*\n/).map(text => `<p style="${paragraphStyle}">${escapeHtml(text).replace(/\n/g, '<br>')}</p>`).join('')}${deadlineText ? `<p style="${paragraphStyle}">${escapeHtml(deadlineText)}</p>` : ''}${button ? `<p style="margin:24px 0"><a href="${escapeHtml(dashboard)}" style="display:inline-block;padding:12px 20px;background:#B31B1B;border-radius:6px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none">${escapeHtml(button)}</a></p><p style="margin:0 0 22px;font-size:12px;line-height:1.6;color:#666666">${kind === 'approved' ? 'Already responded? You’re all set.<br>' : ''}<a href="${escapeHtml(dashboard)}" style="color:#8B1515;word-break:break-all">${escapeHtml(dashboard)}</a></p>` : ''}<p style="margin:24px 0 0;font-size:15px;line-height:1.7;color:#343434">The BigRed//Hacks team</p></td></tr></table></td></tr></table></body></html>`;

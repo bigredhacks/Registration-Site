@@ -8,6 +8,7 @@ require('ts-node').register({ project: path.resolve(__dirname, '../../tsconfig.j
 const emails = require('./adminEmails.ts').default;
 const teams = require('./adminTeams.ts').default;
 const releases = require('./adminReleaseEmails.ts').default;
+const announcements = require('./adminAnnouncements.ts').default;
 const { defaultTemplateHtml } = require('../utils/emailTemplates.ts');
 const { supabase } = require('../config/supabase.ts');
 const id = '00000000-0000-4000-8000-000000000001';
@@ -29,6 +30,8 @@ test.beforeEach(() => {
     const builder = {
       abortSignal() { return builder; }, select() { return builder; }, order() { return builder; }, range() { return builder; }, ilike() { return builder; },
       eq(key, value) { filters.push(row => row[key] === value); return builder; },
+      is(key, value) { filters.push(row => (row[key] ?? null) === value); return builder; },
+      not(key, operator, value) { assert.equal(operator, 'is'); filters.push(row => (row[key] ?? null) !== value); return builder; },
       in(key, values) { filters.push(row => values.includes(row[key])); return builder; },
       insert(value) { payload = value; writes.push({ table, value }); savedDraft = { id, ...value }; return builder; },
       upsert(value, options) { writes.push({ table, value, options }); return builder; },
@@ -38,7 +41,7 @@ test.beforeEach(() => {
     };
     return builder;
   };
-  supabase.rpc = async (name, args) => { rpc.push({ name, args }); return { data: { queued: 1, skipped: 0, version: 3 }, error: null }; };
+  supabase.rpc = (name, args) => { rpc.push({ name, args }); return Object.assign(Promise.resolve({ data: { queued: 1, skipped: 0, version: 3 }, error: null }), { abortSignal() { return this; } }); };
 });
 async function request(router, method, route, body = {}, options = {}) {
   const layer = router.stack.find(entry => entry.route?.path === route && entry.route.methods[method]);
@@ -171,7 +174,7 @@ test('release test emails use saved messages and only the signed-in admin addres
 
 test('template tests support all email kinds and queue only the entered recipient without changing applicants',async()=>{
   const original=structuredClone(records);
-  for(const kind of ['confirmation','approved','rejected','waitlisted']) {
+  for(const kind of ['confirmation','approved','rejected','waitlisted','announcement']) {
     const response=await request(emails,'post','/test',{kind,to:' tester@example.com ',request_id:id});
     assert.equal(response.statusCode,202);
     const job=writes.at(-1);
@@ -220,4 +223,118 @@ test('test personalization rejects blank or oversized values and stale template 
   }
   assert.equal((await request(emails,'post','/test',{kind:'confirmation',to:'tester@example.com',request_id:id,expected_version:3})).statusCode,409);
   assert.equal(writes.length,0);
+});
+
+test('announcements filter main applications by admin acceptance status, freeze saved content, and skip invalid/duplicate addresses', async () => {
+  records = [row(1, { status: 'pending', released_status: null }), row(2), row(3, { status: 'pending', email: ' ALEX1@example.com ' }), row(4, { status: 'pending', email: 'bad' }), row(5, { status: 'pending', form_key: 'workshop' })];
+  const response = await request(announcements, 'post', '/drafts', { audience: { type: 'acceptance', status: 'pending' }, expected_version: 0 });
+  assert.equal(response.statusCode, 201);
+  assert.deepEqual(response.body.recipients.map(row => row.id), [1]);
+  assert.deepEqual(response.body.skipped.map(row => row.id), [3, 4]);
+  assert.equal(writes[0].value.kind, 'announcement');
+  assert.deepEqual(writes[0].value.audience, { type: 'acceptance', status: 'pending' });
+  assert.equal(writes[0].value.messages[0].payload.to, 'alex1@example.com');
+  assert.match(response.body.preview.html, /Hi Alex,/);
+  assert.doesNotMatch(response.body.preview.html, /Respond to invitation|Please accept by|href="[^"]*\/dashboard"/);
+  assert.deepEqual(rpc.map(call => call.name), ['expire_registration_invitations'], 'preparing does not queue messages');
+});
+test('announcement invitation groups distinguish actual responses, unanswered released approvals, and expirations', async () => {
+  records = [row(1, { invitation_response: 'accepted' }), row(2, { invitation_response: 'declined' }), row(3),
+    row(4, { invitation_response: 'declined', invitation_expired_at: '2026-09-15T00:00:00Z', released_status: 'rejected' }),
+    row(5, { released_status: null }), row(6, { released_status: 'rejected', invitation_response: 'accepted' })];
+  for (const [status, id] of [['accepted', 1], ['declined', 2], ['unanswered', 3], ['expired', 4]]) {
+    const response = await request(announcements, 'post', '/drafts', { audience: { type: 'invitation', status }, expected_version: 0 });
+    assert.equal(response.statusCode, 201);
+    assert.deepEqual(response.body.recipients.map(row => row.id), [id]);
+  }
+});
+test('announcement requests reject forged content, bad cohorts, stale templates, empty groups and oversized groups', async () => {
+  for (const body of [
+    { audience: { type: 'invitation', status: 'pending' }, expected_version: 0 },
+    { audience: { type: 'all' }, expected_version: 0, html: 'forged' },
+    { audience: { type: 'all', status: 'accepted' }, expected_version: 0 },
+    { audience: { type: 'all' } },
+  ]) assert.equal((await request(announcements, 'post', '/drafts', body)).statusCode, 400);
+  assert.equal(reads.length, 0);
+  assert.equal((await request(announcements, 'post', '/drafts', { audience: { type: 'all' }, expected_version: 4 })).statusCode, 409);
+  records = [];
+  assert.equal((await request(announcements, 'post', '/drafts', { audience: { type: 'all' }, expected_version: 0 })).statusCode, 400);
+  records = Array.from({ length: 1001 }, (_, i) => row(i + 1));
+  assert.equal((await request(announcements, 'post', '/drafts', { audience: { type: 'all' }, expected_version: 0 })).statusCode, 400);
+  assert.equal(writes.length, 0);
+});
+test('announcement send requires enabled delivery and queues only the saved batch for the signed-in admin', async () => {
+  delete process.env.EMAIL_DELIVERY_ENABLED;
+  assert.equal((await request(announcements, 'post', '/drafts/:id/send')).statusCode, 503);
+  assert.equal(rpc.length, 0);
+  process.env.EMAIL_DELIVERY_ENABLED = 'true';
+  assert.equal((await request(announcements, 'post', '/drafts/:id/send', { p_admin_id: 'forged' })).statusCode, 202);
+  assert.deepEqual(rpc[0], { name: 'queue_announcement_email_batch', args: { p_batch_id: id, p_admin_id: 'admin-id' } });
+});
+test('general announcement templates can be edited through the existing revisioned storage API', async () => {
+  const response = await request(emails, 'put', '/templates/:kind', {
+    subject: 'Event update', body: 'Doors open at six.', button_label: '', html: defaultTemplateHtml('announcement'), expected_version: 0,
+  }, { params: { kind: 'announcement' } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(rpc[0].args.p_kind, 'announcement');
+  assert.match(uploads[0].path, /^announcement\//);
+  assert.equal(JSON.parse(uploads[1].content).body, 'Doors open at six.');
+});
+
+function mockAnnouncementDeadlineTemplate() {
+  storedRevision = { storage_path: 'announcement/deadline-test', version: 3 };
+  supabase.storage.from = () => ({ async download(file) {
+    return { data: new Blob([file.endsWith('.html')
+      ? defaultTemplateHtml('announcement').replace('{{message_html}}', '<p>Deadline: {{deadline}}</p>{{message_html}}')
+      : JSON.stringify({ subject: 'Reply by {{deadline}}', body: 'Please respond by {{deadline}}.', button_label: '' })]), error: null };
+  } });
+}
+
+test('announcement editor, test email and frozen batch use the configured deadline and time zone', async t => {
+  const originalSettings = { ...invitationSettings };
+  t.after(() => Object.assign(invitationSettings, originalSettings));
+  Object.assign(invitationSettings, { deadline: '2030-07-15T18:00:00.000Z', time_zone: 'America/Los_Angeles' });
+  mockAnnouncementDeadlineTemplate();
+  const editor = await request(emails, 'get', '/templates/:kind', {}, { params: { kind: 'announcement' } });
+  assert.equal(editor.statusCode, 200);
+  const testEmail = await request(emails, 'post', '/test', { kind: 'announcement', to: 'tester@example.com', request_id: id, expected_version: 3 });
+  assert.equal(testEmail.statusCode, 202);
+  const testPayload = writes.at(-1).value.request_payload;
+  const draft = await request(announcements, 'post', '/drafts', { audience: { type: 'all' }, expected_version: 3 });
+  assert.equal(draft.statusCode, 201);
+  for (const key of ['subject', 'html', 'text']) {
+    assert.equal(draft.body.preview[key], editor.body[key]);
+    assert.equal(testPayload[key], (key === 'subject' ? '[TEST] ' : '') + editor.body[key]);
+    assert.match(draft.body.preview[key], /11:00 AM PDT/);
+    assert.doesNotMatch(draft.body.preview[key], /Deadline not set|\{\{deadline\}\}/);
+  }
+  const frozen = structuredClone(draft.body.preview);
+  Object.assign(invitationSettings, { deadline: '2030-07-16T18:00:00.000Z', time_zone: 'America/New_York' });
+  const saved = await request(emails, 'get', '/drafts/:id/preview', {}, { query: { registration_id: '1' } });
+  assert.deepEqual(saved.body, frozen, 'later deadline edits do not change a reviewed batch');
+});
+
+test('announcements show an unset deadline consistently without sending a sample date', async t => {
+  const originalSettings = { ...invitationSettings };
+  t.after(() => Object.assign(invitationSettings, originalSettings));
+  invitationSettings.deadline = null;
+  mockAnnouncementDeadlineTemplate();
+  const editor = await request(emails, 'get', '/templates/:kind', {}, { params: { kind: 'announcement' } });
+  assert.equal(editor.statusCode, 200);
+  assert.equal(editor.body.deadline, null);
+  assert.equal(editor.body.sample_deadline, false);
+  const testEmail = await request(emails, 'post', '/test', { kind: 'announcement', to: 'tester@example.com', request_id: id });
+  assert.equal(testEmail.statusCode, 202);
+  const testPayload = writes.at(-1).value.request_payload;
+  const draft = await request(announcements, 'post', '/drafts', { audience: { type: 'all' }, expected_version: 3 });
+  assert.equal(draft.statusCode, 201);
+  for (const key of ['subject', 'html', 'text']) {
+    assert.match(draft.body.preview[key], /Deadline not set/);
+    assert.equal(draft.body.preview[key], editor.body[key]);
+    assert.equal(testPayload[key], (key === 'subject' ? '[TEST] ' : '') + editor.body[key]);
+  }
+  storedRevision = null;
+  const approval = await request(emails, 'get', '/templates/:kind', {}, { params: { kind: 'approved' } });
+  assert.equal(approval.statusCode, 200);
+  assert.equal(approval.body.sample_deadline, true, 'approval previews still support the existing sample date');
 });

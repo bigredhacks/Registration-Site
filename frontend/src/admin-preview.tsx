@@ -11,6 +11,7 @@ import type { AdminStudent, ReleaseDecision } from './pages/admin/adminApprovalS
 import type { FormField } from './lib/formConfig';
 import type { MatcherTeam, ParticipantSummary, TeamOverview } from './pages/admin/adminTeamMatchingState';
 import { renderEmailTemplate, DEFAULT_EMAIL_TEMPLATES, defaultTemplateHtml, SAMPLE_INVITATION_DEADLINE, type EmailTemplate, type EmailKind } from '../../backend/src/utils/emailTemplates';
+import type { AnnouncementAudience } from '../../backend/src/utils/announcementAudience';
 import './index.css';
 
 // Standalone Vite development entry. No production route, auth override, or
@@ -35,7 +36,7 @@ interface Payload extends Partial<PreviewForm> {
   decisions?: ReleaseDecision[];
   scope?: 'released'; html?: string; subject?: string; body?: string; button_label?: string; expected_version?: number; deadline?: string | null; time_zone?: string;
   email_kinds?: Array<'approved' | 'rejected' | 'waitlisted'>;
-  kind?: 'confirmation' | 'approved' | 'rejected' | 'waitlisted'; expected_name?: string; expected_members?: string[];
+  kind?: EmailKind; audience?: AnnouncementAudience; expected_name?: string; expected_members?: string[];
   id?: number; response?: 'accepted' | 'declined'; expected_response?: 'accepted' | 'declined'; expected_responded_at?: string;
 }
 const normalize = (value: string) => value.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
@@ -184,7 +185,7 @@ function filtered(params: URLSearchParams) {
   return sampleSorted(rows, params.get('sort') ?? '', params.get('dir') ?? '');
 }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
-const emailDrafts = new Map<string, { kind: 'approved' | 'rejected' | 'waitlisted'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
+const emailDrafts = new Map<string, { kind: 'approved' | 'rejected' | 'waitlisted' | 'announcement'; recipients: Student[]; messages: Array<{ id: number; subject: string; html: string; text: string; to: string }>; queued: boolean; deadline_version: number }>();
 const releaseDrafts = new Map<string, { decisions: ReleaseDecision[]; messages: Array<{ id: number; kind: 'approved' | 'rejected' | 'waitlisted'; recipient: string; name: string; subject: string; html: string; text: string; to: string }>; deadline_version: number; result?: { data: { id: number }[]; queued: number; skipped: number } }>();
 const releasedEmailKeys = new Set<string>();
 const testEmailKeys = new Set<string>();
@@ -199,7 +200,8 @@ function expireSampleInvitations() {
   return count;
 }
 const emailJobs: Array<{ id: string; kind: string; recipient: string; state: string; attempts: number; created_at: string; can_retry: boolean }> = [];
-const sampleEmail = (kind: EmailKind, student?: Student) => ({ ...renderEmailTemplate(kind, student?.first_name ?? 'Alex', undefined, location.origin, emailTemplates[kind], invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE, invitationSettings.time_zone), to: student?.email ?? 'alex@example.com' });
+const sampleDeadline = (kind: EmailKind) => kind === 'announcement' ? invitationSettings.deadline : invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE;
+const sampleEmail = (kind: EmailKind, student?: Student) => ({ ...renderEmailTemplate(kind, student?.first_name ?? 'Alex', undefined, location.origin, emailTemplates[kind], sampleDeadline(kind), invitationSettings.time_zone), to: student?.email ?? 'alex@example.com' });
 const originalFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(input instanceof Request ? input.url : String(input), location.origin);
@@ -238,8 +240,8 @@ window.fetch = async (input, init) => {
       emailTemplates[kind] = { html: payload.html, subject: payload.subject ?? '', body: payload.body ?? '', button_label: payload.button_label ?? '', version: emailTemplates[kind].version + 1 };
       return json({ template: emailTemplates[kind] });
     }
-    return json({ ...sampleEmail(kind), template: emailTemplates[kind], site_url: location.origin, deadline: invitationSettings.deadline ?? SAMPLE_INVITATION_DEADLINE,
-      time_zone: invitationSettings.time_zone, sample_deadline: !invitationSettings.deadline, enabled: true });
+    return json({ ...sampleEmail(kind), template: emailTemplates[kind], site_url: location.origin, deadline: sampleDeadline(kind),
+      time_zone: invitationSettings.time_zone, sample_deadline: kind !== 'announcement' && !invitationSettings.deadline, enabled: true });
   }
   if (path === '/api/admin/emails/jobs') {
     const jobs = emailJobs.filter(job => (!url.searchParams.get('state') || job.state === url.searchParams.get('state')) && job.recipient.includes(url.searchParams.get('q') ?? ''));
@@ -278,6 +280,29 @@ window.fetch = async (input, init) => {
       }
       draft.result = { data: draft.decisions.map(({ id }) => ({ id })), queued, skipped }; return json(draft.result);
     }
+  }
+  if (path === '/api/admin/emails/announcements/drafts' && method === 'POST') {
+    expireSampleInvitations();
+    if (payload.expected_version !== emailTemplates.announcement.version) return json({ error: 'The announcement changed. Reload before reviewing.' }, 409);
+    const audience = payload.audience ?? { type: 'all' };
+    const recipients = students.filter(row => row.form_key === 'registration' && (audience.type === 'all'
+      || (audience.type === 'acceptance' && row.status === audience.status)
+      || (audience.type === 'invitation' && (audience.status === 'expired' ? !!row.invitation_expired_at
+        : row.released_status === 'approved' && !row.invitation_expired_at && (row.invitation_response ?? 'unanswered') === audience.status))));
+    if (!recipients.length) return json({ error: 'No applicants with a valid email match this group.' }, 400);
+    const id = crypto.randomUUID();
+    const messages = recipients.map(row => ({ id: row.id, ...sampleEmail('announcement', row) }));
+    emailDrafts.set(id, { kind: 'announcement', recipients, messages, queued: false, deadline_version: invitationSettings.version });
+    return json({ id, audience, enabled: true, preview: messages[0], recipients: recipients.map(row => ({ id: row.id, name: fullName(row), recipient: row.email })), skipped: [] }, 201);
+  }
+  if (path.startsWith('/api/admin/emails/announcements/drafts/') && path.endsWith('/send')) {
+    const draft = emailDrafts.get(path.split('/')[6]);
+    if (!draft || draft.kind !== 'announcement') return json({ error: 'Preview not found.' }, 404);
+    if (!draft.queued) {
+      draft.queued = true;
+      draft.recipients.forEach(row => emailJobs.unshift({ id: crypto.randomUUID(), kind: 'announcement', recipient: row.email, state: 'queued', attempts: 0, created_at: new Date().toISOString(), can_retry: false }));
+    }
+    return json({ queued: draft.recipients.length, skipped: 0 }, 202);
   }
   if (path === '/api/admin/emails/drafts' && method === 'POST') {
     if (payload.kind === 'approved' && (!invitationSettings.deadline || Date.parse(invitationSettings.deadline) <= Date.now())) return json({ error: 'Set a future deadline in Invitations before sending approval emails.' }, 409);

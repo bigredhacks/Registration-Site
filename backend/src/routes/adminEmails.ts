@@ -1,4 +1,5 @@
 import releaseEmails from './adminReleaseEmails';
+import announcements from './adminAnnouncements';
 import { Router } from 'express';
 import { z } from 'zod';
 import { supabase } from '../config/supabase';
@@ -10,13 +11,14 @@ import { deliveryEnabled, emailPayload, emailSiteUrl, renderEmail, validEmail, E
 // Mounted after requireAuth + requireAdmin.
 const router = Router();
 router.use('/releases', releaseEmails);
+router.use('/announcements', announcements);
 const kind = z.enum(['approved', 'rejected', 'waitlisted']);
 const draftId = z.object({ id: z.uuid() });
 const rpcStatus = (code: string) => code === 'PT409' ? 409 : code === 'PT404' ? 404 : code === 'PT403' ? 403 : 500;
 interface DecisionRow { id: number; email: string | null; first_name: string | null; last_name: string | null; released_status: string | null; decision_released_at: string | null }
 interface DraftMessage { id: number; recipient: string; name: string; released_at: string; template_version: string; payload: EmailPayload }
 
-const templateParams = z.object({ kind: z.enum(['confirmation', 'approved', 'rejected', 'waitlisted']) });
+const templateParams = z.object({ kind: z.enum(['confirmation', 'approved', 'rejected', 'waitlisted', 'announcement']) });
 const templateBody = z.object({ subject: z.string().trim().min(1).max(200).refine(value => !/[\r\n]/.test(value), 'Use one line for the subject.'),
   body: z.string().trim().min(1).max(10000), button_label: z.string().trim().max(80), html: z.string().trim().min(1).max(50000) });
 router.post('/test', validate({ body: z.object({
@@ -32,7 +34,7 @@ router.post('/test', validate({ body: z.object({
       res.status(409).json({ error: 'The template changed. Close and reopen the test form to load the latest version.' }); return;
     }
     const payload = emailPayload(req.body.kind, req.body.to, req.body.first_name, req.body.form_title, template,
-      settings.deadline ?? SAMPLE_INVITATION_DEADLINE, settings.time_zone);
+      req.body.kind === 'announcement' ? settings.deadline : settings.deadline ?? SAMPLE_INVITATION_DEADLINE, settings.time_zone);
     const { error } = await supabase.from('email_outbox').upsert({
       dedupe_key: `template-test/${req.user!.id}/${req.body.request_id}/${req.body.kind}/${req.body.to}`,
       kind: 'test', recipient: req.body.to, created_by: req.user!.id,
@@ -48,10 +50,11 @@ router.get('/templates/:kind', validate({ params: templateParams }), async (req,
   try {
     const emailKind = req.params.kind as EmailKind;
     const [template, settings] = await Promise.all([getEmailTemplate(emailKind), getInvitationSettings()]);
-    res.json({ ...renderEmail(emailKind, 'Alex', undefined, template, settings.deadline ?? SAMPLE_INVITATION_DEADLINE, settings.time_zone),
+    const deadline = emailKind === 'announcement' ? settings.deadline : settings.deadline ?? SAMPLE_INVITATION_DEADLINE;
+    res.json({ ...renderEmail(emailKind, 'Alex', undefined, template, deadline, settings.time_zone),
       template, site_url: emailSiteUrl(),
-      deadline: settings.deadline ?? SAMPLE_INVITATION_DEADLINE, time_zone: settings.time_zone,
-      sample_deadline: !settings.deadline, enabled: deliveryEnabled() });
+      deadline, time_zone: settings.time_zone,
+      sample_deadline: emailKind !== 'announcement' && !settings.deadline, enabled: deliveryEnabled() });
   } catch { res.status(500).json({ error: 'Could not load this email. Check the email editor migration.' }); }
 });
 router.put('/templates/:kind', validate({ params: templateParams, body: templateBody.extend({ expected_version: z.number().int().min(0) }).strict() }), async (req, res) => {

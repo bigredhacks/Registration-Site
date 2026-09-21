@@ -5,13 +5,14 @@ import { useToast } from '@/components/Toast/ToastContext';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import AdminEmailEditor from './AdminEmailEditor';
 import AdminTestEmail from './AdminTestEmail';
+import AdminAnnouncements from './AdminAnnouncements';
 
 interface Job { id: string; kind: string; recipient: string; state: string; attempts: number; last_error: string | null; created_at: string; sent_at: string | null; resend_id: string | null; can_retry: boolean }
 const states = [{ value: 'queued', label: 'Queued' }, { value: 'sending', label: 'Sending' }, { value: 'sent', label: 'Sent' }, { value: 'failed', label: 'Failed' }, { value: 'needs_review', label: 'Needs review' }, { value: 'cancelled', label: 'Cancelled' }];
-const kinds: Record<string, string> = { confirmation: 'Application received', approved: 'Approved', rejected: 'Not selected', waitlisted: 'Waitlisted', test: 'Test' };
+const kinds: Record<string, string> = { confirmation: 'Application received', approved: 'Approved', rejected: 'Not selected', waitlisted: 'Waitlisted', announcement: 'General announcement', test: 'Test' };
 export default function AdminEmails() {
   const { showToast } = useToast();
-  const [tab, setTab] = useState<'templates' | 'history'>('templates');
+  const [tab, setTab] = useState<'templates' | 'announcement' | 'history'>('templates');
   const [state, setState] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
@@ -50,12 +51,14 @@ export default function AdminEmails() {
     finally { setSaving(false); }
   };
   return <div className="space-y-6">
-    <div className="admin-toolbar"><div className="flex gap-2" role="group" aria-label="Email views">
+    <div className="admin-toolbar"><div className="flex flex-wrap gap-2" role="group" aria-label="Email views">
       <button className={`admin-button ${tab === 'templates' ? 'admin-button-primary' : ''}`} onClick={() => setTab('templates')}>Templates</button>
+      <button className={`admin-button ${tab === 'announcement' ? 'admin-button-primary' : ''}`} onClick={() => setTab('announcement')}>General announcement</button>
       <button className={`admin-button ${tab === 'history' ? 'admin-button-primary' : ''}`} onClick={() => setTab('history')}>History</button>
     </div><AdminTestEmail onQueued={() => { void load(); }} /></div>
     {!loading && !error && !enabled && <p className="admin-meta">Email delivery is paused.</p>}
     <div hidden={tab !== 'templates'}><AdminEmailEditor /></div>
+    <div hidden={tab !== 'announcement'}><AdminAnnouncements onQueued={() => { void load(); }} /></div>
     <div hidden={tab !== 'history'} className="space-y-4">
     <div className="admin-toolbar"><p className="admin-meta">Delivery details are available in Resend.</p><button className="admin-button" disabled={loading} onClick={() => void load()}>Refresh</button></div>
     <div className="admin-toolbar"><input className="admin-input flex-1" type="search" aria-label="Search email recipients" placeholder="Search recipient email" value={search} onChange={event => { setSearch(event.target.value); setPage(0); }} /><AdminSelect aria-label="Email status" className="admin-input" value={state} placeholder="All statuses" options={states} onChange={value => { setState(value); setPage(0); }} /></div>

@@ -32,6 +32,7 @@ test.before(async () => {
     CREATE TABLE storage.objects(bucket_id text,name text); ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;`);
   await migrate('20260915020000_email_template_storage.sql');
   await migrate('20260916000000_release_decision_emails.sql');
+  await migrate('20260917000000_general_announcement_emails.sql');
 });
 test.after(async () => db?.close());
 test.beforeEach(async () => {
@@ -139,4 +140,113 @@ test('waitlist Storage templates use the same versioned activation rules',async(
   const result=await one('SELECT to_jsonb(activate_email_template_files($1,$2,$3,$4))',['waitlisted',path,0,uid(9)]);
   assert.equal(result.storage_path,path);
   await assert.rejects(one('SELECT to_jsonb(activate_email_template_files($1,$2,$3,$4))',['waitlisted',`waitlisted/${uid(2)}`,0,uid(9)]),/template changed/);
+});
+
+async function announcement(ids = [1, 2, 3], audience = { type: 'all' }) {
+  const rows = await q('SELECT * FROM registrations WHERE id=ANY($1) ORDER BY id', [ids]);
+  const messages = rows.map(r => ({ id: r.id, recipient: r.email, first_name: r.first_name, template_version: 'announcement-v1',
+    payload: { to: r.email, subject: 'Event update', html: `<p>Hello ${r.first_name}</p>`, text: `Hello ${r.first_name}` } }));
+  return one("INSERT INTO email_batches(kind,created_by,messages,audience) VALUES('announcement',$1,$2,$3) RETURNING id", [uid(9), JSON.stringify(messages), JSON.stringify(audience)]);
+}
+const sendAnnouncement = (id, user = uid(9)) => one('SELECT queue_announcement_email_batch($1,$2)', [id, user]);
+test('announcements queue reviewed content once per batch without changing decisions or responses', async () => {
+  const original = await q('SELECT * FROM registrations ORDER BY id');
+  const id = await announcement();
+  assert.deepEqual(await sendAnnouncement(id), { queued: 3, skipped: 0 });
+  assert.deepEqual(await sendAnnouncement(id), { queued: 3, skipped: 0 });
+  assert.equal(await one('SELECT count(*)::int FROM email_outbox'), 3);
+  assert.deepEqual(await q('SELECT * FROM registrations ORDER BY id'), original);
+  const job = (await q('SELECT * FROM claim_email_job()'))[0];
+  assert.equal(job.kind, 'announcement'); assert.equal(job.request_payload.subject, 'Event update');
+  assert.equal(job.template_version, 'announcement-v1');
+  assert.equal((await sendAnnouncement(await announcement([1]))).queued, 1, 'a new announcement may email the same applicant');
+});
+test('announcement audience rules cover admin decisions and current invitation responses only', async () => {
+  await db.exec("UPDATE registrations SET released_status='approved',decision_released_at=now(),invitation_response='accepted',invitation_responded_at=now() WHERE id=1");
+  for (const [audience, expected] of [
+    [{ type: 'all' }, [1, 2, 3]],
+    [{ type: 'acceptance', status: 'approved' }, [1]],
+    [{ type: 'acceptance', status: 'rejected' }, [2]],
+    [{ type: 'acceptance', status: 'waitlisted' }, [3]],
+    [{ type: 'acceptance', status: 'pending' }, []],
+    [{ type: 'invitation', status: 'accepted' }, [1]],
+    [{ type: 'invitation', status: 'unanswered' }, []],
+  ]) assert.deepEqual((await q('SELECT id::int FROM registrations r WHERE matches_announcement_audience(r,$1) ORDER BY id', [JSON.stringify(audience)])).map(r => r.id), expected);
+  await db.exec("UPDATE registrations SET invitation_response='declined' WHERE id=1");
+  assert.equal((await sendAnnouncement(await announcement([1], { type: 'invitation', status: 'declined' }))).queued, 1);
+  await db.exec("UPDATE registrations SET invitation_expired_at=now(),released_status='rejected' WHERE id=1");
+  await assert.rejects(sendAnnouncement(await announcement([1], { type: 'invitation', status: 'declined' })), /changed/);
+  assert.equal((await sendAnnouncement(await announcement([1], { type: 'invitation', status: 'expired' }))).queued, 1);
+});
+test('stale announcement audiences and changed recipients reject the whole batch', async () => {
+  for (const [change, restore] of [
+    ["UPDATE registrations SET email='changed@example.com' WHERE id=2", "UPDATE registrations SET email='b@example.com' WHERE id=2"],
+    ["UPDATE registrations SET first_name='Changed' WHERE id=2", "UPDATE registrations SET first_name='Blair' WHERE id=2"],
+    ["UPDATE registrations SET form_key='workshop' WHERE id=2", "UPDATE registrations SET form_key='registration' WHERE id=2"],
+  ]) {
+    const id = await announcement(); await db.exec(change);
+    await assert.rejects(sendAnnouncement(id), /changed/);
+    assert.equal(await one('SELECT count(*)::int FROM email_outbox'), 0);
+    assert.equal(await one('SELECT queued_at FROM email_batches WHERE id=$1', [id]), null);
+    await db.exec(restore);
+  }
+  const id = await announcement([1], { type: 'acceptance', status: 'approved' });
+  await db.exec("UPDATE registrations SET status='waitlisted' WHERE id=1");
+  await assert.rejects(sendAnnouncement(id), /changed/);
+});
+test('announcement worker cancels messages that leave their reviewed audience', async () => {
+  const id = await announcement([1], { type: 'acceptance', status: 'approved' });
+  await sendAnnouncement(id);
+  await db.exec("UPDATE registrations SET status='rejected' WHERE id=1");
+  assert.deepEqual(await q('SELECT * FROM claim_email_job()'), []);
+  assert.equal(await one('SELECT state FROM email_outbox'), 'cancelled');
+});
+for (const retryState of ['sending', 'queued']) {
+  test(`announcement ${retryState} retries require review after the applicant responds`, async () => {
+    await db.exec("UPDATE registrations SET released_status='approved',decision_released_at=now() WHERE id=1");
+    await sendAnnouncement(await announcement([1], { type: 'invitation', status: 'unanswered' }));
+    const attempted = (await q('SELECT * FROM claim_email_job()'))[0];
+    assert.equal(attempted.attempts, 1);
+    assert.ok(attempted.first_attempt_at);
+    // Simulate an uncertain send: either the worker lost its receipt, or a timeout queued a retry.
+    if (retryState === 'sending') await db.exec("UPDATE email_outbox SET lease_until=now()-interval '1 second'");
+    else await db.exec("UPDATE email_outbox SET state='queued',available_at=now()-interval '1 second',lease_token=null,lease_until=null");
+    await db.exec("UPDATE registrations SET invitation_response='accepted',invitation_responded_at=now() WHERE id=1");
+    assert.deepEqual(await q('SELECT * FROM claim_email_job()'), []);
+    const saved = (await q('SELECT * FROM email_outbox'))[0];
+    assert.equal(saved.state, 'needs_review');
+    assert.equal(saved.attempts, 1, 'no additional send is attempted');
+    assert.equal(saved.lease_token, null);
+    assert.equal(saved.lease_until, null);
+    assert.deepEqual(saved.first_attempt_at, attempted.first_attempt_at);
+    assert.deepEqual(saved.request_payload, attempted.request_payload);
+    assert.match(saved.last_error, /Check Resend/);
+    assert.equal(await one('SELECT retry_email_job($1)', [saved.id]), false, 'uncertain deliveries cannot be blindly retried');
+  });
+}
+test('invitation expiry is applied before announcement confirmation', async () => {
+  await db.exec("UPDATE registrations SET released_status='approved',decision_released_at=now() WHERE id=1");
+  const id = await announcement([1], { type: 'invitation', status: 'unanswered' });
+  await db.exec("UPDATE invitation_settings SET deadline=now()-interval '1 day'");
+  await assert.rejects(sendAnnouncement(id), /changed/);
+  assert.equal(await one('SELECT count(*)::int FROM email_outbox'), 0);
+});
+test('announcements require a recent owned preview, admin access, and service credentials', async () => {
+  const id = await announcement();
+  await assert.rejects(sendAnnouncement(id, uid(1)), /Admin access/);
+  await db.exec(`RESET ROLE; INSERT INTO admin_users VALUES('${uid(8)}'); SET ROLE service_role;`);
+  await assert.rejects(sendAnnouncement(id, uid(8)), /not found/);
+  await db.exec("UPDATE email_batches SET created_at=now()-interval '2 hours'");
+  await assert.rejects(sendAnnouncement(id), /expired/);
+  for (const role of ['anon', 'authenticated']) {
+    await db.exec(`RESET ROLE; SET ROLE ${role};`);
+    await assert.rejects(sendAnnouncement(id), /permission denied/);
+    await assert.rejects(q('SELECT audience,messages FROM email_batches'), /permission denied/);
+  }
+});
+test('announcement template revisions retain optimistic concurrency checks', async () => {
+  const activate = version => one("SELECT to_jsonb(activate_email_template_files('announcement',$1,$2,$3))", [`announcement/${uid(version + 30)}`, version, uid(9)]);
+  assert.equal((await activate(0)).version, 1);
+  await assert.rejects(activate(0), /changed/);
+  assert.equal((await activate(1)).version, 2);
 });

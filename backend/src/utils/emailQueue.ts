@@ -4,7 +4,7 @@ import { supabase } from '../config/supabase';
 import { deliveryEnabled, emailPayload, EmailSendError, sendEmail, type EmailPayload } from './email';
 
 export interface EmailJob {
-  id: string; kind: 'confirmation' | 'approved' | 'rejected' | 'waitlisted' | 'test'; recipient: string;
+  id: string; kind: 'confirmation' | 'approved' | 'rejected' | 'waitlisted' | 'announcement' | 'test'; recipient: string;
   first_name: string | null; form_title: string | null; request_payload: EmailPayload | null;
   attempts: number; lease_token: string;
 }

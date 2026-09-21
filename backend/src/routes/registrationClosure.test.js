@@ -14,6 +14,7 @@ const registration = { id: 1, user_id: 'student', form_key: 'registration', stat
 let admin = false;
 let closesAt = '2020-01-01T00:00:00Z';
 let active = true;
+let allowLateWaitlist = false;
 let writes = [];
 
 supabase.from = (table) => {
@@ -27,7 +28,7 @@ supabase.from = (table) => {
     delete() { writes.push({ table, kind: 'delete' }); return builder; },
     async maybeSingle() {
       if (table === 'form_configs') return { data: {
-        key: 'registration', title: 'Registration', version: 1, is_active: active, closes_at: closesAt,
+        key: 'registration', title: 'Registration', version: 1, is_active: active, closes_at: closesAt, allow_late_waitlist: allowLateWaitlist,
         fields: [{ id: 'first_name', type: 'text', label: 'First name', required: true }],
       }, error: null };
       if (table === 'admin_users') return { data: admin ? { user_id: 'student' } : null, error: null };
@@ -209,4 +210,74 @@ test('RSVP uses authenticated ownership, permits closed/inactive forms, and maps
     assert.equal(calls[0].args.p_registration.email, 'student@example.com');
     assert.equal(writes.length, 0, 'no separate application write');
   } finally { supabase.from = originalFrom; }
+});
+
+
+test('waitlist intake requires explicit acknowledgement, validates answers, and keeps all existing edit paths closed', async () => {
+  active = true; closesAt = '2020-01-01T00:00:00Z'; allowLateWaitlist = true; admin = false; writes = [];
+  const originalFrom = supabase.from;
+  supabase.from = table => {
+    const query = originalFrom(table);
+    if (table === 'registrations') query.maybeSingle = async () => ({ data: null, error: null });
+    return query;
+  };
+  const calls = [];
+  supabase.rpc = (name, args) => {
+    calls.push({ name, args });
+    return { async single() { return { data: { ...registration, ...args.p_registration, status: 'waitlisted', released_status: 'waitlisted' }, error: null }; } };
+  };
+  try {
+    const unacknowledged = await request('post', '/', { first_name: 'Alex', waitlist_acknowledged: true });
+    assert.equal(unacknowledged.statusCode, 412);
+    assert.equal(unacknowledged.body.code, 'WAITLIST_ACKNOWLEDGEMENT_REQUIRED');
+    assert.equal(unacknowledged.body.allow_late_waitlist, true);
+    assert.equal(calls.length, 0);
+    const options = { query: { waitlist: 'true' } };
+    assert.equal((await request('post', '/', { first_name: '' }, options)).statusCode, 400);
+    const saved = await request('post', '/', { first_name: 'Alex', status: 'approved', email: 'forged@example.com' }, options);
+    assert.equal(saved.statusCode, 201);
+    assert.equal(saved.body.status, 'waitlisted');
+    assert.equal(calls[0].args.p_registration.waitlist_acknowledged, true);
+    assert.equal(calls[0].args.p_registration.email, 'student@example.com');
+    assert.equal(calls[0].args.p_registration.status, 'pending', 'database chooses initial decision');
+    supabase.from = originalFrom;
+    for (const [method, path, body] of [
+      ['put', '/me', { first_name: 'Edit' }], ['put', '/:id', { first_name: 'Edit' }],
+      ['post', '/me/resume-upload-url', {}], ['post', '/me/resume', { resume_path: 'student/resume.pdf' }], ['delete', '/:id', {}],
+    ]) assert.equal((await request(method, path, body, options)).statusCode, 403, path);
+    assert.deepEqual(writes, []);
+    active = false;
+    assert.equal((await request('post', '/', { first_name: 'Alex' }, options)).statusCode, 404);
+  } finally { supabase.from = originalFrom; allowLateWaitlist = false; }
+});
+
+test('transaction-time closure refreshes intake metadata and distinguishes duplicates from changed forms', async () => {
+  active = true; closesAt = null; allowLateWaitlist = true; admin = false;
+  const originalFrom = supabase.from;
+  supabase.from = table => {
+    const query = originalFrom(table);
+    if (table === 'registrations') query.maybeSingle = async () => ({ data: null, error: null });
+    return query;
+  };
+  let failure;
+  supabase.rpc = () => ({ async single() {
+    closesAt = '2020-01-01T00:00:00Z';
+    return { data: null, error: { code: failure, message: 'Transaction rejected' } };
+  } });
+  try {
+    for (const [error, status, code] of [
+      ['PT412', 412, 'WAITLIST_ACKNOWLEDGEMENT_REQUIRED'], ['PT403', 403, 'REGISTRATION_CLOSED'],
+      ['PT409', 409, 'FORM_CHANGED'], ['23505', 409, 'REGISTRATION_EXISTS'],
+    ]) {
+      closesAt = null; failure = error;
+      const response = await request('post', '/', { first_name: 'Alex' });
+      assert.equal(response.statusCode, status);
+      assert.equal(response.body.code, code);
+      if (status !== 409) {
+        assert.equal(response.body.closes_at, closesAt);
+        assert.equal(response.body.allow_late_waitlist, true);
+        assert.ok(response.body.server_now);
+      }
+    }
+  } finally { supabase.from = originalFrom; allowLateWaitlist = false; }
 });

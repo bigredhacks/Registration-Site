@@ -25,6 +25,7 @@ router.get('/', async (_req: Request, res: Response) => {
     res.json((data ?? []).map((form) => registrationClosureResponse({
       key: form.key, title: form.title, description: form.description, version: form.version,
       closes_at: form.closes_at, closes_timezone: form.closes_timezone,
+      allow_late_waitlist: form.allow_late_waitlist,
     }, now)));
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });

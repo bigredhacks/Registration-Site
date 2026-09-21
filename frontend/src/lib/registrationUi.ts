@@ -1,4 +1,4 @@
-import { isRegistrationClosed, type RegistrationClosure } from "./registrationClosure.ts";
+import { isRegistrationClosed, isWaitlistApplication, type RegistrationClosure } from "./registrationClosure.ts";
 
 export interface ActiveFormSummary extends RegistrationClosure {
   key: string;
@@ -22,6 +22,7 @@ export interface ApplicationCard {
   started: boolean;
   primaryActionLabel: string;
   closed: boolean;
+  waitlistApplication: boolean;
   closesAt: string | null;
   closesTimezone?: string;
 }
@@ -67,6 +68,7 @@ export function buildApplicationCards(
           : null;
       const started = registration !== undefined;
       const closed = isRegistrationClosed(form.closes_at, now);
+      const waitlistApplication = isWaitlistApplication(form, started, now);
 
       return {
         key: form.key,
@@ -75,11 +77,12 @@ export function buildApplicationCards(
         version: form.version,
         status,
         closed,
+        waitlistApplication,
         closesAt: form.closes_at ?? null,
         closesTimezone: form.closes_timezone,
         stateLabel: form.key === 'registration' && (status === 'pending' || status === 'submitted') ? 'Under review' : status ? titleCaseStatus(status) : closed ? "Closed" : "Not Started",
         started,
-        primaryActionLabel: closed && !started ? "Registration closed" : form.key === "registration"
+        primaryActionLabel: waitlistApplication ? "Apply on waitlist" : closed && !started ? "Registration closed" : form.key === "registration"
           ? started
             ? "View Application"
             : "Start Application"

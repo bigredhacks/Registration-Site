@@ -16,10 +16,12 @@ export function isRegistrationClosed(closesAt: string | null | undefined, now = 
   return !!closesAt && now >= Date.parse(closesAt);
 }
 
-export function registrationClosureResponse<T extends { closes_at?: string | null; closes_timezone?: string }>(form: T, now = Date.now()) {
+export function registrationClosureResponse<T extends { closes_at?: string | null; closes_timezone?: string; allow_late_waitlist?: boolean }>(form: T, now = Date.now()) {
   return {
     ...form,
     deadline_supported: form.closes_at !== undefined && form.closes_timezone !== undefined,
+    late_waitlist_supported: form.allow_late_waitlist !== undefined,
+    allow_late_waitlist: form.allow_late_waitlist === true,
     closes_at: form.closes_at ?? null,
     closes_timezone: form.closes_timezone ?? DEFAULT_REGISTRATION_TIMEZONE,
     is_closed: isRegistrationClosed(form.closes_at, now),
@@ -37,6 +39,9 @@ export function registrationClosedError(closesAt: string) {
 }
 
 export function formConfigWriteError(error: { code?: string; message: string }) {
+  if (['42703', 'PGRST204'].includes(error.code ?? '') && /allow_late_waitlist/.test(error.message)) {
+    return 'Late waitlist applications require the 20260921000000_late_waitlist.sql database migration. Other form settings can still be saved.';
+  }
   if (['42703', 'PGRST204'].includes(error.code ?? '') && /closes_at|closes_timezone/.test(error.message)) {
     return 'Registration deadlines require the 20260905_registration_closure.sql database migration. Other form settings can still be saved.';
   }

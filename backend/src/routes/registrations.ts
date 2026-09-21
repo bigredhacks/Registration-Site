@@ -8,7 +8,7 @@ import {
 } from '../types/registration';
 import { validate } from '../middleware/validate';
 import { isAdmin, resolveOwnerOrAdmin } from '../middleware/requireAdmin';
-import { isRegistrationClosed, registrationClosedError } from '../utils/registrationClosure';
+import { isRegistrationClosed, registrationClosedError, registrationClosureResponse } from '../utils/registrationClosure';
 import {
   buildAnswersSchema,
   projectRegistrationColumns,
@@ -50,6 +50,7 @@ type FormConfigRow = {
   fields: DynamicFormField[];
   is_active: boolean;
   closes_at: string | null;
+  allow_late_waitlist?: boolean;
 };
 
 function getFormKey(req: Request): string {
@@ -128,6 +129,7 @@ async function parseAnswersFromBody(
   formKey: string,
   rawBody: Record<string, unknown> = req.body ?? {},
   allowClosed = false,
+  creating = false,
 ) {
   const formConfig = await getUserFormConfig(formKey);
   if (!formConfig || (!allowClosed && !formConfig.is_active)) {
@@ -138,10 +140,21 @@ async function parseAnswersFromBody(
   }
 
   if (!allowClosed && isRegistrationClosed(formConfig.closes_at)) {
-    return {
-      status: 403 as const,
-      body: registrationClosedError(formConfig.closes_at!),
-    };
+    if (creating && formConfig.allow_late_waitlist) {
+      if (req.query.waitlist !== 'true') return {
+        status: 412 as const,
+        body: {
+          ...registrationClosureResponse(formConfig),
+          error: 'Registration has closed. Review the waitlist notice, then choose Apply on waitlist to submit.',
+          code: 'WAITLIST_ACKNOWLEDGEMENT_REQUIRED',
+        },
+      };
+    } else {
+      return {
+        status: 403 as const,
+        body: { ...registrationClosedError(formConfig.closes_at!), allow_late_waitlist: formConfig.allow_late_waitlist === true },
+      };
+    }
   }
 
   const schema = buildAnswersSchema(formConfig.fields);
@@ -352,21 +365,25 @@ router.get('/me', async (req: Request, res: Response) => {
 router.post('/', async (req: Request<{}, {}, Record<string, unknown>>, res: Response) => {
   try {
     const formKey = getFormKey(req);
-    const parsed = await parseAnswersFromBody(req, formKey);
+    const parsed = await parseAnswersFromBody(req, formKey, req.body, false, true);
     if (parsed.status !== 200) {
       res.status(parsed.status).json(parsed.body);
       return;
     }
 
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('registrations')
       .select('id')
       .eq('user_id', req.user!.id)
       .eq('form_key', formKey)
       .maybeSingle();
 
+    if (existingError) {
+      res.status(500).json({ error: 'Could not check your application. Please try again.' });
+      return;
+    }
     if (existing) {
-      res.status(409).json({ error: 'Registration already exists for this user and form' });
+      res.status(409).json({ error: 'Registration already exists for this user and form', code: 'REGISTRATION_EXISTS' });
       return;
     }
 
@@ -377,6 +394,7 @@ router.post('/', async (req: Request<{}, {}, Record<string, unknown>>, res: Resp
       form_version: parsed.formConfig.version,
       answers: parsed.answers,
       status: 'pending',
+      waitlist_acknowledged: req.query.waitlist === 'true',
       ...projected,
       email: req.user!.email ?? null,
     };
@@ -384,8 +402,18 @@ router.post('/', async (req: Request<{}, {}, Record<string, unknown>>, res: Resp
     const { data, error } = await supabase.rpc('create_registration_with_email', { p_registration: payload }).single();
 
     if (error) {
-      res.status(error.code === '23505' || error.code === 'PT409' ? 409 : error.code === 'PT403' ? 403 : error.code === 'PT404' ? 404 : 500)
-        .json({ error: error.code === '23505' ? 'An application already exists for this account. Refresh your dashboard.' : error.message });
+      if (error.code === 'PT403' || error.code === 'PT412') {
+        const latest = await getUserFormConfig(formKey);
+        res.status(error.code === 'PT412' ? 412 : 403).json({
+          ...(latest ? registrationClosureResponse(latest) : {}),
+          error: error.message,
+          code: error.code === 'PT412' ? 'WAITLIST_ACKNOWLEDGEMENT_REQUIRED' : 'REGISTRATION_CLOSED',
+        });
+        return;
+      }
+      res.status(error.code === '23505' || error.code === 'PT409' ? 409 : error.code === 'PT404' ? 404 : 500)
+        .json({ error: error.code === '23505' ? 'An application already exists for this account. Refresh your dashboard.' : error.message,
+          code: error.code === '23505' ? 'REGISTRATION_EXISTS' : error.code === 'PT409' ? 'FORM_CHANGED' : undefined });
       return;
     }
 

@@ -48,11 +48,14 @@ test.before(async () => {
   assert.equal(await scalar('SELECT count(*)::int FROM email_outbox'), 0, 'migration must not backfill confirmations');
   const after = await query("SELECT to_jsonb(r) - ARRAY['released_status','decision_released_at','invitation_response','invitation_responded_at'] AS value FROM registrations r");
   assert.deepEqual(after.map(row => row.value), before);
+  await db.exec(migration('20260921000000_late_waitlist.sql'));
+  assert.equal(await scalar('SELECT allow_late_waitlist FROM form_configs'), false);
 });
 test.after(async () => { await db?.close(); });
 test.beforeEach(async () => {
   await db.exec(`RESET ROLE; TRUNCATE email_outbox,email_batches,user_team_members,user_teams,participants,profiles,admin_users,registrations,auth.users RESTART IDENTITY CASCADE;
-    UPDATE form_configs SET version=1,is_active=true,closes_at=null;
+    DELETE FROM form_configs WHERE key <> 'registration';
+    UPDATE form_configs SET version=1,is_active=true,closes_at=null,allow_late_waitlist=false;
     INSERT INTO auth.users SELECT ('00000000-0000-4000-8000-' || lpad(n::text,12,'0'))::uuid, 'alex' || n || '@example.com' FROM generate_series(1,9) n;
     INSERT INTO admin_users VALUES ('${uid(9)}'); SET ROLE service_role;`);
 });
@@ -162,4 +165,57 @@ test('new tables and functions are inaccessible to clients; account fallback is 
     await db.exec(`RESET ROLE; SET ROLE ${role};`);
     for (const sql of ['SELECT * FROM email_outbox', 'SELECT * FROM email_batches', "SELECT create_registration_with_email('{}')", 'SELECT claim_email_job()', `SELECT retry_email_job('${uid(1)}')`, `SELECT queue_decision_email_batch('${uid(1)}','${uid(9)}')`, `SELECT admin_delete_user_team('${uid(50)}','Tide','{}','${uid(9)}')`, "SELECT * FROM admin_team_account_emails('{}')"]) await assert.rejects(query(sql), /permission denied/);
   }
+});
+
+
+test('late waitlist intake requires acknowledgement and atomically publishes only the initial waitlist decision', async () => {
+  const existing = await create(1);
+  await db.exec("UPDATE form_configs SET closes_at=clock_timestamp(),allow_late_waitlist=true");
+  await assert.rejects(create(2), error => error.code === 'PT412');
+  assert.equal(await scalar('SELECT count(*)::int FROM registrations'), 1);
+  const payload = { ...registration(2), waitlist_acknowledged: true, status: 'approved', released_status: 'approved' };
+  const submit = () => scalar('SELECT to_jsonb(create_registration_with_email($1::jsonb))', [JSON.stringify(payload)]);
+  const late = await submit();
+  assert.equal(late.status, 'waitlisted');
+  assert.equal(late.released_status, 'waitlisted');
+  assert.ok(late.decision_released_at);
+  assert.equal(late.invitation_response, null);
+  assert.deepEqual(await query('SELECT status,released_status FROM registrations WHERE id=$1', [existing.id]), [{ status: 'pending', released_status: null }]);
+  assert.deepEqual(await query('SELECT kind,recipient FROM email_outbox WHERE registration_id=$1', [late.id]), [{ kind: 'confirmation', recipient: 'alex2@example.com' }]);
+  await assert.rejects(submit(), error => error.code === '23505');
+  assert.equal(await scalar('SELECT count(*)::int FROM email_outbox WHERE registration_id=$1', [late.id]), 1);
+  await db.exec('RESET ROLE; REVOKE INSERT ON email_outbox FROM service_role; SET ROLE service_role;');
+  await assert.rejects(scalar('SELECT create_registration_with_email($1::jsonb)', [JSON.stringify({ ...registration(3), waitlist_acknowledged: true })]), /permission denied/);
+  assert.equal(await scalar('SELECT count(*)::int FROM registrations'), 2);
+  await db.exec('RESET ROLE; GRANT INSERT ON email_outbox TO service_role; SET ROLE service_role;');
+  await query("UPDATE registrations SET status='approved' WHERE id=$1", [late.id]);
+  assert.equal(await scalar('SELECT released_status FROM registrations WHERE id=$1', [late.id]), 'waitlisted', 'later draft decisions remain private');
+  await release(late.id, 'approved');
+  assert.equal(await scalar('SELECT released_status FROM registrations WHERE id=$1', [late.id]), 'approved', 'organizers can release a later approval normally');
+});
+
+test('waitlist intake never bypasses inactive, disabled, or stale form settings', async () => {
+  const submit = () => scalar('SELECT create_registration_with_email($1::jsonb)', [JSON.stringify({ ...registration(1), waitlist_acknowledged: true })]);
+  await db.exec("UPDATE form_configs SET closes_at=now()-interval '1 minute'");
+  await assert.rejects(submit(), error => error.code === 'PT403');
+  await db.exec('UPDATE form_configs SET allow_late_waitlist=true,is_active=false');
+  await assert.rejects(submit(), error => error.code === 'PT404');
+  await db.exec('UPDATE form_configs SET is_active=true,version=2');
+  await assert.rejects(submit(), error => error.code === 'PT409');
+  assert.equal(await scalar('SELECT count(*)::int FROM registrations'), 0);
+  assert.equal(await scalar('SELECT count(*)::int FROM email_outbox'), 0);
+});
+
+test('waitlist settings only affect new applications received after an actual deadline, for each form', async () => {
+  await db.exec('UPDATE form_configs SET allow_late_waitlist=true');
+  const submit = n => scalar('SELECT to_jsonb(create_registration_with_email($1::jsonb))', [JSON.stringify({ ...registration(n), waitlist_acknowledged: true, status: 'waitlisted' })]);
+  assert.equal((await submit(1)).status, 'pending', 'no deadline');
+  await db.exec("UPDATE form_configs SET closes_at=clock_timestamp()+interval '1 hour'");
+  assert.equal((await submit(2)).status, 'pending', 'before deadline');
+  await db.exec("INSERT INTO form_configs(key,title,version,is_active,closes_at,allow_late_waitlist) VALUES ('workshop','Workshop',1,true,now()-interval '1 hour',true)");
+  const other = await scalar('SELECT to_jsonb(create_registration_with_email($1::jsonb))', [JSON.stringify({ ...registration(1), form_key: 'workshop', waitlist_acknowledged: true })]);
+  assert.equal(other.status, 'waitlisted');
+  assert.equal(other.released_status, null, 'generic forms do not use main-form invitations');
+  await db.exec("UPDATE form_configs SET allow_late_waitlist=false,closes_at=null WHERE key='workshop'");
+  assert.equal(await scalar('SELECT status FROM registrations WHERE id=$1', [other.id]), 'waitlisted', 'config changes never rewrite submitted decisions');
 });

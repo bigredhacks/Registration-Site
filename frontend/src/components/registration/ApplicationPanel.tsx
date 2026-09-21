@@ -5,7 +5,8 @@ import { buildSchemaFromFields } from "@/lib/buildSchema";
 import { useToast } from "@/components/Toast/ToastContext";
 import { apiFetch } from "@/lib/api";
 import { extractSubmissionFeedback } from "@/lib/registrationUi";
-import { formatRegistrationDeadline, isRegistrationClosed } from "@/lib/registrationClosure";
+import { isRegistrationClosed, isWaitlistApplication } from "@/lib/registrationClosure";
+import RegistrationDeadlineNotice from './RegistrationDeadlineNotice';
 import { useRegistrationClock } from "@/lib/useRegistrationClock";
 import type { ApplicantInvitation } from '@/lib/invitations';
 
@@ -89,7 +90,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
       if (event.key === "Escape") closePanel.current();
       if (event.key !== "Tab") return;
       const controls = Array.from(panel.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]',
+        'button:enabled, a[href], input:enabled, select:enabled, textarea:enabled, [tabindex="0"]:not(:disabled)',
       ) ?? []).filter((element) => element.getClientRects().length > 0);
       const first = controls[0];
       const last = controls[controls.length - 1];
@@ -123,6 +124,8 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   const [currentStatus, setCurrentStatus] = useState<string | null>(null);
   const now = useRegistrationClock(config?.server_now);
   const closed = isRegistrationClosed(config?.closes_at, now);
+  const waitlistApplication = isWaitlistApplication(config, hasExistingSubmission, now);
+  const readOnly = closed && !waitlistApplication;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -133,6 +136,9 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
       setIsBootstrapping(true);
       setIsSubmitted(false);
       setSubmissionErrors({});
+      setProfileValues(null);
+      setConfig(null);
+      setConfigUnavailable(false);
 
       try {
         const [configRes, profileRes, registrationRes] = await Promise.all([
@@ -140,6 +146,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
           apiFetch("/api/profile"),
           apiFetch(`/api/registrations/me?form_key=${FORM_KEY}`),
         ]);
+        if (!registrationRes.ok && registrationRes.status !== 404) throw new Error('Could not load your application.');
 
         if (!cancelled && configRes.ok) {
           const remote = await configRes.json();
@@ -152,6 +159,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
             closes_at: remote.closes_at,
             closes_timezone: remote.closes_timezone,
             server_now: remote.server_now,
+            allow_late_waitlist: remote.allow_late_waitlist,
           });
           setConfigUnavailable(false);
         } else if (!cancelled) {
@@ -183,6 +191,9 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
         }
       } catch {
         if (!cancelled) {
+          setConfig(null);
+          setConfigUnavailable(true);
+          showToast('Could not load your application. Close it and try again.', 'error');
           setHasExistingSubmission(false);
           setSubmissionMode("created");
           setCurrentStatus(null);
@@ -203,10 +214,10 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, showToast]);
 
   const showPrefillBanner =
-    !closed &&
+    !isBootstrapping && !!config && !readOnly &&
     !hasExistingSubmission &&
     profileValues !== null &&
     !prefillBannerDismissed &&
@@ -222,28 +233,36 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
   };
 
   const handleSubmit = async (data: Record<string, unknown>) => {
-    if (closed) return;
+    if (readOnly || isLoading) return;
     setIsLoading(true);
     setSubmissionErrors({});
     try {
       const method = hasExistingSubmission ? "PUT" : "POST";
       const endpoint = hasExistingSubmission
         ? `/api/registrations/me?form_key=${FORM_KEY}`
-        : `/api/registrations?form_key=${FORM_KEY}`;
+        : `/api/registrations?form_key=${FORM_KEY}${waitlistApplication ? '&waitlist=true' : ''}`;
       const res = await apiFetch(endpoint, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        if (res.status === 409) {
+        const body = await res.json().catch(() => null);
+        if (body?.code === 'REGISTRATION_EXISTS') {
+          const existing = await apiFetch(`/api/registrations/me?form_key=${FORM_KEY}`);
+          if (!existing.ok) throw new Error('Your application already exists. Close this panel and reopen it to load your submitted answers.');
+          const saved = await existing.json() as RegistrationResponse;
+          setInitialValues(registrationToFormValues(saved));
+          setCurrentStatus(saved.status ?? null);
           showToast("You've already submitted an application.", "info");
           setHasExistingSubmission(true);
           return;
         }
-        const body = await res.json().catch(() => null);
-        if (body?.code === "REGISTRATION_CLOSED") {
-          setConfig((current) => current ? { ...current, closes_at: body.closes_at, server_now: body.server_now } : current);
+        if (body?.code === "REGISTRATION_CLOSED" || body?.code === 'WAITLIST_ACKNOWLEDGEMENT_REQUIRED') {
+          setConfig((current) => current ? { ...current, closes_at: body.closes_at, server_now: body.server_now, allow_late_waitlist: body.allow_late_waitlist === true } : current);
+        }
+        if (res.status === 404) {
+          setConfigUnavailable(true);
         }
         const feedback = extractSubmissionFeedback(
           body,
@@ -341,12 +360,7 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
 
         {/* Form content */}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-8 sm:py-6">
-          {!isBootstrapping && config?.closes_at && (
-            <p role="status" className="mb-4 rounded-lg bg-red7 p-3 font-poppins text-sm text-red6">
-              {closed ? "Registration closed" : "Registration closes"} · {formatRegistrationDeadline(config.closes_at, config.closes_timezone)}
-              {closed && hasExistingSubmission && <span className="block mt-1">Your submitted answers are available below. Changes are closed.</span>}
-            </p>
-          )}
+          {!isBootstrapping && !configUnavailable && config && <RegistrationDeadlineNotice form={config} closed={closed} waitlistApplication={waitlistApplication} hasSubmission={hasExistingSubmission} />}
           {isBootstrapping ? (
             <div className="flex h-full items-center justify-center">
               <p className="font-poppins text-sm text-gray-500">Loading application…</p>
@@ -364,16 +378,18 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
                 Back to Dashboard
               </button>
             </div>
-          ) : closed && !hasExistingSubmission ? (
-            <p className="font-poppins text-sm text-gray-600">Applications are no longer being accepted.</p>
+          ) : readOnly && !hasExistingSubmission ? (
+            <button onClick={onClose} className="min-h-11 font-poppins text-sm font-semibold text-red5">Back to Dashboard</button>
           ) : isSubmitted ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-center">
               <p className="text-6xl font-jersey10 text-red5">Done!</p>
               <h3 className="text-xl font-poppins font-bold text-red6">
-                {submissionMode === "updated" ? "Application Updated" : "Application Submitted"}
+                {currentStatus === 'waitlisted' ? "You’re on the waitlist" : submissionMode === "updated" ? "Application Updated" : "Application Submitted"}
               </h3>
               <p className="font-poppins text-sm text-gray-500 max-w-xs leading-relaxed">
-                {submissionMode === "updated"
+                {currentStatus === 'waitlisted'
+                  ? "Your application has been received. We’ll email you if a place becomes available."
+                  : submissionMode === "updated"
                   ? "Your application changes have been saved."
                   : "Thanks for applying to Big Red Hacks 2026. We'll review your application and reach out soon."}
               </p>
@@ -392,8 +408,8 @@ export default function ApplicationPanel({ isOpen, onClose, onSubmitted }: Appli
               initialValues={initialValues}
               hideHeader
               submissionErrors={submissionErrors}
-              submitLabel={hasExistingSubmission ? "Update Application" : "Submit Application"}
-              readOnly={closed}
+              submitLabel={waitlistApplication ? "Apply on waitlist" : hasExistingSubmission ? "Update Application" : "Submit Application"}
+              readOnly={readOnly}
             />
           )}
         </div>

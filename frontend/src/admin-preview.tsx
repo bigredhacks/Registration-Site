@@ -26,7 +26,7 @@ interface Student extends AdminStudent {
 interface PreviewForm {
   key: string; title: string; description: string; fields: FormField[];
   is_active: boolean; version: number; updated_at: string;
-  closes_at: string | null; closes_timezone: string;
+  closes_at: string | null; closes_timezone: string; allow_late_waitlist: boolean;
 }
 interface Draft { team_number: number; members: { participant_id: string }[] }
 interface Payload extends Partial<PreviewForm> {
@@ -80,7 +80,7 @@ const fields: FormField[] = [
 const forms: PreviewForm[] = ['registration', 'workshop'].map(key => ({ key,
   title: key === 'registration' ? 'BigRed//Hacks Fall 2026' : 'Workshop RSVP', description: '', fields,
   is_active: true, version: 1, updated_at: '2026-09-05T14:00:00Z',
-  closes_at: key === 'registration' ? '2026-09-19T03:59:00Z' : null, closes_timezone: 'America/New_York',
+  closes_at: key === 'registration' ? '2026-09-19T03:59:00Z' : null, closes_timezone: 'America/New_York', allow_late_waitlist: false,
 }));
 const teams = [
   { id: 'sample-team-1', name: 'Clock Tower', members: [1, 2, 3, 4] },
@@ -337,7 +337,7 @@ window.fetch = async (input, init) => {
   if (path === '/api/admin/form-configs') {
     if (method === 'GET') return json(forms.map(form => ({ ...form, fields_count: form.fields.length, server_now: new Date().toISOString() })));
     if (method === 'POST' && payload.key && !forms.some(form => form.key === payload.key)) {
-      const form: PreviewForm = { key: payload.key, title: payload.title ?? payload.key, description: payload.description ?? '', fields: payload.fields ?? [], is_active: false, version: 1, updated_at: new Date().toISOString(), closes_at: null, closes_timezone: 'America/New_York' };
+      const form: PreviewForm = { key: payload.key, title: payload.title ?? payload.key, description: payload.description ?? '', fields: payload.fields ?? [], is_active: false, version: 1, updated_at: new Date().toISOString(), closes_at: null, closes_timezone: 'America/New_York', allow_late_waitlist: false };
       forms.push(form); return json(form, 201);
     }
   }

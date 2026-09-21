@@ -14,6 +14,8 @@ interface FormConfigRow {
   version: number;
   updated_at: string;
   deadline_supported?: boolean;
+  late_waitlist_supported?: boolean;
+  allow_late_waitlist?: boolean;
   closes_at: string | null;
   closes_timezone: string;
 }
@@ -138,6 +140,7 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
           description: config.description ?? "",
           fields: config.fields,
           is_active: config.is_active,
+          ...(config.late_waitlist_supported === false ? {} : { allow_late_waitlist: config.allow_late_waitlist === true }),
           ...(config.deadline_supported === false ? {} : {
             closes_at: closesAt,
             closes_timezone: config.closes_timezone,
@@ -238,8 +241,34 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
           disabled={!closingTime || config.deadline_supported === false}
           className="self-start text-xs font-poppins font-semibold text-red5 disabled:text-gray-400"
         >
-          {closingTime ? "Clear deadline" : "No deadline"}
+          {closingTime ? "Remove deadline" : "No deadline set"}
         </button>
+        <p className="text-xs font-poppins text-gray-500">
+          Without a deadline, active forms accept normal applications and edits at any time. Removing the deadline reopens them after you save.
+        </p>
+        <div className="rounded-lg bg-red7/40 p-4 font-poppins">
+          <label className="flex items-start gap-3 text-sm font-semibold text-gray-800">
+            <input
+              type="checkbox"
+              className="mt-1 shrink-0 accent-red5"
+              checked={config.allow_late_waitlist === true}
+              disabled={config.late_waitlist_supported === false}
+              onChange={(e) => update((c) => ({ ...c, allow_late_waitlist: e.target.checked }))}
+              aria-describedby="late-waitlist-help"
+            />
+            Accept waitlist applications after the deadline
+          </label>
+          <p id="late-waitlist-help" className="mt-2 text-xs leading-relaxed text-gray-600">
+            New applicants can choose “Apply on waitlist” after registration closes and are automatically marked Waitlisted, visible to them immediately. Existing applications are unchanged and cannot be edited after the deadline.
+          </p>
+          {config.late_waitlist_supported === false ? (
+            <p className="mt-2 text-xs text-amber-800">Waitlist applications are unavailable until the database update is applied.</p>
+          ) : config.allow_late_waitlist && (
+            <p className="mt-2 text-xs font-medium text-red6">
+              {!config.is_active ? "Activate this form to accept applications." : !closingTime ? "Set a deadline to use the waitlist. Without one, applications stay open as normal." : "After the deadline, new applications will go to the waitlist while this form is active."}
+            </p>
+          )}
+        </div>
         <div className="flex flex-wrap items-center gap-3 text-xs font-poppins text-gray-500">
           <label className="flex items-center gap-2">
             <input
@@ -247,11 +276,12 @@ export default function AdminFormEditor({ formKey, onBack }: Props) {
               checked={config.is_active}
               onChange={(e) => update((c) => ({ ...c, is_active: e.target.checked }))}
             />
-            Active (shown to users)
+            Active (visible to applicants)
           </label>
           <span>· Version {config.version}</span>
           <span>· {config.fields.length} fields</span>
         </div>
+        <p className="text-xs font-poppins text-gray-500">Inactive forms are hidden and accept no applications, including waitlist applications. Changes take effect when you save.</p>
       </div>
 
       {/* Fields */}

@@ -13,12 +13,14 @@ const original = { key: 'registration', title: 'Existing form', version: 1, is_a
 let rows;
 let migrated;
 let readError;
-test.beforeEach(() => { rows = [{ ...original }]; migrated = false; readError = false; });
+let waitlistMigrated;
+test.beforeEach(() => { rows = [{ ...original }]; migrated = false; waitlistMigrated = false; readError = false; });
 supabase.from = (table) => {
   assert.equal(table, 'form_configs');
   let columns = '*', key, payload, operation;
   const result = (single = false) => {
     const missing = !migrated && (columns.includes('closes_') || Object.entries(payload ?? {}).some(([name, value]) => name.startsWith('closes_') && value !== undefined));
+    if (!waitlistMigrated && payload?.allow_late_waitlist !== undefined) return { data: null, error: { code: 'PGRST204', message: "Could not find the 'allow_late_waitlist' column" } };
     if (missing) return { data: null, error: { code: 'PGRST204', message: "Could not find the 'closes_at' column of 'form_configs' in the schema cache" } };
     if (readError) return { data: null, error: { code: 'XX000', message: 'Database unavailable' } };
     let row = rows.find(row => row.key === key);
@@ -93,4 +95,35 @@ test('real database failures remain errors instead of empty form lists', async (
   const response = await request(admin, 'get', '/form-configs');
   assert.equal(response.statusCode, 500);
   assert.equal(response.body.error, 'Database unavailable');
+});
+
+
+test('late waitlist writes require migration while unrelated form edits remain available', async () => {
+  const response = await request(admin, 'put', '/form-configs/:key', { title: 'Do not save', allow_late_waitlist: true });
+  assert.equal(response.statusCode, 500);
+  assert.match(response.body.error, /20260921000000_late_waitlist.sql/);
+  assert.equal(rows[0].title, original.title);
+  const legacy = await request(admin, 'get', '/form-configs/:key');
+  assert.equal(legacy.body.late_waitlist_supported, false);
+  assert.equal(legacy.body.allow_late_waitlist, false);
+});
+
+test('waitlist setting survives edits, appears in discovery, and requires a boolean', async () => {
+  migrated = true; waitlistMigrated = true;
+  Object.assign(rows[0], { closes_at: '2020-01-01T00:00:00Z', closes_timezone: 'UTC', allow_late_waitlist: false });
+  assert.equal((await request(admin, 'put', '/form-configs/:key', { allow_late_waitlist: 'true' })).statusCode, 400);
+  const saved = await request(admin, 'put', '/form-configs/:key', { allow_late_waitlist: true });
+  assert.equal(saved.body.late_waitlist_supported, true);
+  assert.equal(saved.body.allow_late_waitlist, true);
+  assert.equal(saved.body.is_closed, true);
+  await request(admin, 'put', '/form-configs/:key', { title: 'Renamed' });
+  for (const [router, path] of [[admin, '/form-configs'], [publicForms, '/']]) {
+    const list = await request(router, 'get', path);
+    assert.equal(list.body[0].allow_late_waitlist, true);
+    assert.equal(list.body[0].late_waitlist_supported, true);
+  }
+  const created = await request(admin, 'post', '/form-configs', { key: 'other', title: 'Other', allow_late_waitlist: true });
+  assert.equal(created.statusCode, 201);
+  assert.equal(created.body.allow_late_waitlist, true);
+  assert.equal((await request(admin, 'put', '/form-configs/:key', { allow_late_waitlist: false })).body.allow_late_waitlist, false);
 });

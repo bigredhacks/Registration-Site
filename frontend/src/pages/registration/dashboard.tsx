@@ -124,7 +124,9 @@ function getApplicationSummary(card: ApplicationCard | undefined) {
       headline: card.started ? card.stateLabel : "Registration closed",
       body: card.started
         ? "Registration has closed. You can review your submitted application."
-        : "The application deadline has passed.",
+        : card.waitlistApplication
+          ? "You can still apply for the waitlist. A spot is not guaranteed."
+          : "The application deadline has passed.",
     };
   }
 
@@ -174,11 +176,15 @@ const Dashboard = () => {
   const refreshRegistrations = useCallback(async () => {
     const current = ++registrationRequest.current;
     try {
-      const res = await apiFetch('/api/registrations/me/all');
+      const [res, formsRes] = await Promise.all([
+        apiFetch('/api/registrations/me/all'), apiFetch('/api/form-configs'),
+      ]);
       if (!res.ok) throw new Error();
       const rows = await res.json();
+      const forms = formsRes.ok ? await formsRes.json() : null;
       if (current !== registrationRequest.current) return;
       setRegistrations(rows);
+      if (forms) setActiveForms(forms);
       setRegistrationsError('');
     } catch {
       if (current === registrationRequest.current) setRegistrationsError('Could not load your application status. Please try again.');
@@ -208,16 +214,10 @@ const Dashboard = () => {
       setEmailVerified(!!user?.email_confirmed_at);
     });
 
-    Promise.all([
-      apiFetch("/api/profile"),
-      apiFetch("/api/form-configs"),
-    ])
-      .then(async ([profileRes, formsRes]) => {
+    apiFetch("/api/profile")
+      .then(async (profileRes) => {
         if (profileRes.ok) {
           setProfile(await profileRes.json());
-        }
-        if (formsRes.ok) {
-          setActiveForms(await formsRes.json());
         }
       })
       .catch(() => undefined);
@@ -242,6 +242,7 @@ const Dashboard = () => {
 
   const handlePanelClose = () => {
     setPanelOpen(false);
+    void refreshRegistrations();
     if (location.pathname === "/register") {
       navigate("/dashboard");
     }
@@ -293,7 +294,7 @@ const Dashboard = () => {
               }} />}
             {(!mainRegistration || registrationCard) && <button
               onClick={() => registrationCard && setPanelOpen(true)}
-              disabled={!registrationCard}
+              disabled={!registrationCard || (registrationCard.closed && !registrationCard.started && !registrationCard.waitlistApplication)}
               className="mt-auto w-full rounded-lg bg-red5 min-h-11 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {registrationCard?.primaryActionLabel ?? "Application Unavailable"}
@@ -388,7 +389,8 @@ const Dashboard = () => {
             {registrationCard && (
               <button
                 onClick={() => openCard(registrationCard)}
-                className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-red7/20 px-4 py-5 text-left transition-colors hover:bg-red7/40"
+                disabled={registrationCard.closed && !registrationCard.started && !registrationCard.waitlistApplication}
+                className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-red7/20 px-4 py-5 text-left transition-colors hover:bg-red7/40 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <div className="flex w-full flex-wrap items-center justify-between gap-3">
                   <p className="font-poppins font-semibold text-gray-900 [overflow-wrap:anywhere]">{registrationCard.title}</p>
@@ -413,8 +415,9 @@ const Dashboard = () => {
               return (
                 <button
                   key={card.key}
+                  disabled={card.closed && !card.started && !card.waitlistApplication}
                   onClick={() => openCard(card)}
-                  className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-white px-4 py-5 text-left transition-colors hover:bg-red7/20"
+                  className="flex flex-col items-start gap-3 rounded-lg border border-red6/20 bg-white px-4 py-5 text-left transition-colors hover:bg-red7/20 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <div className="flex w-full flex-wrap items-center justify-between gap-3">
                     <p className="font-poppins font-semibold text-gray-900 [overflow-wrap:anywhere]">{card.title}</p>
@@ -441,9 +444,9 @@ const Dashboard = () => {
           <div className="flex flex-col items-center">
             <button
               onClick={() => registrationCard && setPanelOpen(true)}
-              disabled={!registrationCard}
+              disabled={!registrationCard || (registrationCard.closed && !registrationCard.started && !registrationCard.waitlistApplication)}
               className="relative w-full cursor-pointer overflow-hidden rounded-xl shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
-              aria-label="Open application form"
+              aria-label={registrationCard?.primaryActionLabel ?? "Application unavailable"}
             >
               <img
                 src={siteBanner}
@@ -473,6 +476,7 @@ const Dashboard = () => {
         isOpen={panelOpen}
         onClose={handlePanelClose}
         onSubmitted={(registration: ApplicationRegistration) => {
+          registrationRequest.current++;
           setRegistrations((prev) => {
             const next = prev.filter((row) => (row.form_key ?? "registration") !== "registration");
             return [
@@ -485,11 +489,12 @@ const Dashboard = () => {
             ];
           });
           setPanelOpen(false);
+          void refreshRegistrations();
           if (location.pathname === "/register") {
             navigate("/dashboard");
           }
           showToast(
-            registration.status ? `Application ${registration.status}.` : "Application saved.",
+            registration.status === "waitlisted" ? "Application submitted. You’re on the waitlist." : registration.status ? `Application ${registration.status}.` : "Application saved.",
             "success",
           );
         }}

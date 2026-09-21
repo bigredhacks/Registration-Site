@@ -324,6 +324,7 @@ const FormConfigUpdateSchema = z.object({
   description: z.string().optional(),
   fields: z.array(FormFieldSchema).optional(),
   is_active: z.boolean().optional(),
+  allow_late_waitlist: z.boolean().optional(),
   closes_at: RegistrationClosesAtSchema.optional(),
   closes_timezone: RegistrationTimezoneSchema.optional(),
 });
@@ -346,6 +347,7 @@ router.get('/form-configs', async (_req: Request, res: Response) => {
       title: row.title,
       description: row.description,
       is_active: row.is_active,
+      allow_late_waitlist: row.allow_late_waitlist,
       closes_at: row.closes_at,
       closes_timezone: row.closes_timezone,
       version: row.version,
@@ -366,6 +368,7 @@ const FormConfigCreateSchema = z.object({
   description: z.string().optional(),
   fields: z.array(FormFieldSchema).default([]),
   is_active: z.boolean().default(false),
+  allow_late_waitlist: z.boolean().optional(),
   closes_at: RegistrationClosesAtSchema.optional(),
   closes_timezone: RegistrationTimezoneSchema.optional(),
 });
@@ -375,7 +378,7 @@ router.post(
   validate({ body: FormConfigCreateSchema }),
   async (req: Request, res: Response) => {
     try {
-      const { key, title, description, fields, is_active, closes_at, closes_timezone } = req.body;
+      const { key, title, description, fields, is_active, closes_at, closes_timezone, allow_late_waitlist } = req.body;
 
       const { data: existing } = await supabase
         .from('form_configs')
@@ -395,6 +398,7 @@ router.post(
           description: description ?? '',
           fields,
           is_active,
+          allow_late_waitlist,
           closes_at,
           closes_timezone,
           version: 1,

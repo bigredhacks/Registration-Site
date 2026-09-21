@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { deadlineToLocalInput, formatRegistrationDeadline, isRegistrationClosed, localInputToDeadline } from "./registrationClosure.ts";
+import { deadlineToLocalInput, formatRegistrationDeadline, isRegistrationClosed, isWaitlistApplication, localInputToDeadline } from "./registrationClosure.ts";
 import { buildApplicationCards } from "./registrationUi.ts";
 
 test("New York date input resolves to an absolute deadline independently of browser zone", () => {
@@ -34,4 +34,27 @@ test("deadline boundary closes unstarted cards and keeps submitted statuses and 
   const submitted = buildApplicationCards(forms, [{ form_key: "registration", status: "approved" }], cutoff)[0];
   assert.equal(submitted.stateLabel, "Approved");
   assert.equal(submitted.primaryActionLabel, "View Application");
+});
+
+test('late waitlist intake starts at the exact deadline and never changes existing submissions', () => {
+  const closes_at = '2026-10-01T00:00:00Z';
+  const cutoff = Date.parse(closes_at);
+  for (const key of ['registration', 'workshop']) {
+    const form = { key, title: 'Application', description: null, version: 1, closes_at, allow_late_waitlist: true };
+    assert.equal(isWaitlistApplication(form, false, cutoff - 1), false);
+    assert.equal(isWaitlistApplication(form, false, cutoff), true);
+    assert.equal(isWaitlistApplication(form, true, cutoff), false);
+    assert.equal(isWaitlistApplication({ ...form, closes_at: null }, false, cutoff), false);
+    assert.equal(isWaitlistApplication({ ...form, allow_late_waitlist: false }, false, cutoff), false);
+    const card = buildApplicationCards([form], [], cutoff)[0];
+    assert.equal(card.closed, true);
+    assert.equal(card.stateLabel, 'Closed');
+    assert.equal(card.primaryActionLabel, 'Apply on waitlist');
+    for (const status of ['pending', 'approved', 'waitlisted', 'rejected']) {
+      const submitted = buildApplicationCards([form], [{ form_key: key, status }], cutoff)[0];
+      assert.equal(submitted.waitlistApplication, false);
+      assert.equal(submitted.status, status);
+      assert.notEqual(submitted.primaryActionLabel, 'Apply on waitlist');
+    }
+  }
 });

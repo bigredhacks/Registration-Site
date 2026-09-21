@@ -180,8 +180,9 @@ export default function AdminFormList({ onSelect }: Props) {
                 <td data-label="Registration closes" className="px-4 py-2 text-gray-600 text-xs">
                   {f.closes_at ? (
                     <>
-                      <span className="block font-semibold">{isRegistrationClosed(f.closes_at, now) ? "Closed" : "Scheduled"}</span>
+                      <span className="block font-semibold">{isRegistrationClosed(f.closes_at, now) ? (f.is_active && f.allow_late_waitlist ? "Waitlist open" : "Closed") : "Scheduled"}</span>
                       {formatRegistrationDeadline(f.closes_at, f.closes_timezone)}
+                      {f.allow_late_waitlist && !isRegistrationClosed(f.closes_at, now) && <span className="block mt-1">Waitlist after deadline</span>}
                     </>
                   ) : "No deadline"}
                 </td>

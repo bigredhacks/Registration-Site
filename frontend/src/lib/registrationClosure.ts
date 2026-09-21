@@ -1,9 +1,15 @@
 export const DEFAULT_REGISTRATION_TIMEZONE = "America/New_York";
 
 export interface RegistrationClosure {
+  allow_late_waitlist?: boolean;
   closes_at?: string | null;
   closes_timezone?: string;
   server_now?: string;
+}
+
+/** Late intake only creates new submissions; it never reopens existing answers. */
+export function isWaitlistApplication(form: RegistrationClosure | null, hasSubmission: boolean, now = Date.now()): boolean {
+  return !hasSubmission && form?.allow_late_waitlist === true && isRegistrationClosed(form.closes_at, now);
 }
 
 export function isRegistrationClosed(closesAt: string | null | undefined, now = Date.now()): boolean {

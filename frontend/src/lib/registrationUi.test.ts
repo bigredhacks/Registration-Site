@@ -56,6 +56,7 @@ test("buildApplicationCards marks active forms with no submission as not started
       version: 1,
       status: null,
       closed: false,
+      waitlistApplication: false,
       closesAt: null,
       closesTimezone: undefined,
       stateLabel: "Not Started",

@@ -2,13 +2,17 @@ import { useNavigate } from "react-router-dom";
 import SideButton from "./SideButton";
 import { ICONS } from "../../constants/icons";
 import { supabase } from "../../config/supabase";
-import { useAdmin } from "@/lib/useAdmin";
+import { useApplicantPreview } from "@/lib/ApplicantPreviewContext";
 
 const SideButtonSet = () => {
   const navigate = useNavigate();
-  const { isAdmin } = useAdmin();
+  const preview = useApplicantPreview();
 
   const handleLogout = async () => {
+    if (import.meta.env.DEV && preview) {
+      window.location.assign('/dashboard');
+      return;
+    }
     await supabase.auth.signOut();
     navigate("/login");
   };
@@ -43,18 +47,6 @@ const SideButtonSet = () => {
       >
         Team
       </SideButton>
-      {isAdmin && (
-        <SideButton
-          to="/admin"
-          iconElement={
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L4 5v6c0 5 3.5 9 8 11 4.5-2 8-6 8-11V5l-8-3z" />
-            </svg>
-          }
-        >
-          Admin
-        </SideButton>
-      )}
       <button
         onClick={handleLogout}
         className="flex items-center gap-2 px-2 h-12 text-sm lg:gap-3 lg:px-4 lg:text-base font-medium rounded-lg transition-colors duration-200 text-white hover:bg-red4 w-full"

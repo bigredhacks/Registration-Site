@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { MemoryRouter } from 'react-router-dom';
+import RegistrationLayout from './components/layouts/RegistrationLayout';
+import { ApplicantPreviewContext } from './lib/ApplicantPreviewContext';
+import { APPLICANT_PERSONAS, resolvePersona } from './preview/applicantPreviewState';
 import ToastProvider from './components/Toast/ToastProvider';
 import { ApprovalWorkspace } from './pages/admin/AdminPage';
 import AdminSelectionProvider from './pages/admin/AdminSelectionProvider';
@@ -427,7 +431,7 @@ window.fetch = async (input, init) => {
 export function Preview() {
   const [tab, setTab] = useState<'users' | 'teams' | 'editor' | 'emails'>('users');
   const [editingKey, setEditingKey] = useState<string | null>(null);
-  return <main className="admin-surface mx-auto min-h-screen max-w-[1600px] bg-red7 px-4 py-6 font-poppins sm:px-8">
+  return <RegistrationLayout><div className="admin-surface min-w-0 py-2 font-poppins lg:px-2">
     <div className="admin-toolbar mb-5"><h1 className="text-3xl font-semibold text-red6">Admin</h1><span className="text-xs text-red6">Sample data preview</span></div>
     <nav aria-label="Admin sections" className="mb-5 flex flex-wrap gap-2">
       {([['users', 'Approvals'], ['teams', 'Team Matching'], ['emails', 'Emails'], ['editor', 'Application Editor']] as const).map(([key, label]) => <button key={key} aria-pressed={tab === key} className={`admin-button ${tab === key ? 'admin-button-primary' : ''}`} onClick={() => setTab(key)}>{label}</button>)}
@@ -435,8 +439,16 @@ export function Preview() {
     <div hidden={tab === 'editor' || tab === 'emails'}><ApprovalWorkspace tab={tab} /></div>
     {tab === 'emails' && <AdminEmails />}
     {tab === 'editor' && (editingKey ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} /> : <AdminFormList onSelect={setEditingKey} />)}
-  </main>;
+  </div></RegistrationLayout>;
 }
+const personaId = resolvePersona(new URLSearchParams(window.location.search).get('persona'));
 const previewRoot = createRoot(document.getElementById('root')!);
-previewRoot.render(<ToastProvider><AdminSelectionProvider><Preview /></AdminSelectionProvider></ToastProvider>);
+previewRoot.render(
+  <ApplicantPreviewContext.Provider value={{ view: 'admin', personaId, personas: APPLICANT_PERSONAS,
+    selectPersona: id => window.location.assign(`/applicant-preview.html?persona=${resolvePersona(id)}#/dashboard`) }}>
+    <MemoryRouter initialEntries={['/admin']}>
+      <ToastProvider><AdminSelectionProvider><Preview /></AdminSelectionProvider></ToastProvider>
+    </MemoryRouter>
+  </ApplicantPreviewContext.Provider>
+);
 if (import.meta.hot) import.meta.hot.dispose(() => { previewRoot.unmount(); window.fetch = originalFetch; });

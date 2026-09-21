@@ -1,5 +1,6 @@
 import { memo, useRef, useState } from "react";
 import SideButtonSet from "./SideButtonSet";
+import SidebarTools from './SidebarTools';
 import logo from "@/assets/brh_logo_sidebar.png";
 
 const Sidebar = memo(() => {
@@ -41,12 +42,15 @@ const Sidebar = memo(() => {
       <nav
         id="registration-navigation"
         aria-label="Main navigation"
-        className={`${menuOpen ? "grid" : "hidden"} mt-4 grid-cols-2 gap-2 lg:mt-0 lg:block lg:flex-1 lg:space-y-2`}
+        className={`${menuOpen ? "flex" : "hidden"} mt-4 min-h-0 flex-col lg:mt-0 lg:flex lg:flex-1`}
         onClick={(event) => {
           if ((event.target as HTMLElement).closest("a, button")) setMenuOpen(false);
         }}
       >
-        <SideButtonSet />
+        <div className="grid grid-cols-2 gap-2 pb-4 lg:flex lg:flex-col">
+          <SideButtonSet />
+        </div>
+        <SidebarTools />
       </nav>
     </aside>
   );

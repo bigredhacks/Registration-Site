@@ -30,7 +30,7 @@ interface UserRegistrationSummary extends ApplicantInvitation {
 }
 
 function useCountdown(target: Date) {
-  const calc = () => {
+  const calc = useCallback(() => {
     const diff = target.getTime() - Date.now();
     if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
     return {
@@ -39,18 +39,12 @@ function useCountdown(target: Date) {
       minutes: Math.floor((diff % 3600000) / 60000),
       seconds: Math.floor((diff % 60000) / 1000),
     };
-  };
+  }, [target]);
   const [countdown, setCountdown] = useState(calc);
-  const started = useRef(false);
-
-  if (!started.current) {
-    started.current = true;
-    const tick = () => {
-      setCountdown(calc());
-      setTimeout(tick, 1000);
-    };
-    setTimeout(tick, 1000);
-  }
+  useEffect(() => {
+    const timer = window.setInterval(() => setCountdown(calc()), 1000);
+    return () => window.clearInterval(timer);
+  }, [calc]);
 
   return countdown;
 }

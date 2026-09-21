@@ -75,7 +75,9 @@ The applicant and admin pages are wrapped in `components/ProtectedRoute.tsx`.
 the Express middleware is the authorization boundary.
 
 `components/layouts/RegistrationLayout.tsx` and `components/SideBar/` provide the
-authenticated shell. `Modal`, `ConfirmationDialog`, `SearchableCombobox`,
+authenticated shell. `SideButtonSet` holds the five primary buttons;
+`SidebarTools` anchors Admin at the bottom and provides the development-only
+applicant preview link/switcher. `Modal`, `ConfirmationDialog`, `SearchableCombobox`,
 `AdminSelect`, and `Toast/` are shared UI primitives. Theme colors, fonts, Tailwind
 imports, and global styles live in `src/index.css`; landing styles are in
 `App.css`, and admin styles in `pages/admin/admin.css`. Images live in
@@ -142,7 +144,20 @@ against fictional in-memory API fixtures. `stats-preview.html` /
 `src/stats-preview.tsx` provide synthetic metrics. They are Vite development
 entries and are not included in the normal production build. The admin preview
 explicitly rejects non-development execution; keep its fixtures separate from
-real authorization and API behavior.
+real authorization and API behavior. It uses the shared `RegistrationLayout`
+with the existing sidebar; its applicant links return to the selected persona.
+
+`applicant-preview.html` / `src/applicant-preview.tsx` use the actual Dashboard,
+Profile, Register, and Team pages with independent fictional personas defined in
+`src/preview/applicantPreviewState.ts`. Hash routes keep navigation inside this
+development-only entry; the `persona` query parameter selects a starting scenario.
+Local form/RSVP/team actions persist in memory per persona until reset/reload.
+All fetches are intercepted, including sample CSV options; unsupported requests
+fail locally. The Supabase client on the exact applicant and admin development
+preview pages uses a dummy host with persistence and refresh disabled, leaving
+real sessions untouched.
+`ApplicantPreviewContext` carries only UI controls, never fixture data or auth
+privileges. Production builds exclude the preview entry, fixtures, and switcher.
 
 ## Backend map and authorization
 

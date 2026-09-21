@@ -4,7 +4,7 @@ const path = require('node:path');
 require('ts-node').register({project:path.resolve(__dirname,'../../tsconfig.json'),transpileOnly:true});
 const { addEmailBranding, defaultTemplateHtml, DEFAULT_EMAIL_TEMPLATES, renderEmailTemplate } = require('./emailTemplates.ts');
 
-test('all four email templates render a public logo URL and contact link without unresolved placeholders',()=>{
+test('all email templates render a public logo URL and contact link without unresolved placeholders',()=>{
   for(const kind of Object.keys(DEFAULT_EMAIL_TEMPLATES)) {
     const html=defaultTemplateHtml(kind);
     assert.match(html,/\{\{logo_url\}\}/);
@@ -24,4 +24,15 @@ test('older Storage layouts gain branding once and preserve customized content',
   assert.match(updated,/\{\{first_name\}\}/);
   assert.equal(addEmailBranding(updated),updated);
   assert.match(renderEmailTemplate('confirmation','Jamie',undefined,undefined,{...DEFAULT_EMAIL_TEMPLATES.confirmation,html:legacy}).html,/Hi Jamie,/);
+});
+
+test('announcements reuse the shared layout with editable escaped copy and no invitation extras', () => {
+  const template = { ...DEFAULT_EMAIL_TEMPLATES.announcement, html: defaultTemplateHtml('announcement'), subject: 'Event update', body: 'Doors open at 6.\n\nBring <your laptop> & a charger.' };
+  const rendered = renderEmailTemplate('announcement', 'Jamie <Test>', undefined, undefined, template);
+  assert.equal(rendered.subject, 'Event update');
+  assert.match(rendered.html, /Hi Jamie &lt;Test&gt;,/);
+  assert.match(rendered.html, /Bring &lt;your laptop&gt; &amp; a charger/);
+  assert.match(rendered.text, /Bring <your laptop> & a charger/);
+  assert.match(rendered.html, /background:#FDECEA/);
+  assert.doesNotMatch(rendered.html, /Please accept by|Already responded|href="[^"]*\/dashboard"|\{\{/);
 });

@@ -6,7 +6,7 @@ import { renderEmailTemplate, type EmailTemplate, type EmailKind } from '../../.
 import AdminTaskDialog from './AdminTaskDialog';
 import EmailPreview from './EmailPreview';
 
-interface Settings { template: EmailTemplate; site_url: string; deadline: string; time_zone: string; sample_deadline: boolean }
+interface Settings { template: EmailTemplate; site_url: string; deadline: string | null; time_zone: string; sample_deadline: boolean }
 interface TestRequest { kind: EmailKind; to: string; first_name: string; form_title: string; expected_version: number; request_id: string }
 
 export default function AdminTestEmail({ onQueued }: { onQueued: () => void }) {
@@ -54,7 +54,7 @@ export default function AdminTestEmail({ onQueued }: { onQueued: () => void }) {
     {open && <AdminTaskDialog title="Send test email" busy={busy} onClose={() => setOpen(false)}>
       <form className="space-y-4" onSubmit={event => { event.preventDefault(); void send(); }}>
         <label className="block text-sm">Template<AdminSelect fullWidth aria-label="Test email template" className="admin-input mt-2" value={kind} disabled={busy} onChange={value => { setSettings(null); setKind(value as EmailKind); }}
-          options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }, { value: 'waitlisted', label: 'Waitlisted' }]} /></label>
+          options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }, { value: 'waitlisted', label: 'Waitlisted' }, { value: 'announcement', label: 'General announcement' }]} /></label>
         <label className="block text-sm">Send to<input className="admin-input mt-2 w-full" type="email" required maxLength={254} placeholder="you@example.com" value={to} disabled={busy} onChange={event => setTo(event.target.value)} /></label>
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block text-sm">First name<input className="admin-input mt-2 w-full" required maxLength={100} value={firstName} disabled={busy} onChange={event => setFirstName(event.target.value)} /></label>

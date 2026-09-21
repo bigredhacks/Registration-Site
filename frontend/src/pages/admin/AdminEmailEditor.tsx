@@ -5,10 +5,11 @@ import { useToast } from '@/components/Toast/ToastContext';
 import { renderEmailTemplate, type EmailTemplate, type EmailKind } from '../../../../backend/src/utils/emailTemplates';
 import EmailPreview from './EmailPreview';
 
-interface Settings { template: EmailTemplate; deadline: string; time_zone: string; site_url: string; sample_deadline: boolean }
-export default function AdminEmailEditor() {
+interface Settings { template: EmailTemplate; deadline: string | null; time_zone: string; site_url: string; sample_deadline: boolean }
+export default function AdminEmailEditor({ fixedKind, onReady }: { fixedKind?: EmailKind; onReady?: (version: number | null) => void }) {
   const { showToast } = useToast();
-  const [kind, setKind] = useState<EmailKind>('approved');
+  const [selectedKind, setKind] = useState<EmailKind>('approved');
+  const kind = fixedKind ?? selectedKind;
   const [settings, setSettings] = useState<Settings | null>(null);
   const [draft, setDraft] = useState<EmailTemplate | null>(null);
   const [editing, setEditing] = useState(false);
@@ -24,6 +25,7 @@ export default function AdminEmailEditor() {
     return () => { current = false; };
   }, [kind, reload]);
   const dirty = !!draft && !!settings && (draft.subject !== settings.template.subject || draft.body !== settings.template.body || draft.button_label !== settings.template.button_label || draft.html !== settings.template.html);
+  useEffect(() => { onReady?.(settings && !editing && !dirty && !saving && !error ? settings.template.version : null); }, [settings, editing, dirty, saving, error, onReady]);
   const preview = draft && settings ? renderEmailTemplate(kind, 'Alex', undefined, settings.site_url, draft, settings.deadline, settings.time_zone) : null;
   const save = async () => {
     if (!draft || !settings || saving) return;
@@ -37,8 +39,8 @@ export default function AdminEmailEditor() {
     finally { setSaving(false); }
   };
   return <div className="space-y-4">
-    <div className="admin-toolbar"><AdminSelect aria-label="Email template" className="admin-input" value={kind} disabled={dirty || saving} onChange={value => setKind(value as EmailKind)}
-      options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }, { value: 'waitlisted', label: 'Waitlisted' }]} />
+    <div className="admin-toolbar">{fixedKind ? <h2 className="font-semibold">General announcement</h2> : <AdminSelect aria-label="Email template" className="admin-input" value={kind} disabled={dirty || saving} onChange={value => setKind(value as EmailKind)}
+      options={[{ value: 'confirmation', label: 'Application received' }, { value: 'approved', label: 'Approved' }, { value: 'rejected', label: 'Denied' }, { value: 'waitlisted', label: 'Waitlisted' }]} />}
       {draft && !editing && <button className="admin-button" onClick={() => setEditing(true)}>Edit email</button>}
     </div>
     {error && <p role="alert" className="text-sm text-red6">{error} <button className="admin-text-button" disabled={saving} onClick={() => setReload(reload + 1)}>Reload</button></p>}
@@ -48,7 +50,7 @@ export default function AdminEmailEditor() {
           <label className="text-sm">Subject<input className="admin-input mt-1 w-full" value={draft.subject} maxLength={200} required disabled={saving} onChange={event => setDraft({ ...draft, subject: event.target.value })} /></label>
           <label className="text-sm">Message<textarea className="admin-input mt-1 min-h-60 w-full resize-y leading-relaxed" value={draft.body} maxLength={10000} required disabled={saving} onChange={event => setDraft({ ...draft, body: event.target.value })} /></label>
           <p className="admin-meta">The greeting adds each applicant’s first name.{kind === 'approved' ? ' The deadline and dashboard link are added automatically.' : ''}</p>
-          {kind !== 'rejected' && <label className="text-sm">Button text<input className="admin-input mt-1 w-full" value={draft.button_label} maxLength={80} required disabled={saving} onChange={event => setDraft({ ...draft, button_label: event.target.value })} /></label>}
+          {kind !== 'rejected' && kind !== 'announcement' && <label className="text-sm">Button text<input className="admin-input mt-1 w-full" value={draft.button_label} maxLength={80} required disabled={saving} onChange={event => setDraft({ ...draft, button_label: event.target.value })} /></label>}
           <details><summary className="admin-text-button cursor-pointer">HTML template</summary>
             <label className="text-sm">HTML and inline CSS<textarea aria-label="HTML template" className="admin-input mt-2 min-h-80 w-full resize-y font-mono text-xs" value={draft.html ?? ''} maxLength={50000} required disabled={saving} onChange={event => setDraft({ ...draft, html: event.target.value })} /></label>
             <p className="admin-meta">Saved as template.html in Supabase Storage. Use {'{{message_html}}'} for the message and {'{{first_name}}'} for the applicant’s name.{kind === 'approved' ? ' Keep {{deadline_sentence}} and {{dashboard_url}} in the template.' : ''}</p>

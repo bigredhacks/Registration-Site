@@ -101,4 +101,4 @@ The development admin preview includes synthetic draft/released decisions and RS
 
 ## Email and team operations
 
-See [email delivery and team management](docs/email-and-team-update.md) for the five required migrations, worker configuration, editable email templates, decision-email workflow, shared invitation deadline and team deletion behavior.
+See [email delivery and team management](docs/email-and-team-update.md) for the six required migrations, worker configuration, editable email templates, filtered general announcements, decision-email workflow, shared invitation deadline and team deletion behavior.

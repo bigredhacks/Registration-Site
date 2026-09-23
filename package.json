@@ -13,6 +13,8 @@
     "build:frontend": "npm run build -w frontend",
     "build:backend": "npm run build -w backend",
     "dev": "concurrently --kill-others --names frontend,backend \"npm run dev -w frontend\" \"npm run dev -w backend -- --exitcrash\"",
+    "dev:localdb": "concurrently --kill-others --names frontend,backend \"npm run dev -w frontend -- --mode localdb\" \"DOTENV_CONFIG_PATH=.env.localdb.local npm run dev -w backend -- --exitcrash\"",
+    "email:worker:localdb": "DOTENV_CONFIG_PATH=.env.localdb.local npm run email:worker -w backend",
     "build": "npm run build:frontend && npm run build:backend",
     "lint": "npm run lint -w frontend",
     "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\"",

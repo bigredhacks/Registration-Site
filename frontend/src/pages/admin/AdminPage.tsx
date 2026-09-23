@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import RegistrationLayout from "@/components/layouts/RegistrationLayout";
 import { useAdmin } from "@/lib/useAdmin";
 import AdminUsers from "./AdminUsers";
+import AdminApprovals from "./AdminApprovals";
 import AdminStats from "./AdminStats";
 import AdminEmails from "./AdminEmails";
 import AdminFormEditor from "./AdminFormEditor";
@@ -14,10 +15,11 @@ import AdminSelectionActions from "./AdminSelectionActions";
 import { useAdminSelection } from "./AdminSelectionContext";
 import AdminSelect from "@/components/AdminSelect";
 
-type Tab = "editor" | "stats" | "users" | "teams" | "emails";
+type Tab = "editor" | "stats" | "approvals" | "users" | "teams" | "emails";
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "users", label: "Approvals" },
+  { id: "approvals", label: "Approvals" },
+  { id: "users", label: "Users" },
   { id: "teams", label: "Team Matching" },
   { id: "editor", label: "Application Editor" },
   { id: "stats", label: "Stats" },
@@ -26,7 +28,8 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function AdminPage() {
   const { loading, isAdmin, error } = useAdmin();
-  const [tab, setTab] = useState<Tab>("users");
+  const [tab, setTab] = useState<Tab>("approvals");
+  const [usersOpened, setUsersOpened] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
 
   if (loading) {
@@ -73,7 +76,7 @@ export default function AdminPage() {
               <button
                 key={t.id}
                 aria-pressed={active}
-                onClick={() => setTab(t.id)}
+                onClick={() => { setTab(t.id); if (t.id === 'users') setUsersOpened(true); }}
                 className={`px-3 sm:px-6 py-3 text-sm sm:text-base font-poppins font-semibold rounded-t-lg transition-colors ${
                   active
                     ? "bg-red5 text-white"
@@ -88,9 +91,10 @@ export default function AdminPage() {
 
         {/* Tab body */}
         <div className="min-w-0 bg-red7 rounded-xl sm:rounded-tl-none p-3 sm:p-6 min-h-[60vh] shadow-sm">
-          <div hidden={tab !== "users" && tab !== "teams"}>
+          <div hidden={tab !== "approvals" && tab !== "teams"}>
             <ApprovalWorkspace tab={tab} />
           </div>
+          {usersOpened && <div hidden={tab !== "users"}><AdminUsers /></div>}
           {tab === "stats" && <AdminStats />}
           {tab === "emails" && <AdminEmails />}
           {tab === "editor" && (
@@ -119,7 +123,7 @@ export function ApprovalWorkspace({ tab }: { tab: Tab }) {
     </div>
     <div className="admin-approval-workspace">
       <div className="min-w-0" key={`browse-${formKey}`} id="admin-browse-list">
-        <div hidden={tab !== 'users'}><AdminUsers /></div>
+        <div hidden={tab !== 'approvals'}><AdminApprovals /></div>
         <fieldset disabled={busy} hidden={tab !== 'teams'}><AdminTeamMatching /></fieldset>
       </div>
       {tab === 'teams' && <AdminSelectionActions />}

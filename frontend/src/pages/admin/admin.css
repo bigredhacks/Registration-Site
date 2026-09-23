@@ -1,6 +1,7 @@
 .admin-surface [hidden] { display: none !important; }
 .admin-approval-workspace { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: 20px; font-family: var(--font-poppins); font-size: 14px; color: #39272a; }
 .admin-approval-workspace fieldset { min-width: 0; }
+.admin-users-view { min-width: 0; font-family: var(--font-poppins); font-size: 14px; color: #39272a; }
 .admin-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .admin-toolbar h2, .admin-selection-panel h2, .admin-detail h2 { font-size: 16px; font-weight: 600; }
 .admin-search { display: flex; flex: 1 1 250px; gap: 8px; min-width: 0; }

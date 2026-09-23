@@ -18,7 +18,7 @@
     "build": "npm run build:frontend && npm run build:backend",
     "lint": "npm run lint -w frontend",
     "test": "node --test \"frontend/src/**/*.test.{ts,js}\" \"backend/src/**/*.test.{ts,js}\"",
-    "test:database": "node --test supabase/tests/emailQueue.test.js supabase/tests/emailDeadline.test.js supabase/tests/emailTemplateStorage.test.js supabase/tests/releaseDecisionEmails.test.js"
+    "test:database": "node --test supabase/tests/emailQueue.test.js supabase/tests/emailDeadline.test.js supabase/tests/emailTemplateStorage.test.js supabase/tests/releaseDecisionEmails.test.js supabase/tests/adminUsers.test.js"
   },
   "dependencies": {
     "serverless-http": "^3.2.0"

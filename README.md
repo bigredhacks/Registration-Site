@@ -42,8 +42,6 @@ Before deploying this feature, apply only `supabase/migrations/20260920000000_ad
 
 Run `npm run test:database` for the directory's query and permission coverage. After deployment, verify an admin can find an account with no application, select different forms, and open details; verify ordinary accounts cannot call the directory endpoints or functions. A rollback can remove the Users UI/routes while leaving the unused read-only functions in place.
 
-Per-user application access is a separate, unimplemented follow-up: [later-session handoff](ADMIN_USER_APPLICATION_ACCESS.md).
-
 ## Local applicant preview
 
 Run `npm run dev:frontend` and open `/applicant-preview.html` on the Vite server (normally `http://localhost:5173/applicant-preview.html`). No sign-in or backend is required. In a normal local session, **View as applicant** appears above **Admin** at the bottom of the sidebar; the admin sample preview also links to it. Production continues to show **Admin** only to organizers and does not include the applicant preview or its switcher.

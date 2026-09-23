@@ -10,6 +10,8 @@ import AdminSelectionProvider from './pages/admin/AdminSelectionProvider';
 import AdminFormEditor from './pages/admin/AdminFormEditor';
 import AdminFormList from './pages/admin/AdminFormList';
 import AdminEmails from './pages/admin/AdminEmails';
+import AdminUsers from './pages/admin/AdminUsers';
+import { previewUsers } from './pages/admin/adminUsersPreview';
 import type { ApprovalAnswerFilter, ApprovalFilterField } from './pages/admin/AdminApprovalFilters';
 import type { AdminStudent, ReleaseDecision } from './pages/admin/adminApprovalState';
 import type { FormField } from './lib/formConfig';
@@ -215,6 +217,11 @@ window.fetch = async (input, init) => {
   const payload: Payload = typeof init?.body === 'string' ? JSON.parse(init.body) : input instanceof Request && method !== 'GET' ? await input.clone().json() : {};
   const formKey = payload.form_key ?? url.searchParams.get('form_key') ?? 'registration';
   const pool = payload.pool_id ?? url.searchParams.get('pool_id') ?? 'default';
+
+  if ((path === '/api/admin/users' || path.startsWith('/api/admin/users/')) && method === 'GET') {
+    const result = previewUsers(path, url.searchParams);
+    return result ? json(result) : json({ error: 'User not found.' }, 404);
+  }
 
   if (path === '/api/admin/invitations/deadline') {
     let expired_count = expireSampleInvitations();
@@ -429,14 +436,15 @@ window.fetch = async (input, init) => {
 };
 
 export function Preview() {
-  const [tab, setTab] = useState<'users' | 'teams' | 'editor' | 'emails'>('users');
+  const [tab, setTab] = useState<'approvals' | 'users' | 'teams' | 'editor' | 'emails'>('approvals');
   const [editingKey, setEditingKey] = useState<string | null>(null);
   return <RegistrationLayout><div className="admin-surface min-w-0 py-2 font-poppins lg:px-2">
     <div className="admin-toolbar mb-5"><h1 className="text-3xl font-semibold text-red6">Admin</h1><span className="text-xs text-red6">Sample data preview</span></div>
     <nav aria-label="Admin sections" className="mb-5 flex flex-wrap gap-2">
-      {([['users', 'Approvals'], ['teams', 'Team Matching'], ['emails', 'Emails'], ['editor', 'Application Editor']] as const).map(([key, label]) => <button key={key} aria-pressed={tab === key} className={`admin-button ${tab === key ? 'admin-button-primary' : ''}`} onClick={() => setTab(key)}>{label}</button>)}
+      {([['approvals', 'Approvals'], ['users', 'Users'], ['teams', 'Team Matching'], ['emails', 'Emails'], ['editor', 'Application Editor']] as const).map(([key, label]) => <button key={key} aria-pressed={tab === key} className={`admin-button ${tab === key ? 'admin-button-primary' : ''}`} onClick={() => setTab(key)}>{label}</button>)}
     </nav>
-    <div hidden={tab === 'editor' || tab === 'emails'}><ApprovalWorkspace tab={tab} /></div>
+    <div hidden={tab !== 'approvals' && tab !== 'teams'}><ApprovalWorkspace tab={tab} /></div>
+    <div hidden={tab !== 'users'}><AdminUsers /></div>
     {tab === 'emails' && <AdminEmails />}
     {tab === 'editor' && (editingKey ? <AdminFormEditor formKey={editingKey} onBack={() => setEditingKey(null)} /> : <AdminFormList onSelect={setEditingKey} />)}
   </div></RegistrationLayout>;

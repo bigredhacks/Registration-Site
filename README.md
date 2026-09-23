@@ -34,6 +34,14 @@ Also apply `supabase/migrations/20260905_unique_team_membership.sql` before depl
 
 Approvals and Team Matching share a selection per application form. Selection survives tab, search, and page changes during the current admin session; refreshing the browser resets it. Saving draft decisions does not send emails; the release dialog offers optional decision emails. Pasted lists match exact emails or full names and require resolving ambiguous names. Resume matching with Box is not connected yet.
 
+### Admin Users directory
+
+Admin → Users lists every Auth account, including accounts without a profile or application. Choose an application to inspect its submission status without excluding other accounts. Search names/account emails, filter profile completion, submission, email verification and signup dates (inclusive UTC days), and open a user for read-only account, profile and application details. Decision changes remain in Approvals. Profile completion matches the dashboard's 13-field meter, including optional fields; it does not represent an explicit profile submission.
+
+Before deploying this feature, apply only `supabase/migrations/20260920000000_admin_users_directory.sql` to the intended Supabase project, then deploy backend and frontend together. The migration adds read-only, service-role-only functions; it does not change existing user data or application availability. The migration directory is not a complete schema baseline: inspect the target `auth.users`, `profiles`, and `registrations` columns and existing `(user_id, form_key)` uniqueness, and rehearse the new migration with synthetic records before applying it. Do not reset the remote database or replay unrelated migrations.
+
+Run `npm run test:database` for the directory's query and permission coverage. After deployment, verify an admin can find an account with no application, select different forms, and open details; verify ordinary accounts cannot call the directory endpoints or functions. A rollback can remove the Users UI/routes while leaving the unused read-only functions in place.
+
 ## Local applicant preview
 
 Run `npm run dev:frontend` and open `/applicant-preview.html` on the Vite server (normally `http://localhost:5173/applicant-preview.html`). No sign-in or backend is required. In a normal local session, **View as applicant** appears above **Admin** at the bottom of the sidebar; the admin sample preview also links to it. Production continues to show **Admin** only to organizers and does not include the applicant preview or its switcher.

@@ -7,6 +7,7 @@ import { RegistrationStatusSchema } from '../types/registration';
 import adminApprovalsRouter from './adminApprovals';
 import adminEmailsRouter from './adminEmails';
 import adminInvitationsRouter from './adminInvitations';
+import adminUsersRouter from './adminUsers';
 
 import { buildMetrics, metricsQuerySchema, MetricRow } from '../utils/adminMetrics';
 import { formConfigWriteError, RegistrationClosesAtSchema, RegistrationTimezoneSchema, registrationClosureResponse } from '../utils/registrationClosure';
@@ -32,6 +33,7 @@ router.get('/me', async (req: Request, res: Response) => {
 });
 
 router.use(requireAdmin);
+router.use('/users', adminUsersRouter);
 router.use('/approval', adminApprovalsRouter);
 router.use('/emails', adminEmailsRouter);
 router.use('/invitations', adminInvitationsRouter);

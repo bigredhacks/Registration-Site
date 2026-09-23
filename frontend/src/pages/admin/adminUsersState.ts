@@ -40,6 +40,10 @@ export const PROFILE_STATE_OPTIONS: { value: ProfileState; label: string }[] = [
   { value: 'complete', label: 'Complete' },
 ];
 
+export const PROFILE_STATUS_CLASS: Record<ProfileState, string> = {
+  complete: 'admin-status-approved', incomplete: 'admin-status-waitlisted', not_started: 'admin-status-rejected',
+};
+
 export function profileStateLabel(state: ProfileState): string {
   return PROFILE_STATE_OPTIONS.find(option => option.value === state)?.label ?? state;
 }

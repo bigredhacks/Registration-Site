@@ -3,7 +3,7 @@ import { apiFetch } from '@/lib/api';
 import AdminSelect from '@/components/AdminSelect';
 import AdminTaskDialog from './AdminTaskDialog';
 import AdminUserDetail from './AdminUserDetail';
-import { PROFILE_STATE_OPTIONS, profileStateLabel, userName, type AdminUserDetail as UserDetail, type AdminUserRow } from './adminUsersState';
+import { PROFILE_STATE_OPTIONS, PROFILE_STATUS_CLASS, profileStateLabel, userName, type AdminUserDetail as UserDetail, type AdminUserRow } from './adminUsersState';
 
 const PAGE_SIZES = [25, 50, 100, 200];
 const PAGE_SIZE_KEY = 'brh.admin.users.pageSize';
@@ -70,7 +70,7 @@ export default function AdminUsers() {
       sort: sort.column, dir: sort.dir, limit: String(pageSize), offset: String(page * pageSize),
     });
     apiFetch(`/api/admin/users?${params}`).then(async response => {
-      const body = await response.json();
+      const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof body.error === 'string' ? body.error : 'Could not load users.');
       if (!current) return;
       setRows(body.data ?? []);
@@ -91,8 +91,8 @@ export default function AdminUsers() {
     requestAnimationFrame(() => detailPanel.current?.focus());
     try {
       const response = await apiFetch(`/api/admin/users/${encodeURIComponent(userId)}?${new URLSearchParams({ form_key: formKey })}`);
-      const body = await response.json();
       if (!response.ok) throw new Error(response.status === 404 ? 'This user no longer exists.' : 'Could not load user details.');
+      const body = await response.json();
       if (request === detailRequest.current) setDetail(body);
     } catch (cause) {
       if (request === detailRequest.current) setDetailError(cause instanceof Error ? cause.message : 'Could not load user details.');
@@ -110,7 +110,7 @@ export default function AdminUsers() {
   const activeFilters = [
     { label: query && `Search: ${query}`, clear: () => { setSearch(''); setQuery(''); setPage(0); } },
     { label: filters.profile && `Profile: ${profileStateLabel(filters.profile as AdminUserRow['profile_state'])}`, clear: () => updateFilters({ ...filters, profile: '' }) },
-    { label: filters.submitted && `Application: ${filters.submitted === 'true' ? 'Submitted' : 'Not submitted'}`, clear: () => updateFilters({ ...filters, submitted: '' }) },
+    { label: filters.submitted && `Submission: ${filters.submitted === 'true' ? 'Submitted' : 'Not submitted'}`, clear: () => updateFilters({ ...filters, submitted: '' }) },
     { label: filters.verified && `Email: ${filters.verified === 'true' ? 'Verified' : 'Not verified'}`, clear: () => updateFilters({ ...filters, verified: '' }) },
     { label: filters.from && `Signed up from: ${filters.from}`, clear: () => updateFilters({ ...filters, from: '' }) },
     { label: filters.to && `Signed up through: ${filters.to}`, clear: () => updateFilters({ ...filters, to: '' }) },
@@ -141,7 +141,7 @@ export default function AdminUsers() {
         <label className="admin-meta admin-primary-filter">Profile
           <AdminSelect fullWidth aria-label="Profile status" className="admin-input" value={filters.profile} placeholder="Any" options={PROFILE_STATE_OPTIONS} onChange={value => updateFilters({ ...filters, profile: value })} />
         </label>
-        <label className="admin-meta admin-primary-filter">Application
+        <label className="admin-meta admin-primary-filter">Submission
           <AdminSelect fullWidth aria-label="Application submitted" className="admin-input" value={filters.submitted} placeholder="Any" options={[{ value: 'true', label: 'Submitted' }, { value: 'false', label: 'Not submitted' }]} onChange={value => updateFilters({ ...filters, submitted: value })} />
         </label>
         <button className="admin-button" onClick={() => setFilterDraft(filters)}>More filters</button>
@@ -183,8 +183,8 @@ export default function AdminUsers() {
           <td data-label="User"><div><p>{userName(row)}</p>{row.email && <p className="admin-meta break-all">{row.email}</p>}</div></td>
           <td data-label="School">{row.school || '—'}</td>
           <td data-label="Signed up"><SignupDate value={row.created_at} /></td>
-          <td data-label="Profile"><div><span className={`admin-status ${row.profile_state === 'complete' ? 'admin-status-approved' : ''}`}>{profileStateLabel(row.profile_state)}</span><p className="admin-meta mt-1">{row.profile_pct}% complete</p></div></td>
-          <td data-label="Application"><div><span className="admin-status">{row.registration_id !== null ? 'Submitted' : 'Not submitted'}</span>{row.submitted_at && <p className="admin-meta mt-1"><SignupDate value={row.submitted_at} /></p>}</div></td>
+          <td data-label="Profile"><div><span className={`admin-status ${PROFILE_STATUS_CLASS[row.profile_state]}`}>{profileStateLabel(row.profile_state)}</span><p className="admin-meta mt-1">{row.profile_pct}% complete</p></div></td>
+          <td data-label="Application"><div><span className={`admin-status ${row.registration_id !== null ? 'admin-status-approved' : 'admin-status-rejected'}`}>{row.registration_id !== null ? 'Submitted' : 'Not submitted'}</span>{row.submitted_at && <p className="admin-meta mt-1"><SignupDate value={row.submitted_at} /></p>}</div></td>
           <td data-label="Actions"><button className="admin-button" id={`view-user-${row.user_id}`} onClick={() => void loadDetail(row.user_id)}>View user<span className="sr-only"> {userName(row)}</span></button></td>
         </tr>)}</tbody>
       </table></div>

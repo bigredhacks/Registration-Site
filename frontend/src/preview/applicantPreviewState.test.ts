@@ -75,6 +75,18 @@ test('profile, matching, and team actions use independent in-memory applicants',
   assert.equal(other.team, null);
 });
 
+test('preview Discord invite appears only after an approved invitation is accepted', () => {
+  const discord = (applicant: ReturnType<typeof createPreviewApplicant>) => (call(applicant, 'GET', '/api/registrations/me/discord').body as { invite_url: string | null }).invite_url;
+  for (const id of ['new', 'review', 'draft-approved', 'waitlisted', 'declined', 'expired', 'rejected'] as const) {
+    assert.equal(discord(createPreviewApplicant(id, now)), null, id);
+  }
+  assert.ok(discord(createPreviewApplicant('accepted', now)));
+  const invited = createPreviewApplicant('invited', now);
+  assert.equal(discord(invited), null);
+  call(invited, 'PUT', '/api/registrations/me/invitation-response', { response: 'accepted' });
+  assert.ok(discord(invited));
+});
+
 test('preview API rejects unknown actions and returns detached response snapshots', () => {
   const applicant = createPreviewApplicant('new', now);
   for (const path of ['/api/admin/emails/tests', '/api/admin/approval/release', '/api/unknown']) {

@@ -232,6 +232,15 @@ const Dashboard = () => {
   const mainRegistration = registrations.find(row => row.form_key === 'registration');
   const registrationSummary = registrationsLoading ? { headline: 'Loading…', body: 'Checking your application status.' }
     : mainRegistration ? invitationPresentation(mainRegistration) : getApplicationSummary(registrationCard);
+  const invitationResponse = mainRegistration?.invitation_response;
+  const [discordInvite, setDiscordInvite] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    apiFetch('/api/registrations/me/discord')
+      .then(async res => { if (current && res.ok) setDiscordInvite((await res.json()).invite_url ?? null); })
+      .catch(() => undefined);
+    return () => { current = false; };
+  }, [invitationResponse]);
   const registrationTone = getStatusTone(registrationCard ?? (mainRegistration ? { status: mainRegistration.status ?? null, started: true } : undefined));
 
   const handlePanelClose = () => {
@@ -313,6 +322,25 @@ const Dashboard = () => {
             </div>
           </div>
         </div>
+
+        {discordInvite && (
+          <div className="flex flex-col items-start gap-3 rounded-xl border border-red7 bg-white p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6 shadow-sm">
+            <div>
+              <p className="font-poppins font-semibold text-gray-800">Join the BigRed//Hacks Discord</p>
+              <p className="mt-1 text-sm leading-relaxed text-gray-500 font-poppins">
+                Get event announcements, find teammates, and ask organizers questions.
+              </p>
+            </div>
+            <a
+              href={discordInvite}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex w-full shrink-0 items-center justify-center rounded-lg bg-red5 px-5 min-h-11 py-2 text-sm font-poppins font-semibold text-white transition-colors hover:bg-red3 sm:w-auto"
+            >
+              Join Discord ↗
+            </a>
+          </div>
+        )}
 
         {emailVerified === false && (
           <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-amber-200 bg-white px-6 py-4 shadow-sm">

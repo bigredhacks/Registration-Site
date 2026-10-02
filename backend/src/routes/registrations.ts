@@ -185,6 +185,22 @@ router.get('/me/invitation-settings', async (_req, res) => {
   catch { res.status(500).json({ error: 'Could not load the invitation deadline.' }); }
 });
 
+/** Returns the Discord invite only to admins and applicants who accepted a released approval. */
+router.get('/me/discord', async (req: Request, res: Response) => {
+  const inviteUrl = process.env.DISCORD_INVITE_URL || null;
+  if (!inviteUrl) { res.json({ invite_url: null }); return; }
+  try {
+    const { data, error } = await supabase.from('registrations').select('id')
+      .eq('user_id', req.user!.id).eq('form_key', 'registration')
+      .eq('released_status', 'approved').eq('invitation_response', 'accepted')
+      .is('invitation_expired_at', null).maybeSingle();
+    if (error) throw error;
+    res.json({ invite_url: (data || await isAdmin(req.user!.id)) ? inviteUrl : null });
+  } catch {
+    res.status(500).json({ error: 'Could not load the Discord invite.' });
+  }
+});
+
 router.put('/me/invitation-response', validate({ body: z.object({
   response: z.enum(['accepted', 'declined']),
 }).strict() }), async (req: Request, res: Response) => {

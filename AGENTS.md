@@ -175,7 +175,7 @@ membership; the rest of that router runs after `requireAdmin`.
 
 | Route module | Mounted path and responsibility |
 | --- | --- |
-| `registrations.ts` | `/api/registrations`: caller submissions, form-scoped reads/writes, RSVP/settings, legacy signed resume URLs, owner/admin access by ID |
+| `registrations.ts` | `/api/registrations`: caller submissions, form-scoped reads/writes, RSVP/settings, gated Discord invite (`DISCORD_INVITE_URL`), legacy signed resume URLs, owner/admin access by ID |
 | `profile.ts` | `/api/profile`: get/create and update the caller's profile |
 | `participants.ts` | `/api/participants`: matching preferences per caller/pool; admin listing; owner/admin deletion |
 | `formConfigs.ts` | `/api/form-configs`: active form discovery and definitions, with closure metadata |

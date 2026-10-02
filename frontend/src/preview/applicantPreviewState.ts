@@ -113,6 +113,10 @@ export function handleApplicantPreviewRequest(applicant: PreviewApplicant, metho
   if (path.startsWith('/api/registrations') && query.has('form_key') && query.get('form_key') !== 'registration') return fail('Form not found in this preview.', 404);
   if (method === 'GET' && path === '/api/registrations/me/all') return result(applicant.registration ? [applicant.registration] : []);
   if (method === 'GET' && path === '/api/registrations/me') return applicant.registration ? result(applicant.registration) : fail('No application yet.', 404);
+  if (method === 'GET' && path === '/api/registrations/me/discord') {
+    const accepted = applicant.registration?.status === 'approved' && applicant.registration.invitation_response === 'accepted';
+    return result({ invite_url: accepted ? 'https://discord.gg/REPLACE_ME' : null });
+  }
   if (method === 'GET' && path === '/api/registrations/me/invitation-settings') return result({ deadline: applicant.invitationDeadline, time_zone: 'America/New_York', version: 1, expired_count: 0, server_now: new Date(now).toISOString() });
   if (method === 'PUT' && path === '/api/registrations/me/invitation-response') {
     const registration = applicant.registration;
